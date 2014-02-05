@@ -1,0 +1,113 @@
+// index_queue.h
+// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+
+#ifndef SEXAIN_INDEX_QUEUE_H_
+#define SEXAIN_INDEX_QUEUE_H_
+
+#include <cerrno>
+#include <cassert>
+#include <vector>
+
+typedef std::pair<int, int> IndexNode;
+
+class IndexArray {
+ public:
+  virtual IndexNode& operator[](int i) = 0;
+};
+
+class IndexQueue {
+ public:
+  IndexQueue(IndexArray& arr);
+  int Front() const { return head_.first; }
+  int Back() const { return head_.second; }
+  bool Empty();
+  void PushBack(int i);
+  int PopFront();
+  void Remove(int i);
+  std::vector<int> Indexes() const;
+ private:
+  IndexNode& FrontNode();
+  IndexNode& BackNode();
+  void SetFront(int i) { head_.first = i; }
+  void SetBack(int i) { head_.second = i; }
+
+  IndexNode head_;
+  IndexArray& array_;
+};
+
+IndexQueue::IndexQueue(IndexArray& arr) : array_(arr) {
+  SetFront(-EINVAL);
+  SetBack(-EINVAL);
+}
+
+IndexNode& IndexQueue::FrontNode() {
+  assert(Front() >= 0);
+  return array_[Front()];
+}
+
+IndexNode& IndexQueue::BackNode() {
+  assert(Back() >= 0);
+  return array_[Back()];
+}
+
+bool IndexQueue::Empty() {
+  assert((Front() == -EINVAL) == (Back() == -EINVAL));
+  return Front() == -EINVAL;
+}
+
+void IndexQueue::PushBack(int i) {
+  if (Empty()) {
+    array_[i].first = array_[i].second = -EINVAL;
+    SetFront(i);
+    SetBack(i);
+  } else {
+    array_[i].first = Back();
+    array_[i].second = -EINVAL;
+    BackNode().second = i;
+    SetBack(i);
+  }
+}
+
+int IndexQueue::PopFront() {
+  if (Empty()) return -EINVAL;
+
+  const int old_front = Front();
+  const int new_front = FrontNode().second;
+  if (new_front != -EINVAL) array_[new_front].first = -EINVAL;
+  SetFront(new_front);
+  array_[old_front].second = -EINVAL;
+  return old_front;
+}
+
+void IndexQueue::Remove(int i) {
+  assert(i >= 0);
+  const int prev = array_[i].first;
+  const int next = array_[i].second;
+
+  if (prev == -EINVAL) {
+    assert(Front() == i);
+    SetFront(next);
+  } else {
+    array_[prev].second = next;
+  }
+
+  if (next == -EINVAL) {
+    assert(Back() == i);
+    SetBack(prev);
+  } else {
+    array_[next].first = prev;
+  }
+
+  array_[i].first = -EINVAL;
+  array_[i].second = -EINVAL;
+}
+
+std::vector<int> IndexQueue::Indexes() const {
+  std::vector<int> indexes;
+  for (int i = Front(); i != -EINVAL; i = array_[i].second) {
+    indexes.push_back(i);
+  }
+  return indexes;
+}
+
+#endif // SEXAIN_INDEX_QUEUE_H_
