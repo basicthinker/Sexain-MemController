@@ -22,10 +22,10 @@ class IndexQueue {
   int Front() const { return head_.first; }
   int Back() const { return head_.second; }
   bool Empty();
-  void PushBack(int i);
-  int PopFront();
-  void PushFront(int i);
   void Remove(int i);
+  int PopFront();
+  void PushBack(int i);
+  void PushFront(int i);
   std::set<int> Indexes() const;
  private:
   IndexNode& FrontNode();
@@ -57,43 +57,6 @@ bool IndexQueue::Empty() {
   return Front() == -EINVAL;
 }
 
-void IndexQueue::PushBack(int i) {
-  if (Empty()) {
-    array_[i].first = array_[i].second = -EINVAL;
-    SetFront(i);
-    SetBack(i);
-  } else {
-    array_[i].first = Back();
-    array_[i].second = -EINVAL;
-    BackNode().second = i;
-    SetBack(i);
-  }
-}
-
-int IndexQueue::PopFront() {
-  if (Empty()) return -EINVAL;
-
-  const int old_front = Front();
-  const int new_front = FrontNode().second;
-  if (new_front != -EINVAL) array_[new_front].first = -EINVAL;
-  SetFront(new_front);
-  array_[old_front].second = -EINVAL;
-  return old_front;
-}
-
-void IndexQueue::PushFront(int i) {
-  if (Empty()) {
-    array_[i].first = array_[i].second = -EINVAL;
-    SetFront(i);
-    SetBack(i);
-  } else {
-    array_[i].first = -EINVAL;
-    array_[i].second = Front();
-    FrontNode().first = i;
-    SetFront(i);
-  }
-}
-
 void IndexQueue::Remove(int i) {
   assert(i >= 0);
   const int prev = array_[i].first;
@@ -115,6 +78,39 @@ void IndexQueue::Remove(int i) {
 
   array_[i].first = -EINVAL;
   array_[i].second = -EINVAL;
+}
+
+int IndexQueue::PopFront() {
+  if (Empty()) return -EINVAL;
+  const int front = Front();
+  Remove(front);
+  return front;
+}
+
+void IndexQueue::PushBack(int i) {
+  if (Empty()) {
+    array_[i].first = array_[i].second = -EINVAL;
+    SetFront(i);
+    SetBack(i);
+  } else {
+    array_[i].first = Back();
+    array_[i].second = -EINVAL;
+    BackNode().second = i;
+    SetBack(i);
+  }
+}
+
+void IndexQueue::PushFront(int i) {
+  if (Empty()) {
+    array_[i].first = array_[i].second = -EINVAL;
+    SetFront(i);
+    SetBack(i);
+  } else {
+    array_[i].first = -EINVAL;
+    array_[i].second = Front();
+    FrontNode().first = i;
+    SetFront(i);
+  }
 }
 
 std::set<int> IndexQueue::Indexes() const {
