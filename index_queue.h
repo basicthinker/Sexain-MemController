@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cassert>
 #include <set>
+#include <algorithm>
 
 typedef std::pair<int, int> IndexNode;
 
@@ -123,6 +124,15 @@ std::set<int> IndexQueue::Indexes() const {
     assert(ret);
   }
   return indexes;
+}
+
+std::set<int> IndexIntersection(const IndexQueue& a, const IndexQueue& b) {
+  std::set<int> ai = a.Indexes();
+  std::set<int> bi = b.Indexes();
+  std::set<int> common;
+  set_intersection(ai.begin(), ai.end(), bi.begin(), bi.end(),
+      std::inserter(common, common.begin()));
+  return common;
 }
 
 #endif // SEXAIN_INDEX_QUEUE_H_

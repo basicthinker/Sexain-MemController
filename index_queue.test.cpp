@@ -49,6 +49,7 @@ int main(int argc, const char* argv[]) {
     dq.Remove(i);
     cq.PushBack(i);
   }
+  assert(IndexIntersection(cq, dq).size() == 0);
   Print(cq, "Clean: ");
   Print(dq, "Dirty: ");
   cout << endl;
@@ -56,9 +57,11 @@ int main(int argc, const char* argv[]) {
   for (int i = 0; i < n/3; ++i) {
     cq.PushBack(dq.PopFront());
   }
+  assert(IndexIntersection(cq, dq).size() == 0);
   Print(cq, "Clean: ");
   Print(dq, "Dirty: ");
   cout << endl;
 
   return 0;
 }
+
