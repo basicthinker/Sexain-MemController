@@ -6,7 +6,7 @@
 
 #include <cerrno>
 #include <cassert>
-#include <vector>
+#include <set>
 
 typedef std::pair<int, int> IndexNode;
 
@@ -25,7 +25,7 @@ class IndexQueue {
   int PopFront();
   void PushFront(int i);
   void Remove(int i);
-  std::vector<int> Indexes() const;
+  std::set<int> Indexes() const;
  private:
   IndexNode& FrontNode();
   IndexNode& BackNode();
@@ -116,10 +116,11 @@ void IndexQueue::Remove(int i) {
   array_[i].second = -EINVAL;
 }
 
-std::vector<int> IndexQueue::Indexes() const {
-  std::vector<int> indexes;
+std::set<int> IndexQueue::Indexes() const {
+  std::set<int> indexes;
   for (int i = Front(); i != -EINVAL; i = array_[i].second) {
-    indexes.push_back(i);
+    bool ret = indexes.insert(i).second;
+    assert(ret);
   }
   return indexes;
 }

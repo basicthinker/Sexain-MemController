@@ -18,7 +18,7 @@ class Array : public IndexArray {
 };
 
 void Print(const IndexQueue& q, const char* title) {
-  vector<int> indexes = q.Indexes();
+  set<int> indexes = q.Indexes();
   cout << title;
   copy(indexes.begin(), indexes.end(), ostream_iterator<int>(cout, " "));
   cout << endl;
