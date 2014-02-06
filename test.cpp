@@ -39,7 +39,7 @@ int main(int argc, const char* argv[]) {
 
   for (int i = 0; i < n/2; ++i) {
     dq.Remove(i);
-    dq.PushBack(i);
+    dq.PushFront(i);
   }
   Print(cq, "Clean: ");
   Print(dq, "Dirty: ");

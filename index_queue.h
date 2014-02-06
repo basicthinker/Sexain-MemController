@@ -23,6 +23,7 @@ class IndexQueue {
   bool Empty();
   void PushBack(int i);
   int PopFront();
+  void PushFront(int i);
   void Remove(int i);
   std::vector<int> Indexes() const;
  private:
@@ -77,6 +78,19 @@ int IndexQueue::PopFront() {
   SetFront(new_front);
   array_[old_front].second = -EINVAL;
   return old_front;
+}
+
+void IndexQueue::PushFront(int i) {
+  if (Empty()) {
+    array_[i].first = array_[i].second = -EINVAL;
+    SetFront(i);
+    SetBack(i);
+  } else {
+    array_[i].first = -EINVAL;
+    array_[i].second = Front();
+    FrontNode().first = i;
+    SetFront(i);
+  }
 }
 
 void IndexQueue::Remove(int i) {
