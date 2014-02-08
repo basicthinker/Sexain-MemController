@@ -11,3 +11,9 @@
 *.lai
 *.la
 *.a
+
+*.pyc
+.hg*
+build/
+parser.out
+parsetab.py
