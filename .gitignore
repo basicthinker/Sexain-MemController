@@ -15,5 +15,6 @@
 *.pyc
 .hg*
 build/
+m5out/
 parser.out
 parsetab.py

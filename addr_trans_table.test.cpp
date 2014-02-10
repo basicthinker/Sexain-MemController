@@ -22,7 +22,8 @@ void ScanRead(AddrTransTable& att, int b, int e) {
 }
 
 int main(int argc, const char* argv[]) {
-  AddrTransTable att(8, CACHE_BLOCK_BITS);
+  DirectMappingBuffer buf(8, 1024);
+  AddrTransTable att(8, CACHE_BLOCK_BITS, buf);
 
   ScanWrite(att, 0, 8);
   ScanRead(att, 0, 16);
