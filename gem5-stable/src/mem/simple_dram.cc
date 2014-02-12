@@ -102,31 +102,31 @@ SimpleDRAM::init()
         panic("Unexpected burst size %d", bytesPerCacheLine);
 
     // determine the rows per bank by looking at the total capacity
-    uint64_t capacity = ULL(1) << ceilLog2(AbstractMemory::size());
+    uint64_t capacity = ULL(1) << ceilLog2(AbstractMemory::getPhyAddrRange().size());
 
     DPRINTF(DRAM, "Memory capacity %lld (%lld) bytes\n", capacity,
-            AbstractMemory::size());
+            AbstractMemory::getPhyAddrRange().size());
     rowsPerBank = capacity / (bytesPerCacheLine * linesPerRowBuffer *
                               banksPerRank * ranksPerChannel);
 
-    if (range.interleaved()) {
-        if (channels != range.stripes())
+    if (phyRange.interleaved()) {
+        if (channels != phyRange.stripes())
             panic("%s has %d interleaved address stripes but %d channel(s)\n",
-                  name(), range.stripes(), channels);
+                  name(), phyRange.stripes(), channels);
 
         if (addrMapping == Enums::RaBaChCo) {
             if (bytesPerCacheLine * linesPerRowBuffer !=
-                range.granularity()) {
+                phyRange.granularity()) {
                 panic("Interleaving of %s doesn't match RaBaChCo address map\n",
                       name());
             }
         } else if (addrMapping == Enums::RaBaCoCh) {
-            if (bytesPerCacheLine != range.granularity()) {
+            if (bytesPerCacheLine != phyRange.granularity()) {
                 panic("Interleaving of %s doesn't match RaBaCoCh address map\n",
                       name());
             }
         } else if (addrMapping == Enums::CoRaBaCh) {
-            if (bytesPerCacheLine != range.granularity())
+            if (bytesPerCacheLine != phyRange.granularity())
                 panic("Interleaving of %s doesn't match CoRaBaCh address map\n",
                       name());
         }
@@ -1338,7 +1338,7 @@ AddrRangeList
 SimpleDRAM::MemoryPort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    ranges.push_back(memory.getAddrRange());
+    ranges.push_back(memory.getPhyAddrRange());
     return ranges;
 }
 

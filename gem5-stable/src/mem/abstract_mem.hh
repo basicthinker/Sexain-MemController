@@ -39,6 +39,7 @@
  *
  * Authors: Ron Dreslinski
  *          Andreas Hansson
+ *          Jinglei Ren <jinglei.ren@stanzax.org>
  */
 
 /**
@@ -104,8 +105,11 @@ class AbstractMemory : public MemObject
 {
   protected:
 
-    // Address range of this memory
-    AddrRange range;
+    // Physical ddress range of this memory
+    AddrRange phyRange;
+
+    // Machine address range of this memory
+    AddrRange machRange;
 
     // Pointer to host memory used to implement this memory
     uint8_t* pmemAddr;
@@ -241,25 +245,28 @@ class AbstractMemory : public MemObject
     }
 
     /**
-     * Get the address range
+     * Get the physical address range
      *
      * @return a single contigous address range
      */
-    AddrRange getAddrRange() const;
+    AddrRange getPhyAddrRange() const;
 
     /**
-     * Get the memory size.
+     * Get the machine address range
      *
-     * @return the size of the memory
+     * @return a single contigous address range
      */
-    uint64_t size() const { return range.size(); }
+    AddrRange getMachAddrRange() const;
 
     /**
      * Get the start address.
      *
      * @return the start address of the memory
      */
-    Addr start() const { return range.start(); }
+    Addr start() const {
+        assert(phyRange.start() == machRange.start());
+        return phyRange.start();
+    }
 
     /**
      *  Should this memory be passed to the kernel and part of the OS

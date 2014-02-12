@@ -8,10 +8,10 @@ fi
 GEM5ROOT=~/Projects/Sexain-MemController/gem5-stable
 ARCH=X86 #X86_MESI_CMP_directory # in ./build_opts
 
-CPU_TYPE=atomic # timing, detailed
+CPU_TYPE=timing # atomic, detailed
 NUM_CPUS=1
 
-MEM_TYPE=simple_mem
+MEM_TYPE=ddr3_1600_x64 # simple_mem
 MEM_SIZE=2GB
 
 L1D_SIZE=32kB

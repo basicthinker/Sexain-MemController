@@ -35,6 +35,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Andreas Hansson
+ *          Jinglei Ren <jinglei.ren@stanzax.org>
  */
 
 #ifndef __PHYSICAL_MEMORY_HH__
@@ -84,9 +85,10 @@ class PhysicalMemory : public Serializable
     // The total memory size
     uint64_t size;
 
-    // The physical memory used to provide the memory in the simulated
-    // system
-    std::vector<std::pair<AddrRange, uint8_t*> > backingStore;
+    // The physical memory and backing store
+    std::vector<std::pair<AddrRange, uint8_t*> > phyBackingStore;
+    // The mach memory and backing store
+    std::vector<std::pair<AddrRange, uint8_t*> > machBackingStore;
 
     // Prevent copying
     PhysicalMemory(const PhysicalMemory&);
@@ -160,10 +162,10 @@ class PhysicalMemory : public Serializable
      * the OS-visible global address map and thus are allowed to
      * overlap.
      *
-     * @return Pointers to the memory backing store
+     * @return Pointers to the phy memory backing store
      */
     std::vector<std::pair<AddrRange, uint8_t*> > getBackingStore() const
-    { return backingStore; }
+    { return phyBackingStore; }
 
     /**
      * Perform an untimed memory access and update all the state

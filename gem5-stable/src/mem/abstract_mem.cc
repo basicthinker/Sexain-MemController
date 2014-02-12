@@ -40,6 +40,7 @@
  * Authors: Ron Dreslinski
  *          Ali Saidi
  *          Andreas Hansson
+ *          Jinglei Ren <jinglei.ren@stanzax.org>
  */
 
 #include "arch/registers.hh"
@@ -53,11 +54,12 @@
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
-    MemObject(p), range(params()->range), pmemAddr(NULL),
+    MemObject(p), phyRange(params()->range),
+    machRange(params()->range), pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
 {
-    if (size() % TheISA::PageBytes != 0)
+    if (phyRange.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
 }
 
@@ -176,9 +178,15 @@ AbstractMemory::regStats()
 }
 
 AddrRange
-AbstractMemory::getAddrRange() const
+AbstractMemory::getPhyAddrRange() const
 {
-    return range;
+    return phyRange;
+}
+
+AddrRange
+AbstractMemory::getMachAddrRange() const
+{
+    return machRange;
 }
 
 // Add load-locked to tracking list.  Should only be called if the
@@ -304,7 +312,7 @@ void
 AbstractMemory::access(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
-                     pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
+                     pkt->getAddr() + pkt->getSize() - 1).isSubset(phyRange));
 
     if (pkt->memInhibitAsserted()) {
         DPRINTF(MemoryAccess, "mem inhibited on 0x%x: not responding\n",
@@ -312,7 +320,7 @@ AbstractMemory::access(PacketPtr pkt)
         return;
     }
 
-    uint8_t *hostAddr = pmemAddr + pkt->getAddr() - range.start();
+    uint8_t *hostAddr = pmemAddr + pkt->getAddr() - phyRange.start();
 
     if (pkt->cmd == MemCmd::SwapReq) {
         TheISA::IntReg overwrite_val;
@@ -388,9 +396,9 @@ void
 AbstractMemory::functionalAccess(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
-                     pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
+                     pkt->getAddr() + pkt->getSize() - 1).isSubset(phyRange));
 
-    uint8_t *hostAddr = pmemAddr + pkt->getAddr() - range.start();
+    uint8_t *hostAddr = pmemAddr + pkt->getAddr() - phyRange.start();
 
     if (pkt->isRead()) {
         if (pmemAddr)

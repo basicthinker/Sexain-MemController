@@ -35,6 +35,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Andreas Hansson
+ *          Jinglei Ren <jinglei.ren@stanzax.org>
  */
 
 #include <sys/mman.h>
@@ -71,11 +72,11 @@ PhysicalMemory::PhysicalMemory(const string& _name,
             memories.push_back(*m);
 
             // calculate the total size once and for all
-            size += (*m)->size();
+            size += (*m)->getPhyAddrRange().size();
 
             // add the range to our interval tree and make sure it does not
             // intersect an existing range
-            if (addrMap.insert((*m)->getAddrRange(), *m) == addrMap.end())
+            if (addrMap.insert((*m)->getPhyAddrRange(), *m) == addrMap.end())
                 fatal("Memory address range for %s is overlapping\n",
                       (*m)->name());
         } else {
@@ -91,7 +92,7 @@ PhysicalMemory::PhysicalMemory(const string& _name,
             // map
             vector<AbstractMemory*> unmapped_mems;
             unmapped_mems.push_back(*m);
-            createBackingStore((*m)->getAddrRange(), unmapped_mems);
+            createBackingStore((*m)->getPhyAddrRange(), unmapped_mems);
         }
     }
 
@@ -137,30 +138,33 @@ PhysicalMemory::PhysicalMemory(const string& _name,
 }
 
 void
-PhysicalMemory::createBackingStore(AddrRange range,
+PhysicalMemory::createBackingStore(AddrRange phy_range,
                                    const vector<AbstractMemory*>& _memories)
 {
-    if (range.interleaved())
+    if (phy_range.interleaved())
         panic("Cannot create backing store for interleaved range %s\n",
-              range.to_string());
+              phy_range.to_string());
+
+    AddrRange mach_range = _memories[0]->getMachAddrRange();
 
     // perform the actual mmap
     DPRINTF(BusAddrRanges, "Creating backing store for range %s with size %d\n",
-            range.to_string(), range.size());
+            phy_range.to_string(), mach_range.size());
     int map_flags = MAP_ANON | MAP_PRIVATE;
-    uint8_t* pmem = (uint8_t*) mmap(NULL, range.size(),
+    uint8_t* pmem = (uint8_t*) mmap(NULL, mach_range.size(),
                                     PROT_READ | PROT_WRITE,
                                     map_flags, -1, 0);
 
     if (pmem == (uint8_t*) MAP_FAILED) {
         perror("mmap");
-        fatal("Could not mmap %d bytes for range %s!\n", range.size(),
-              range.to_string());
+        fatal("Could not mmap %d bytes for range %s!\n", mach_range.size(),
+              phy_range.to_string());
     }
 
+    phyBackingStore.push_back(make_pair(phy_range, pmem));
     // remember this backing store so we can checkpoint it and unmap
     // it appropriately
-    backingStore.push_back(make_pair(range, pmem));
+    machBackingStore.push_back(make_pair(mach_range, pmem));
 
     // point the memories to their backing store, and if requested,
     // initialize the memory range to 0
@@ -168,6 +172,7 @@ PhysicalMemory::createBackingStore(AddrRange range,
          m != _memories.end(); ++m) {
         DPRINTF(BusAddrRanges, "Mapping memory %s to backing store\n",
                 (*m)->name());
+        assert((*m)->getMachAddrRange().mergesWith(mach_range));
         (*m)->setBackingStore(pmem);
     }
 }
@@ -175,8 +180,8 @@ PhysicalMemory::createBackingStore(AddrRange range,
 PhysicalMemory::~PhysicalMemory()
 {
     // unmap the backing store
-    for (vector<pair<AddrRange, uint8_t*> >::iterator s = backingStore.begin();
-         s != backingStore.end(); ++s)
+    for (vector<pair<AddrRange, uint8_t*> >::iterator s = machBackingStore.begin();
+         s != machBackingStore.end(); ++s)
         munmap((char*)s->second, s->first.size());
 }
 
@@ -279,13 +284,14 @@ PhysicalMemory::serialize(ostream& os)
     arrayParamOut(os, "lal_cid", lal_cid);
 
     // serialize the backing stores
-    unsigned int nbr_of_stores = backingStore.size();
+    unsigned int nbr_of_stores = machBackingStore.size();
     SERIALIZE_SCALAR(nbr_of_stores);
 
+    // TODO: shrink addr translation table before serialization
     unsigned int store_id = 0;
     // store each backing store memory segment in a file
-    for (vector<pair<AddrRange, uint8_t*> >::iterator s = backingStore.begin();
-         s != backingStore.end(); ++s) {
+    for (vector<pair<AddrRange, uint8_t*> >::iterator s = phyBackingStore.begin();
+         s != phyBackingStore.end(); ++s) {
         nameOut(os, csprintf("%s.store%d", name(), store_id));
         serializeStore(os, store_id++, s->first, s->second);
     }
@@ -393,13 +399,15 @@ PhysicalMemory::unserializeStore(Checkpoint* cp, const string& section)
         fatal("Insufficient memory to allocate compression state for %s\n",
               filename);
 
-    uint8_t* pmem = backingStore[store_id].second;
-    AddrRange range = backingStore[store_id].first;
+    uint8_t* pmem = phyBackingStore[store_id].second;
+    AddrRange phy_range = phyBackingStore[store_id].first;
+    assert(pmem == machBackingStore[store_id].second);
+    AddrRange mach_range = machBackingStore[store_id].first;
 
     // unmap file that was mmapped in the constructor, this is
     // done here to make sure that gzip and open don't muck with
     // our nice large space of memory before we reallocate it
-    munmap((char*) pmem, range.size());
+    munmap((char*) pmem, mach_range.size());
 
     long range_size;
     UNSERIALIZE_SCALAR(range_size);
@@ -407,11 +415,11 @@ PhysicalMemory::unserializeStore(Checkpoint* cp, const string& section)
     DPRINTF(Checkpoint, "Unserializing physical memory %s with size %d\n",
             filename, range_size);
 
-    if (range_size != range.size())
+    if (range_size != phy_range.size())
         fatal("Memory range size has changed! Saw %lld, expected %lld\n",
-              range_size, range.size());
+              range_size, phy_range.size());
 
-    pmem = (uint8_t*) mmap(NULL, range.size(), PROT_READ | PROT_WRITE,
+    pmem = (uint8_t*) mmap(NULL, mach_range.size(), PROT_READ | PROT_WRITE,
                            MAP_ANON | MAP_PRIVATE, -1, 0);
 
     if (pmem == (void*) MAP_FAILED) {
@@ -423,7 +431,7 @@ PhysicalMemory::unserializeStore(Checkpoint* cp, const string& section)
     long* temp_page = new long[chunk_size];
     long* pmem_current;
     uint32_t bytes_read;
-    while (curr_size < range.size()) {
+    while (curr_size < phy_range.size()) {
         bytes_read = gzread(compressed_mem, temp_page, chunk_size);
         if (bytes_read == 0)
             break;
