@@ -1,9 +1,11 @@
 // shadow_addr_mapper.h
+// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
 
 #ifndef SEXAIN_SHADOW_ADDR_MAPPER_H_
 #define SEXAIN_SHADOW_ADDR_MAPPER__H_
 
 #include <vector>
+#include <cstdint>
 
 class ShadowAddrMapper {
  public:

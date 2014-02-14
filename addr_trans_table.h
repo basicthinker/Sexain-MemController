@@ -11,6 +11,7 @@
 #include <iostream>
 #include "index_queue.h"
 #include "shadow_addr_mapper.h"
+#include "mem_store.h"
 
 struct ATTEntry {
   uint64_t phy_addr;
@@ -26,23 +27,23 @@ struct ATTEntry {
 
 class AddrTransTable : public IndexArray {
  public:
-  AddrTransTable(int length, int bits, ShadowAddrMapper& mapper);
+  AddrTransTable(int length, int bits, ShadowAddrMapper& mapper, MemStore& mem);
   uint64_t LoadAddr(uint64_t phy_addr);
   uint64_t StoreAddr(uint64_t phy_addr);
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
- protected:
-  virtual void NewEpoch();
-  virtual void WriteBack(const ATTEntry& entry);
+  void NewEpoch();
  private:
   const int block_bits_;
   ShadowAddrMapper& mapper_;
+  MemStore& mem_store_;
   std::unordered_map<uint64_t, int> trans_index_;
   std::vector<ATTEntry> entries_;
   std::vector<IndexQueue> queues_;
 };
 
-AddrTransTable::AddrTransTable(int length, int bits, ShadowAddrMapper& mapper) :
-    block_bits_(bits), mapper_(mapper), entries_(length), queues_(2, *this) {
+AddrTransTable::AddrTransTable(int length, int bits,
+    ShadowAddrMapper& mapper, MemStore& mem) : block_bits_(bits),
+    mapper_(mapper), mem_store_(mem), entries_(length), queues_(2, *this) {
   for (int i = 0; i < length; ++i) {
     queues_[0].PushBack(i); // clean queue
   }
@@ -67,14 +68,18 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
     if (queues_[0].Empty()) NewEpoch();
     int i = queues_[0].PopFront(); // clean queue
     ATTEntry& entry = entries_[i];
+
     if (entry.valid) {
-      WriteBack(entry);
-      trans_index_.erase(entries_[i].phy_addr);
+      mem_store_.OnWriteBack(entry.phy_addr, entry.mach_addr);
+      trans_index_.erase(entry.phy_addr);
       mapper_.UnmapShadowAddr(entry.mach_addr);
     }
 
+    uint64_t mach_addr = mapper_.MapShadowAddr(phy_addr, i); 
+    if (!entry.valid) mem_store_.OnDirectWrite(phy_addr, mach_addr);
+
     entries_[i].phy_addr = phy_addr;
-    entries_[i].mach_addr = mapper_.MapShadowAddr(phy_addr, i);
+    entries_[i].mach_addr = mach_addr;
     entries_[i].dirty = true;
     entries_[i].valid = true;
 
@@ -87,9 +92,11 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
     assert(entry.valid && entry.phy_addr == phy_addr);
     queues_[entry.dirty].Remove(it->second);
     if (entry.dirty) {
+      mem_store_.OnOverwrite(entry.phy_addr, entry.mach_addr);
       queues_[1].PushBack(it->second);
       return entry.mach_addr;
     } else {
+      mem_store_.OnShrink(entry.phy_addr, entry.mach_addr);
       trans_index_.erase(it);
       entry.valid = false;
       queues_[0].PushFront(it->second);
@@ -100,6 +107,7 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
 }
 
 void AddrTransTable::NewEpoch() {
+  mem_store_.OnEpochEnd();
   assert(IndexIntersection(queues_[0], queues_[1]).size() == 0);
   while (!queues_[1].Empty()) {
     int i = queues_[1].PopFront();
@@ -107,13 +115,6 @@ void AddrTransTable::NewEpoch() {
     queues_[0].PushBack(i);
   }
   assert(queues_[0].Indexes().size() == entries_.size());
-}
-
-void AddrTransTable::WriteBack(const ATTEntry& entry) {
-  std::cerr << std::hex;
-  std::cerr << "[Info] AddrTransTable::WriteBack: "
-      << entry.mach_addr << " => " << entry.phy_addr << std::endl;
-  return;
 }
 
 #endif // SEXAIN_ADDR_TRANS_TABLE_H_
