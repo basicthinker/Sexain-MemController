@@ -112,6 +112,9 @@ parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
 Options.addSEOptions(parser)
 
+parser.add_option("--att-length", type="int", default=1024,
+        help="The number of addr trans table entries (single memory)")
+
 parser.add_option("--cpu-2006", default="", type="string",
         help="The CPU 2006 benchmark to be loaded.")
 parser.add_option("--check-cpu-2006", default="", type="string",
@@ -183,8 +186,11 @@ if options.smt and options.num_cpus > 1:
     fatal("You cannot use SMT with multiple CPUs!")
 
 np = options.num_cpus
+phy_mem_size = Addr(options.mem_size)
+mach_mem_size = phy_mem_size + Addr(options.att_length * options.cacheline_size)
 system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
-                physmem = MemClass(range=AddrRange(options.mem_size)),
+                physmem = MemClass(phy_range=phy_mem_size,
+                                   mach_range=mach_mem_size),
                 mem_mode = test_mem_mode,
                 clk_domain = SrcClockDomain(clock = options.sys_clock))
 

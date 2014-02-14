@@ -54,8 +54,8 @@
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
-    MemObject(p), phyRange(params()->range),
-    machRange(params()->range), pmemAddr(NULL),
+    MemObject(p), phyRange(params()->phy_range),
+    machRange(params()->mach_range), pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
 {

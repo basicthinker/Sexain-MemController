@@ -46,7 +46,8 @@ class AbstractMemory(MemObject):
     type = 'AbstractMemory'
     abstract = True
     cxx_header = "mem/abstract_mem.hh"
-    range = Param.AddrRange(AddrRange('128MB'), "Address range")
+    phy_range = Param.AddrRange(AddrRange('1024MB'), "Physical address range")
+    mach_range = Param.AddrRange(AddrRange('1024MB'), "Machine address range")
     null = Param.Bool(False, "Do not store data, always return zero")
 
     # All memories are passed to the global physical memory, and
