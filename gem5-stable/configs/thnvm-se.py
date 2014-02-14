@@ -44,6 +44,7 @@
 
 import optparse
 import sys
+import filecmp
 
 import m5
 from m5.defines import buildEnv
@@ -59,7 +60,7 @@ import Ruby
 import Simulation
 import CacheConfig
 from Caches import *
-from cpu2000 import *
+from cpu2006 import *
 
 def get_processes(options):
     """Interprets provided options and returns a list of processes"""
@@ -111,6 +112,13 @@ parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
 Options.addSEOptions(parser)
 
+parser.add_option("--cpu-2006", default="", type="string",
+        help="The CPU 2006 benchmark to be loaded.")
+parser.add_option("--check-cpu-2006", default="", type="string",
+        help="The CPU 2006 benchmark whose output to be checked.")
+parser.add_option("--cpu-2006-root", default="", type="string",
+        help="The CPU 2006 root dir that contains benchmark subdirs.")
+
 if '--ruby' in sys.argv:
     Ruby.define_options(parser)
 
@@ -123,7 +131,26 @@ if args:
 multiprocesses = []
 numThreads = 1
 
-if options.bench:
+if options.check_cpu_2006:
+    bench_process, bench_out = make_process(
+            options.check_cpu_2006, options.cpu_2006_root)
+    if bench_out is None:
+        print 'SPEC CPU 2006 ' + options.check_cpu_2006 + ' has no output!'
+        sys.exit(1)
+    if filecmp.cmp(bench_process.output, bench_out):
+        print 'SPEC CPU 2006 outputs check: OK!'
+    else:
+        print 'SPEC CPU 2006 outputs check: FAILED!'
+    sys.exit(0)
+if options.cpu_2006:
+    bench_process, bench_out = make_process(
+            options.cpu_2006, options.cpu_2006_root)
+    if bench_process is not None:
+        multiprocesses = [ bench_process ]
+    else:
+        print "SPEC CPU 2006 process is not established!"
+        sys.exit(1)
+elif options.bench:
     apps = options.bench.split("-")
     if len(apps) != options.num_cpus:
         print "number of benchmarks not equal to set num_cpus!"
@@ -240,3 +267,5 @@ else:
 
 root = Root(full_system = False, system = system)
 Simulation.run(options, root, system, FutureClass)
+
+
