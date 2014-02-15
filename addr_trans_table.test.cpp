@@ -17,10 +17,7 @@ void ScanWrite(AddrTransTable& att, int b, int e) {
 void ScanRead(AddrTransTable& att, int b, int e) {
   cout << dec << "Scanning reads (" << b << ", " << e << ")" << endl << hex;
   for (uint64_t addr = b * g_step; addr < e * g_step; addr += g_step) {
-    uint64_t mach_addr = att.LoadAddr(addr);
-    cout << addr << '\t' << mach_addr;
-    if (addr != mach_addr) cout << '*';
-    cout << endl;
+    cout << addr << '\t' << att.LoadAddr(addr) << endl;
   }
 }
 
