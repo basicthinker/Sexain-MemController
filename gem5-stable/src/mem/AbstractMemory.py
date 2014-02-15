@@ -38,6 +38,7 @@
 #
 # Authors: Nathan Binkert
 #          Andreas Hansson
+#          Jinglei Ren <jinglei.ren@stanzax.org>
 
 from m5.params import *
 from MemObject import MemObject
@@ -47,7 +48,8 @@ class AbstractMemory(MemObject):
     abstract = True
     cxx_header = "mem/abstract_mem.hh"
     phy_range = Param.AddrRange(AddrRange('1024MB'), "Physical address range")
-    mach_range = Param.AddrRange(AddrRange('1024MB'), "Machine address range")
+    att_length = Param.Int(0, "Address Translation Table length")
+    block_size = Param.Int(64, "Cache block size")
     null = Param.Bool(False, "Do not store data, always return zero")
 
     # All memories are passed to the global physical memory, and

@@ -54,13 +54,15 @@
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
-    MemObject(p), phyRange(params()->phy_range),
-    machRange(params()->mach_range), pmemAddr(NULL),
+    MemObject(p), phyRange(p->phy_range), pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
 {
     if (phyRange.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
+
+    machRange = AddrRange(phyRange.start(),
+            phyRange.end() + params()->block_size * params()->att_length);
 }
 
 void
