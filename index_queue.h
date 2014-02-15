@@ -37,6 +37,8 @@ class IndexQueue {
   IndexArray& array_;
 };
 
+std::set<int> IndexIntersection(const IndexQueue& a, const IndexQueue& b);
+
 IndexQueue::IndexQueue(IndexArray& arr) : array_(arr) {
   SetFront(-EINVAL);
   SetBack(-EINVAL);

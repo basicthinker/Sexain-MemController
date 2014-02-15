@@ -54,6 +54,7 @@
 #include "params/AbstractMemory.hh"
 #include "sim/stats.hh"
 
+#include "addr_trans_table.h"
 
 class System;
 
@@ -101,15 +102,20 @@ class LockedAddr {
  * timing information. It is a MemObject since any subclass must have
  * at least one slave port.
  */
-class AbstractMemory : public MemObject
+class AbstractMemory : public MemObject, public MemStore
 {
   protected:
-
     // Physical ddress range of this memory
     AddrRange phyRange;
 
     // Machine address range of this memory
     AddrRange machRange;
+
+    // Shadow address mapper
+    DirectMapper shadowMapper;
+
+    // Address Translation Table
+    AddrTransTable att;
 
     // Pointer to host memory used to implement this memory
     uint8_t* pmemAddr;
@@ -308,6 +314,11 @@ class AbstractMemory : public MemObject
      */
     virtual void regStats();
 
+    void OnDirectWrite(uint64_t phy_addr, uint64_t mach_addr);
+    void OnWriteBack(uint64_t phy_addr, uint64_t mach_addr);
+    void OnOverwrite(uint64_t phy_addr, uint64_t mach_addr);
+    virtual void OnShrink(uint64_t phy_addr, uint64_t mach_addr);
+    virtual void OnEpochEnd();
 };
 
 #endif //__ABSTRACT_MEMORY_HH__

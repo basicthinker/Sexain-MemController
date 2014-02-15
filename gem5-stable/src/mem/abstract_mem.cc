@@ -54,7 +54,10 @@
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
-    MemObject(p), phyRange(p->phy_range), pmemAddr(NULL),
+    MemObject(p), phyRange(p->phy_range),
+    shadowMapper(p->att_length, p->phy_range.end()),
+    att(p->att_length, p->block_size, shadowMapper, *this),
+    pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
 {
