@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <iostream>
 #include "index_queue.h"
-#include "shadow_addr_mapper.h"
+#include "shadow_tag_mapper.h"
 #include "mem_store.h"
 
 struct ATTEntry {
@@ -27,14 +27,14 @@ struct ATTEntry {
 
 class AddrTransTable : public IndexArray {
  public:
-  AddrTransTable(int length, int bits, ShadowAddrMapper& mapper, MemStore& mem);
+  AddrTransTable(int length, int bits, ShadowTagMapper& mapper, MemStore& mem);
   uint64_t LoadAddr(uint64_t phy_addr);
   uint64_t StoreAddr(uint64_t phy_addr);
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
   void NewEpoch();
  private:
   const int block_bits_;
-  ShadowAddrMapper& mapper_;
+  ShadowTagMapper& mapper_;
   MemStore& mem_store_;
   std::unordered_map<uint64_t, int> trans_index_;
   std::vector<ATTEntry> entries_;
@@ -42,7 +42,7 @@ class AddrTransTable : public IndexArray {
 };
 
 AddrTransTable::AddrTransTable(int length, int bits,
-    ShadowAddrMapper& mapper, MemStore& mem) : block_bits_(bits),
+    ShadowTagMapper& mapper, MemStore& mem) : block_bits_(bits),
     mapper_(mapper), mem_store_(mem), entries_(length), queues_(2, *this) {
   for (int i = 0; i < length; ++i) {
     queues_[0].PushBack(i); // clean queue
@@ -72,10 +72,10 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
     if (entry.valid) {
       mem_store_.OnWriteBack(entry.phy_addr, entry.mach_addr);
       trans_index_.erase(entry.phy_addr);
-      mapper_.UnmapShadowAddr(entry.mach_addr);
+      mapper_.UnmapShadowTag(entry.mach_addr);
     }
 
-    uint64_t mach_addr = mapper_.MapShadowAddr(phy_addr, i); 
+    uint64_t mach_addr = mapper_.MapShadowTag(phy_addr, i); 
     if (!entry.valid) mem_store_.OnDirectWrite(phy_addr, mach_addr);
 
     entries_[i].phy_addr = phy_addr;
@@ -100,7 +100,7 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
       trans_index_.erase(it);
       entry.valid = false;
       queues_[0].PushFront(it->second);
-      mapper_.UnmapShadowAddr(entry.mach_addr);
+      mapper_.UnmapShadowTag(entry.mach_addr);
       return phy_addr;
     }
   }
