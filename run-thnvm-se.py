@@ -1,17 +1,14 @@
 #!/bin/bash
 
-if [ $# -lt 1 ]; then
-  echo "Usage: $0 [-h] [-c COMMAND] [-o OPTIONS] ..."
-  exit -1
-fi
-
 GEM5ROOT=~/Projects/Sexain-MemController/gem5-stable
 ARCH=X86 #X86_MESI_CMP_directory # in ./build_opts
+GEM5=$GEM5ROOT/build/$ARCH/gem5.opt
+SE_SCRIPT=$GEM5ROOT/configs/thnvm-se.py
 
-CPU_TYPE=timing # atomic, detailed
+CPU_TYPE=atomic # timing, detailed
 NUM_CPUS=1
 
-MEM_TYPE=ddr3_1600_x64 # simple_mem
+MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB
 ATT_LENGTH=1024
 
@@ -29,7 +26,41 @@ L3_ASSOC=30
 
 CACHELINE_SIZE=64
 
-CPU2006ROOT=~/Documents/spec-cpu-2006/benchspec/CPU2006
+CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
+OUT_DIR=~/Documents/gem5out
+
+while getopts "hc:o:b:t:" opt; do
+  case $opt in
+    h)
+      $GEM5 -h
+      $GEM5 $SE_SCRIPT -h
+      exit 0
+      ;;
+    c)
+      COMMAND="-c $OPTARG"
+      ALIAS=$OPTARG
+      ;;
+    o)
+      COMMAND="$COMMAND -o $OPTARG"
+      ;;
+    b)
+      COMMAND="--cpu-2006=$OPTARG"
+      ALIAS=$OPTARG
+      ;;
+    t)
+      $GEM5 $SE_SCRIPT --cpu-2006-root=$CPU2006ROOT --check-cpu-2006=$OPTARG
+      exit 0
+      ;;
+    \?)
+      exit -1
+      ;;
+  esac
+done
+
+if [ -z $COMMAND ]; then
+  echo "Usage: $0 [-h] [-c COMMAND] [-o OPTIONS] [-b|-t BENCHMARK]" >&2
+  exit -1
+fi
 
 OPTIONS="--caches --l2cache"
 OPTIONS+=" --cpu-type=$CPU_TYPE"
@@ -49,4 +80,4 @@ OPTIONS+=" --l3_assoc=$L3_ASSOC"
 OPTIONS+=" --cacheline_size=$CACHELINE_SIZE"
 OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
 
-$GEM5ROOT/build/$ARCH/gem5.opt $GEM5ROOT/configs/thnvm-se.py $OPTIONS $@
+$GEM5 -d $OUT_DIR/$ALIAS-`date +%F` $SE_SCRIPT $OPTIONS $COMMAND
