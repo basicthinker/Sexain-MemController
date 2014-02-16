@@ -2,7 +2,7 @@
 // Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
 
 #ifndef SEXAIN_SHADOW_TAG_MAPPER_H_
-#define SEXAIN_SHADOW_TAG_MAPPER__H_
+#define SEXAIN_SHADOW_TAG_MAPPER_H_
 
 #include <vector>
 #include <cstdint>
@@ -38,3 +38,4 @@ class DirectMapper : public ShadowTagMapper {
 };
 
 #endif // SEXAIN_SHADOW_TAG_MAPPER_H_
+

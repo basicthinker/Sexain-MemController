@@ -37,85 +37,34 @@ class IndexQueue {
   IndexArray& array_;
 };
 
-std::set<int> IndexIntersection(const IndexQueue& a, const IndexQueue& b);
-
-IndexQueue::IndexQueue(IndexArray& arr) : array_(arr) {
+inline IndexQueue::IndexQueue(IndexArray& arr) : array_(arr) {
   SetFront(-EINVAL);
   SetBack(-EINVAL);
 }
 
-IndexNode& IndexQueue::FrontNode() {
+inline IndexNode& IndexQueue::FrontNode() {
   assert(Front() >= 0);
   return array_[Front()];
 }
 
-IndexNode& IndexQueue::BackNode() {
+inline IndexNode& IndexQueue::BackNode() {
   assert(Back() >= 0);
   return array_[Back()];
 }
 
-bool IndexQueue::Empty() {
+inline bool IndexQueue::Empty() {
   assert((Front() == -EINVAL) == (Back() == -EINVAL));
   return Front() == -EINVAL;
 }
 
-void IndexQueue::Remove(int i) {
-  assert(i >= 0);
-  const int prev = array_[i].first;
-  const int next = array_[i].second;
-
-  if (prev == -EINVAL) {
-    assert(Front() == i);
-    SetFront(next);
-  } else {
-    array_[prev].second = next;
-  }
-
-  if (next == -EINVAL) {
-    assert(Back() == i);
-    SetBack(prev);
-  } else {
-    array_[next].first = prev;
-  }
-
-  array_[i].first = -EINVAL;
-  array_[i].second = -EINVAL;
-}
-
-int IndexQueue::PopFront() {
+inline int IndexQueue::PopFront() {
   if (Empty()) return -EINVAL;
   const int front = Front();
   Remove(front);
   return front;
 }
 
-void IndexQueue::PushBack(int i) {
-  if (Empty()) {
-    array_[i].first = array_[i].second = -EINVAL;
-    SetFront(i);
-    SetBack(i);
-  } else {
-    array_[i].first = Back();
-    array_[i].second = -EINVAL;
-    BackNode().second = i;
-    SetBack(i);
-  }
-}
-
-void IndexQueue::PushFront(int i) {
-  if (Empty()) {
-    array_[i].first = array_[i].second = -EINVAL;
-    SetFront(i);
-    SetBack(i);
-  } else {
-    array_[i].first = -EINVAL;
-    array_[i].second = Front();
-    FrontNode().first = i;
-    SetFront(i);
-  }
-}
-
-std::set<int> IndexQueue::Indexes() const {
+inline std::set<int> IndexQueue::Indexes() const {
   std::set<int> indexes;
   for (int i = Front(); i != -EINVAL; i = array_[i].second) {
     bool ret = indexes.insert(i).second;
@@ -124,7 +73,8 @@ std::set<int> IndexQueue::Indexes() const {
   return indexes;
 }
 
-std::set<int> IndexIntersection(const IndexQueue& a, const IndexQueue& b) {
+inline std::set<int> IndexIntersection(const IndexQueue& a,
+      const IndexQueue& b) {
   std::set<int> ai = a.Indexes();
   std::set<int> bi = b.Indexes();
   std::set<int> common;
@@ -134,3 +84,4 @@ std::set<int> IndexIntersection(const IndexQueue& a, const IndexQueue& b) {
 }
 
 #endif // SEXAIN_INDEX_QUEUE_H_
+
