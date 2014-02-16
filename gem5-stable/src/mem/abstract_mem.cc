@@ -50,13 +50,14 @@
 #include "mem/abstract_mem.hh"
 #include "mem/packet_access.hh"
 #include "sim/system.hh"
+#include "base/intmath.hh"
 
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
     MemObject(p), phyRange(p->phy_range),
-    shadowMapper(p->att_length, p->phy_range.end()),
-    att(p->att_length, p->block_size, shadowMapper, *this),
+    shadowMapper(p->att_length, p->phy_range.size() >> floorLog2(p->block_size)),
+    att(p->att_length, floorLog2(p->block_size), shadowMapper, *this),
     pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
@@ -176,6 +177,23 @@ AbstractMemory::regStats()
     for (int i = 0; i < system()->maxMasters(); i++) {
         bwTotal.subname(i, system()->getMasterName(i));
     }
+
+    numEpochs
+        .name(name() + ".numEpochs")
+        .desc("Total number of epochs");
+    numDirectWrites
+        .name(name() + ".numDirectWrites")
+        .desc("Total number of direct writes");
+    numOverwrites
+        .name(name() + ".numOverwrites")
+        .desc("Total number of overwrites");
+    numWriteBacks
+        .name(name() + ".numWritBacks")
+        .desc("Total number of write-backs");
+    numShrinks
+        .name(name() + ".numShrinks")
+        .desc("Total number of shrinking writes");
+
     bwRead = bytesRead / simSeconds;
     bwInstRead = bytesInstRead / simSeconds;
     bwWrite = bytesWritten / simSeconds;
@@ -341,6 +359,7 @@ AbstractMemory::access(PacketPtr pkt)
         // keep a copy of our possible write value, and copy what is at the
         // memory address into the packet
         std::memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
+        att.LoadAddr(pkt->getAddr());
         std::memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
 
         if (pkt->req->isCondSwap()) {
@@ -356,8 +375,10 @@ AbstractMemory::access(PacketPtr pkt)
                 panic("Invalid size for conditional read/write\n");
         }
 
-        if (overwrite_mem)
+        if (overwrite_mem) {
+            att.StoreAddr(pkt->getAddr());
             std::memcpy(hostAddr, &overwrite_val, pkt->getSize());
+        }
 
         assert(!pkt->req->isInstFetch());
         TRACE_PACKET("Read/Write");
@@ -367,8 +388,11 @@ AbstractMemory::access(PacketPtr pkt)
         if (pkt->isLLSC()) {
             trackLoadLocked(pkt);
         }
-        if (pmemAddr)
+        if (pmemAddr) {
+            assert(pkt->getSize() == att.block_size());
+            att.LoadAddr(pkt->getAddr());
             memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
+        }
         TRACE_PACKET(pkt->req->isInstFetch() ? "IFetch" : "Read");
         numReads[pkt->req->masterId()]++;
         bytesRead[pkt->req->masterId()] += pkt->getSize();
@@ -377,6 +401,8 @@ AbstractMemory::access(PacketPtr pkt)
     } else if (pkt->isWrite()) {
         if (writeOK(pkt)) {
             if (pmemAddr) {
+                assert(pkt->getSize() == att.block_size());
+                att.StoreAddr(pkt->getAddr());
                 memcpy(hostAddr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
@@ -429,3 +455,34 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
               pkt->cmdString());
     }
 }
+
+void
+AbstractMemory::OnDirectWrite(uint64_t phy_addr, uint64_t mach_addr)
+{
+    ++numDirectWrites;
+}
+
+void
+AbstractMemory::OnWriteBack(uint64_t phy_addr, uint64_t mach_addr)
+{
+    ++numWriteBacks;
+}
+
+void
+AbstractMemory::OnOverwrite(uint64_t phy_addr, uint64_t mach_addr)
+{
+    ++numOverwrites;
+}
+
+void
+AbstractMemory::OnShrink(uint64_t phy_addr, uint64_t mach_addr)
+{
+    ++numShrinks;
+}
+
+void
+AbstractMemory::OnEpochEnd()
+{
+    ++numEpochs;
+}
+

@@ -54,7 +54,9 @@
 #include "params/AbstractMemory.hh"
 #include "sim/stats.hh"
 
-#include "addr_trans_table.h"
+#include "mem/mem_store.h"
+#include "mem/shadow_tag_mapper.h"
+#include "mem/addr_trans_table.h"
 
 class System;
 
@@ -181,6 +183,17 @@ class AbstractMemory : public MemObject, public MemStore
     Stats::Formula bwWrite;
     /** Total bandwidth from this memory */
     Stats::Formula bwTotal;
+
+    /** Number of epochs */
+    Stats::Scalar numEpochs;
+    /** Number of direct writes */
+    Stats::Scalar numDirectWrites;
+    /** Number of overwrites */
+    Stats::Scalar numOverwrites;
+    /** Number of write-backs */
+    Stats::Scalar numWriteBacks;
+    /** Number of shrinking writes */
+    Stats::Scalar numShrinks;
 
     /** Pointor to the System object.
      * This is used for getting the number of masters in the system which is
@@ -314,9 +327,9 @@ class AbstractMemory : public MemObject, public MemStore
      */
     virtual void regStats();
 
-    void OnDirectWrite(uint64_t phy_addr, uint64_t mach_addr);
-    void OnWriteBack(uint64_t phy_addr, uint64_t mach_addr);
-    void OnOverwrite(uint64_t phy_addr, uint64_t mach_addr);
+    virtual void OnDirectWrite(uint64_t phy_addr, uint64_t mach_addr);
+    virtual void OnWriteBack(uint64_t phy_addr, uint64_t mach_addr);
+    virtual void OnOverwrite(uint64_t phy_addr, uint64_t mach_addr);
     virtual void OnShrink(uint64_t phy_addr, uint64_t mach_addr);
     virtual void OnEpochEnd();
 };
