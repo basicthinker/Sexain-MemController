@@ -16,8 +16,10 @@
 .hg*
 build/
 m5out/
-parser.out
 parsetab.py
+*.out
+*.dat
+*.log
 
 .project
 .cproject

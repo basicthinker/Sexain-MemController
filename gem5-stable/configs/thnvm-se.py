@@ -45,6 +45,7 @@
 import optparse
 import sys
 import filecmp
+from difflib import unified_diff
 
 import m5
 from m5.defines import buildEnv
@@ -135,18 +136,21 @@ multiprocesses = []
 numThreads = 1
 
 if options.check_cpu_2006:
-    bench_process, bench_out = make_process(
+    bench_process, bench_output, ref_output = make_process(
             options.check_cpu_2006, options.cpu_2006_root)
-    if bench_out is None:
+    if ref_output is None:
         print 'SPEC CPU 2006 ' + options.check_cpu_2006 + ' has no output!'
-        sys.exit(1)
-    if filecmp.cmp(bench_process.output, bench_out):
+    elif filecmp.cmp(bench_output, ref_output):
         print 'SPEC CPU 2006 outputs check: OK!'
     else:
         print 'SPEC CPU 2006 outputs check: FAILED!'
+        for line in unified_diff(open(bench_output).readlines(),
+                open(ref_output).readlines(),
+                bench_output, ref_output):
+            sys.stderr.write(line)
     sys.exit(0)
 if options.cpu_2006:
-    bench_process, bench_out = make_process(
+    bench_process, bench_out, ref_output = make_process(
             options.cpu_2006, options.cpu_2006_root)
     if bench_process is not None:
         multiprocesses = [ bench_process ]
@@ -272,5 +276,4 @@ else:
 
 root = Root(full_system = False, system = system)
 Simulation.run(options, root, system, FutureClass)
-
 
