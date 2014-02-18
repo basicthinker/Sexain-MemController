@@ -1,8 +1,8 @@
-// addr_trans_table.h
+// tag_mapping_table.h
 // Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
 
-#ifndef SEXAIN_ADDR_TRANS_TABLE_H_
-#define SEXAIN_ADDR_TRANS_TABLE_H_
+#ifndef SEXAIN_TAG_MAPPING_TABLE_H_
+#define SEXAIN_TAG_MAPPING_TABLE_H_
 
 #include <cerrno>
 #include <cstdint>
@@ -25,30 +25,25 @@ struct ATTEntry {
   }
 };
 
-class AddrTransTable : public IndexArray {
+class TagMappingTable : public IndexArray {
  public:
-  AddrTransTable(int length, int bits, ShadowTagMapper& mapper, MemStore& mem);
-  uint64_t LoadAddr(uint64_t phy_addr);
-  uint64_t StoreAddr(uint64_t phy_addr);
+  TagMappingTable(int length, int bits, ShadowTagMapper& mapper, MemStore& mem);
+  uint64_t LoadTag(uint64_t phy_tag);
+  uint64_t StoreTag(uint64_t phy_tag);
   int block_size() const { return 1 << block_bits_; }
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
   void NewEpoch();
  private:
-  uint64_t Tag(uint64_t addr) { return addr >> block_bits_; }
-  uint64_t Trans(uint64_t orig_addr, uint64_t new_tag) {
-    return (orig_addr & block_mask_) + (new_tag << block_bits_);
-  }
-
   const int block_bits_;
   const uint64_t block_mask_;
   ShadowTagMapper& mapper_;
   MemStore& mem_store_;
-  std::unordered_map<uint64_t, int> trans_index_;
+  std::unordered_map<uint64_t, int> tag_index_;
   std::vector<ATTEntry> entries_;
   std::vector<IndexQueue> queues_;
 };
 
-inline AddrTransTable::AddrTransTable(int length, int bits,
+inline TagMappingTable::TagMappingTable(int length, int bits,
     ShadowTagMapper& mapper, MemStore& mem) :
     block_bits_(bits), block_mask_((1 << bits) - 1),
     mapper_(mapper), mem_store_(mem), entries_(length), queues_(2, *this) {
@@ -57,21 +52,7 @@ inline AddrTransTable::AddrTransTable(int length, int bits,
   }
 }
 
-inline uint64_t AddrTransTable::LoadAddr(uint64_t phy_addr) {
-  std::unordered_map<uint64_t, int>::iterator it =
-      trans_index_.find(Tag(phy_addr));
-  if (it == trans_index_.end()) { // not hit
-    return phy_addr;
-  } else {
-    ATTEntry& entry = entries_[it->second];
-    assert(entry.valid && entry.phy_tag == Tag(phy_addr));
-    queues_[entry.dirty].Remove(it->second);
-    queues_[entry.dirty].PushBack(it->second);
-    return Trans(phy_addr, entry.mach_tag);
-  }
-}
-
-inline void AddrTransTable::NewEpoch() {
+inline void TagMappingTable::NewEpoch() {
   mem_store_.OnEpochEnd();
   assert(IndexIntersection(queues_[0], queues_[1]).size() == 0);
   while (!queues_[1].Empty()) {
@@ -82,5 +63,5 @@ inline void AddrTransTable::NewEpoch() {
   assert(queues_[0].Indexes().size() == entries_.size());
 }
 
-#endif // SEXAIN_ADDR_TRANS_TABLE_H_
+#endif // SEXAIN_TAG_MAPPING_TABLE_H_
 
