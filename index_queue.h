@@ -21,12 +21,13 @@ class IndexQueue {
   IndexQueue(IndexArray& arr);
   int Front() const { return head_.first; }
   int Back() const { return head_.second; }
-  bool Empty();
+  bool Empty() const;
   void Remove(int i);
   int PopFront();
   void PushBack(int i);
   void PushFront(int i);
   std::set<int> Indexes() const;
+  int GetLength() const;
  private:
   IndexNode& FrontNode();
   IndexNode& BackNode();
@@ -52,7 +53,7 @@ inline IndexNode& IndexQueue::BackNode() {
   return array_[Back()];
 }
 
-inline bool IndexQueue::Empty() {
+inline bool IndexQueue::Empty() const {
   assert((Front() == -EINVAL) == (Back() == -EINVAL));
   return Front() == -EINVAL;
 }
@@ -71,6 +72,14 @@ inline std::set<int> IndexQueue::Indexes() const {
     assert(ret);
   }
   return indexes;
+}
+
+inline int IndexQueue::GetLength() const {
+  int len = 0;
+  for (int i = Front(); i != -EINVAL; i = array_[i].second) {
+    ++len;
+  }
+  return len;
 }
 
 inline std::set<int> IndexIntersection(const IndexQueue& a,

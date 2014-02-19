@@ -22,7 +22,7 @@ class MemStore {
   virtual void OnShrink(uint64_t phy_addr, uint64_t mach_addr, int bits) = 0;
 
   // When a new epoch is to start
-  virtual void OnEpochEnd() = 0;
+  virtual void OnEpochEnd(int bits) = 0;
 };
 
 class TraceMemStore : public MemStore {
@@ -58,8 +58,9 @@ class TraceMemStore : public MemStore {
     std::cout << std::dec;
   }
 
-  void OnEpochEnd() {
-    std::cout << "[Info] MemStore meets epoch end." << std::endl;
+  void OnEpochEnd(int bits) {
+    std::cout << "[Info] MemStore meets epoch end (" << bits << ")."
+        << std::endl;
   }
 };
 

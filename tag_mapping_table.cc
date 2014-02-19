@@ -19,7 +19,7 @@ uint64_t TagMappingTable::LoadTag(uint64_t phy_tag) {
 uint64_t TagMappingTable::StoreTag(uint64_t phy_tag) {
   std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
-    if (queues_[0].Empty()) NewEpoch();
+    if (queues_[0].Empty()) return -EINVAL;
     int i = queues_[0].PopFront(); // clean queue
     ATTEntry& entry = entries_[i];
 

@@ -8,6 +8,7 @@ using namespace std;
 void ScanWrite(TagMappingTable& tmt, int b, int e) {
   cout << dec << "Scanning writes (" << b << ", " << e << ")" << endl << hex;
   for (uint64_t tag = b; tag < e; tag += 1) {
+    if (!tmt.Probe(tag)) tmt.NewEpoch();
     tmt.StoreTag(tag);
   }
 }
@@ -20,7 +21,8 @@ void ScanRead(TagMappingTable& tmt, int b, int e) {
 }
 
 int main(int argc, const char* argv[]) {
-  DirectMapper mapper(8, 1024);
+  DirectMapper mapper(8);
+  mapper.set_lower_limit(1024);
   TraceMemStore mem;
   TagMappingTable tmt(8, CACHE_BLOCK_BITS, mapper, mem);
 
