@@ -9,40 +9,40 @@
 
 class ShadowTagMapper {
  public:
-  virtual uint64_t MapShadowTag(uint64_t phy_tag, int tmt_index) = 0;
+  virtual uint64_t MapShadowTag(uint64_t phy_tag, int table_index) = 0;
   virtual void UnmapShadowTag(uint64_t mach_tag) = 0;
-  virtual int lower_limit() const = 0;
-  virtual void set_lower_limit(int tags) = 0;
-  virtual int upper_limit() const = 0;
+  virtual int length() const = 0;
+  virtual int floor() const = 0;
+  virtual void set_floor(int tag) = 0;
 };
 
 class DirectMapper : public ShadowTagMapper {
  public:
-  DirectMapper(int tmt_length) : tmt_length_(tmt_length),
-      alloc_map_(tmt_length, false) {
-    set_lower_limit(-EINVAL);
+  DirectMapper(int length) : length_(length),
+      alloc_map_(length, false) {
+    set_floor(-EINVAL);
   }
 
-  uint64_t MapShadowTag(uint64_t phy_tag, int tmt_index) {
-    assert(lower_limit() >= 0);
-    assert(tmt_index < tmt_length_ && alloc_map_[tmt_index] == false);
-    alloc_map_[tmt_index] = true; 
-    return tmt_index + lower_limit();
+  uint64_t MapShadowTag(uint64_t phy_tag, int table_index) {
+    assert(floor() >= 0);
+    assert(table_index < length_ && alloc_map_[table_index] == false);
+    alloc_map_[table_index] = true; 
+    return floor() + table_index;
   }
 
   void UnmapShadowTag(uint64_t mach_tag) {
-    assert(lower_limit() >= 0);
-    assert(alloc_map_[mach_tag - lower_limit()]);
-    alloc_map_[mach_tag - lower_limit()] = false;
+    assert(floor() >= 0);
+    assert(alloc_map_[mach_tag - floor()]);
+    alloc_map_[mach_tag - floor()] = false;
   }
 
-  int lower_limit() const { return lower_limit_; }
-  void set_lower_limit(int tags) { lower_limit_ = tags; }
-  int upper_limit() const { return lower_limit() + tmt_length_; }
+  int length() const { return length_; }
+  int floor() const { return floor_; }
+  void set_floor(int tag) { floor_ = tag; }
 
  private:
-  const int tmt_length_;
-  int lower_limit_;
+  const int length_;
+  int floor_;
   std::vector<bool> alloc_map_;
 };
 
