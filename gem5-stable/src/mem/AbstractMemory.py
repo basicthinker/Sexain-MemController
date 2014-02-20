@@ -47,9 +47,13 @@ class AbstractMemory(MemObject):
     type = 'AbstractMemory'
     abstract = True
     cxx_header = "mem/abstract_mem.hh"
-    phy_range = Param.AddrRange(AddrRange('1024MB'), "Physical address range")
-    att_length = Param.Int(0, "Address Translation Table length")
-    block_size = Param.Int(64, "Cache block size")
+    phy_range = Param.AddrRange(AddrRange('512MB'), "Physical address range")
+    block_table_length = Param.Int(0, "Addr Translation Table length")
+    page_table_length = Param.Int(0, "Secondary page table length")
+    block_bits = Param.Int(6, "Number of bits of cache block size")
+    page_bits = Param.Int(12, "Number of bits of page size in 2nd page table")
+    dram_size = Param.Addr(AddrRange('512MB').size(), "DRAM size")
+    nvm_size = Param.Addr(AddrRange('2048MB').size(), "NVM size")
     null = Param.Bool(False, "Do not store data, always return zero")
 
     # All memories are passed to the global physical memory, and

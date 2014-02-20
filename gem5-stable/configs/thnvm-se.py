@@ -113,8 +113,15 @@ parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
 Options.addSEOptions(parser)
 
+parser.add_option("--nvm-size", type="string", default="0B", help="Size of NVM")
 parser.add_option("--att-length", type="int", default=0,
-        help="The number of addr trans table entries (single memory)")
+        help="Number of Addr Translation Table entries (for NVM)")
+parser.add_option("--mc-page-table-length", type="int", default=0,
+        help="Number of the secondary page table entries (for DRAM)")
+parser.add_option("--block-bits", type="int", default=6,
+        help="Number of bits of cache line/block")
+parser.add_option("--page-bits", type="int", default=12,
+        help="Number of bits of page in the secondary page table")
 
 parser.add_option("--cpu-2006", default="", type="string",
         help="The CPU 2006 benchmark to be loaded.")
@@ -191,9 +198,12 @@ if options.smt and options.num_cpus > 1:
 
 np = options.num_cpus
 system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
-                physmem = MemClass(phy_range=options.mem_size,
-                                   att_length=options.att_length,
-                                   block_size=options.cacheline_size),
+                physmem = MemClass(block_table_length=options.att_length,
+                        page_table_length=options.mc_page_table_length,
+                        block_bits=options.block_bits,
+                        page_bits=options.page_bits,
+                        dram_size=options.mem_size,
+                        nvm_size=options.nvm_size),
                 mem_mode = test_mem_mode,
                 clk_domain = SrcClockDomain(clock = options.sys_clock))
 

@@ -56,8 +56,10 @@ using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
     MemObject(p), phyRange(p->phy_range),
-    shadowMapper(p->att_length, p->phy_range.size() >> floorLog2(p->block_size)),
-    att(p->att_length, floorLog2(p->block_size), shadowMapper, *this),
+    blockMapper(p->block_table_length), pageMapper(p->page_table_length),
+    blockTable(p->block_bits, blockMapper, *this),
+    pageTable(p->page_bits, pageMapper, *this),
+    addrController(p->dram_size, p->nvm_size, blockTable, pageTable),
     pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
@@ -66,7 +68,7 @@ AbstractMemory::AbstractMemory(const Params *p) :
         panic("Memory Size not divisible by page size\n");
 
     machRange = AddrRange(phyRange.start(),
-            phyRange.end() + params()->block_size * params()->att_length);
+            phyRange.end() + params()->nvm_size);
 }
 
 void
@@ -343,7 +345,8 @@ AbstractMemory::access(PacketPtr pkt)
         return;
     }
 
-    uint8_t *hostAddr = pmemAddr + pkt->getAddr() - phyRange.start();
+    uint64_t localPhyAddr = pkt->getAddr() - phyRange.start();
+    uint8_t *hostAddr = pmemAddr + localPhyAddr;
 
     if (pkt->cmd == MemCmd::SwapReq) {
         TheISA::IntReg overwrite_val;
@@ -359,7 +362,7 @@ AbstractMemory::access(PacketPtr pkt)
         // keep a copy of our possible write value, and copy what is at the
         // memory address into the packet
         std::memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
-        att.LoadAddr(pkt->getAddr());
+        addrController.LoadAddr(localPhyAddr);
         std::memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
 
         if (pkt->req->isCondSwap()) {
@@ -376,7 +379,7 @@ AbstractMemory::access(PacketPtr pkt)
         }
 
         if (overwrite_mem) {
-            att.StoreAddr(pkt->getAddr());
+            addrController.StoreAddr(localPhyAddr);
             std::memcpy(hostAddr, &overwrite_val, pkt->getSize());
         }
 
@@ -389,8 +392,8 @@ AbstractMemory::access(PacketPtr pkt)
             trackLoadLocked(pkt);
         }
         if (pmemAddr) {
-            assert(pkt->getSize() == att.block_size());
-            att.LoadAddr(pkt->getAddr());
+            assert(pkt->getSize() == addrController.cache_block_size());
+            addrController.LoadAddr(localPhyAddr);
             memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
         }
         TRACE_PACKET(pkt->req->isInstFetch() ? "IFetch" : "Read");
@@ -401,8 +404,8 @@ AbstractMemory::access(PacketPtr pkt)
     } else if (pkt->isWrite()) {
         if (writeOK(pkt)) {
             if (pmemAddr) {
-                assert(pkt->getSize() == att.block_size());
-                att.StoreAddr(pkt->getAddr());
+                assert(pkt->getSize() == addrController.cache_block_size());
+                addrController.StoreAddr(localPhyAddr);
                 memcpy(hostAddr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
@@ -457,31 +460,31 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
-AbstractMemory::OnDirectWrite(uint64_t phy_addr, uint64_t mach_addr)
+AbstractMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     ++numDirectWrites;
 }
 
 void
-AbstractMemory::OnWriteBack(uint64_t phy_addr, uint64_t mach_addr)
+AbstractMemory::OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     ++numWriteBacks;
 }
 
 void
-AbstractMemory::OnOverwrite(uint64_t phy_addr, uint64_t mach_addr)
+AbstractMemory::OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     ++numOverwrites;
 }
 
 void
-AbstractMemory::OnShrink(uint64_t phy_addr, uint64_t mach_addr)
+AbstractMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     ++numShrinks;
 }
 
 void
-AbstractMemory::OnEpochEnd()
+AbstractMemory::OnEpochEnd(int bits)
 {
     ++numEpochs;
 }

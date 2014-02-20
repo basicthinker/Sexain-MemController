@@ -57,6 +57,7 @@
 #include "mem/mem_store.h"
 #include "mem/shadow_tag_mapper.h"
 #include "mem/addr_trans_table.h"
+#include "mem/addr_trans_controller.h"
 
 class System;
 
@@ -113,11 +114,20 @@ class AbstractMemory : public MemObject, public MemStore
     // Machine address range of this memory
     AddrRange machRange;
 
-    // Shadow address mapper
-    DirectMapper shadowMapper;
+    // Shadow tag mapper for cache blocks
+    DirectMapper blockMapper;
+
+    // Shadow tag mapper for secondary pages
+    DirectMapper pageMapper;
 
     // Address Translation Table
-    AddrTransTable att;
+    AddrTransTable blockTable;
+
+    // Secondary page table
+    AddrTransTable pageTable;
+
+    // Controller for addr translation
+    AddrTransController addrController;
 
     // Pointer to host memory used to implement this memory
     uint8_t* pmemAddr;
@@ -327,11 +337,11 @@ class AbstractMemory : public MemObject, public MemStore
      */
     virtual void regStats();
 
-    virtual void OnDirectWrite(uint64_t phy_addr, uint64_t mach_addr);
-    virtual void OnWriteBack(uint64_t phy_addr, uint64_t mach_addr);
-    virtual void OnOverwrite(uint64_t phy_addr, uint64_t mach_addr);
-    virtual void OnShrink(uint64_t phy_addr, uint64_t mach_addr);
-    virtual void OnEpochEnd();
+    virtual void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnEpochEnd(int bits);
 };
 
 #endif //__ABSTRACT_MEMORY_HH__
