@@ -89,6 +89,7 @@ inline uint64_t AddrTransTable::image_floor() const {
 }
 
 inline void AddrTransTable::set_image_floor(uint64_t addr) {
+  assert((addr & block_mask_) == 0);
   mapper_.set_floor(Tag(addr));
 }
 
