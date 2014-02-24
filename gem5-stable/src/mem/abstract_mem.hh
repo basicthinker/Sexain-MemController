@@ -214,6 +214,14 @@ class AbstractMemory : public MemObject, public MemStore
 
   private:
 
+    // Convert physical address to local address
+    Addr localAddr(PacketPtr pkt) const
+    { return pkt->getAddr() - phyRange.start(); }
+
+    // Convert local address to host memory address
+    uint8_t* hostAddr(Addr local_addr) const
+    { return pmemAddr + local_addr; }
+
     // Prevent copying
     AbstractMemory(const AbstractMemory&);
 

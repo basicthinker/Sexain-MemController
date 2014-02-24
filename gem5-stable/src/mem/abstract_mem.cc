@@ -345,9 +345,6 @@ AbstractMemory::access(PacketPtr pkt)
         return;
     }
 
-    uint64_t localPhyAddr = pkt->getAddr() - phyRange.start();
-    uint8_t *hostAddr = pmemAddr + localPhyAddr;
-
     if (pkt->cmd == MemCmd::SwapReq) {
         TheISA::IntReg overwrite_val;
         bool overwrite_mem;
@@ -362,25 +359,25 @@ AbstractMemory::access(PacketPtr pkt)
         // keep a copy of our possible write value, and copy what is at the
         // memory address into the packet
         std::memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
-        addrController.LoadAddr(localPhyAddr);
-        std::memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
+        uint8_t* host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
+        std::memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
 
         if (pkt->req->isCondSwap()) {
             if (pkt->getSize() == sizeof(uint64_t)) {
                 condition_val64 = pkt->req->getExtraData();
-                overwrite_mem = !std::memcmp(&condition_val64, hostAddr,
+                overwrite_mem = !std::memcmp(&condition_val64, host_addr,
                                              sizeof(uint64_t));
             } else if (pkt->getSize() == sizeof(uint32_t)) {
                 condition_val32 = (uint32_t)pkt->req->getExtraData();
-                overwrite_mem = !std::memcmp(&condition_val32, hostAddr,
+                overwrite_mem = !std::memcmp(&condition_val32, host_addr,
                                              sizeof(uint32_t));
             } else
                 panic("Invalid size for conditional read/write\n");
         }
 
         if (overwrite_mem) {
-            addrController.StoreAddr(localPhyAddr);
-            std::memcpy(hostAddr, &overwrite_val, pkt->getSize());
+            host_addr = hostAddr(addrController.StoreAddr(localAddr(pkt)));
+            std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
 
         assert(!pkt->req->isInstFetch());
@@ -393,8 +390,8 @@ AbstractMemory::access(PacketPtr pkt)
         }
         if (pmemAddr) {
             assert(pkt->getSize() == addrController.cache_block_size());
-            addrController.LoadAddr(localPhyAddr);
-            memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
+            uint8_t* host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
+            memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
         }
         TRACE_PACKET(pkt->req->isInstFetch() ? "IFetch" : "Read");
         numReads[pkt->req->masterId()]++;
@@ -405,8 +402,8 @@ AbstractMemory::access(PacketPtr pkt)
         if (writeOK(pkt)) {
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.cache_block_size());
-                addrController.StoreAddr(localPhyAddr);
-                memcpy(hostAddr, pkt->getPtr<uint8_t>(), pkt->getSize());
+                uint8_t* host_addr = hostAddr(addrController.StoreAddr(localAddr(pkt)));
+                memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
             }
@@ -432,16 +429,16 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
     assert(AddrRange(pkt->getAddr(),
                      pkt->getAddr() + pkt->getSize() - 1).isSubset(phyRange));
 
-    uint8_t *hostAddr = pmemAddr + pkt->getAddr() - phyRange.start();
+    uint8_t *host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
 
     if (pkt->isRead()) {
         if (pmemAddr)
-            memcpy(pkt->getPtr<uint8_t>(), hostAddr, pkt->getSize());
+            memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
         TRACE_PACKET("Read");
         pkt->makeResponse();
     } else if (pkt->isWrite()) {
         if (pmemAddr)
-            memcpy(hostAddr, pkt->getPtr<uint8_t>(), pkt->getSize());
+            memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
         TRACE_PACKET("Write");
         pkt->makeResponse();
     } else if (pkt->isPrint()) {
@@ -452,7 +449,7 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
         // through printObj().
         prs->printLabels();
         // Right now we just print the single byte at the specified address.
-        ccprintf(prs->os, "%s%#x\n", prs->curPrefix(), *hostAddr);
+        ccprintf(prs->os, "%s%#x\n", prs->curPrefix(), *host_addr);
     } else {
         panic("AbstractMemory: unimplemented functional command %s",
               pkt->cmdString());
@@ -468,6 +465,7 @@ AbstractMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
 void
 AbstractMemory::OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
+    memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), 1 << bits);
     ++numWriteBacks;
 }
 
