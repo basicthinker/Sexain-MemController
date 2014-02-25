@@ -33,9 +33,9 @@ void ScanRead(AddrTransController& atc, uint64_t base, int b, int e, int bits) {
 
 int main(int argc, const char* argv[]) {
   const uint64_t k_dram_size = 64 * MB;
-  const uint64_t k_nvm_size = GB;
-  const int k_blk_tbl_len = 8;
-  const int k_pg_tbl_len = 8;
+  const uint64_t k_phy_limit = 512 * MB;
+  const int k_blk_tbl_len = 64;
+  const int k_pg_tbl_len = 64;
 
   TraceMemStore mem;
 
@@ -44,7 +44,7 @@ int main(int argc, const char* argv[]) {
   AddrTransTable blk_tbl(BLOCK_BITS, blk_mapper, mem);
   AddrTransTable pg_tbl(PAGE_BITS, pg_mapper, mem);
 
-  AddrTransController atc(k_dram_size, k_nvm_size, blk_tbl, pg_tbl);
+  AddrTransController atc(k_phy_limit, blk_tbl, pg_tbl, k_dram_size);
   
   ScanWrite(atc, 0, 0, 8, PAGE_BITS);
   ScanWrite(atc, k_dram_size, 0, 4, BLOCK_BITS);

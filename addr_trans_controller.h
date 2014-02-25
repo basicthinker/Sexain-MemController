@@ -11,6 +11,8 @@ class AddrTransController {
  public:
   AddrTransController(uint64_t dram_size, uint64_t nvm_size,
     AddrTransTable& blk_tbl, AddrTransTable& pg_tbl);
+  AddrTransController(uint64_t phy_limit, AddrTransTable& blk_tbl,
+    AddrTransTable& pg_tbl, uint64_t dram_size);
 
   uint64_t LoadAddr(uint64_t phy_addr);
   uint64_t StoreAddr(uint64_t phy_addr);
@@ -18,13 +20,12 @@ class AddrTransController {
 
   int cache_block_size() const { return block_table_.block_size(); }
   uint64_t phy_limit() const { return phy_limit_; }
-
+  uint64_t dram_size() const { return dram_size_; }
+  uint64_t nvm_size() const { return nvm_size_; }
  private:
-  void set_phy_limit(uint64_t limit) { phy_limit_ = limit; }
-
   const uint64_t dram_size_;
   const uint64_t nvm_size_;
-  uint64_t phy_limit_;
+  const uint64_t phy_limit_;
 
   AddrTransTable& block_table_;
   AddrTransTable& page_table_;
