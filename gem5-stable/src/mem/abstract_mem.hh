@@ -109,10 +109,7 @@ class AbstractMemory : public MemObject, public MemStore
 {
   protected:
     // Physical ddress range of this memory
-    AddrRange phyRange;
-
-    // Machine address range of this memory
-    AddrRange machRange;
+    AddrRange range;
 
     // Shadow tag mapper for cache blocks
     DirectMapper blockMapper;
@@ -216,7 +213,7 @@ class AbstractMemory : public MemObject, public MemStore
 
     // Convert physical address to local address
     Addr localAddr(PacketPtr pkt) const
-    { return pkt->getAddr() - phyRange.start(); }
+    { return pkt->getAddr() - range.start(); }
 
     // Convert local address to host memory address
     uint8_t* hostAddr(Addr local_addr) const
@@ -252,6 +249,12 @@ class AbstractMemory : public MemObject, public MemStore
     void setBackingStore(uint8_t* pmem_addr);
 
     /**
+     * Get the length of backing host memory
+     */
+    uint64_t hostSize()
+    { return addrController.dram_size() + addrController.nvm_size(); };
+
+    /**
      * Get the list of locked addresses to allow checkpointing.
      */
     const std::list<LockedAddr>& getLockedAddrList() const
@@ -284,26 +287,23 @@ class AbstractMemory : public MemObject, public MemStore
     /**
      * Get the physical address range
      *
-     * @return a single contigous address range
+     * @return a single contiguous address range
      */
-    AddrRange getPhyAddrRange() const;
+    AddrRange getAddrRange() const;
 
     /**
-     * Get the machine address range
+     * Get the physical memory size.
      *
-     * @return a single contigous address range
+     * @return the physical size of the memory
      */
-    AddrRange getMachAddrRange() const;
+    uint64_t size() const { return range.size(); }
 
     /**
      * Get the start address.
      *
      * @return the start address of the memory
      */
-    Addr start() const {
-        assert(phyRange.start() == machRange.start());
-        return phyRange.start();
-    }
+    Addr start() const { return range.start(); }
 
     /**
      *  Should this memory be passed to the kernel and part of the OS

@@ -55,7 +55,7 @@
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
-    MemObject(p), phyRange(p->phy_range),
+    MemObject(p), range(p->range),
     blockMapper(p->block_table_length), pageMapper(p->page_table_length),
     blockTable(p->block_bits, blockMapper, *this),
     pageTable(p->page_bits, pageMapper, *this),
@@ -64,11 +64,10 @@ AbstractMemory::AbstractMemory(const Params *p) :
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
 {
-    if (phyRange.size() % TheISA::PageBytes != 0)
+    if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
 
-    machRange = AddrRange(phyRange.start(),
-            phyRange.end() + params()->nvm_size);
+    assert(range.size() == addrController.phy_limit());
 }
 
 void
@@ -203,15 +202,9 @@ AbstractMemory::regStats()
 }
 
 AddrRange
-AbstractMemory::getPhyAddrRange() const
+AbstractMemory::getAddrRange() const
 {
-    return phyRange;
-}
-
-AddrRange
-AbstractMemory::getMachAddrRange() const
-{
-    return machRange;
+    return range;
 }
 
 // Add load-locked to tracking list.  Should only be called if the
@@ -337,7 +330,7 @@ void
 AbstractMemory::access(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
-                     pkt->getAddr() + pkt->getSize() - 1).isSubset(phyRange));
+                     pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
 
     if (pkt->memInhibitAsserted()) {
         DPRINTF(MemoryAccess, "mem inhibited on 0x%x: not responding\n",
@@ -427,7 +420,7 @@ void
 AbstractMemory::functionalAccess(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
-                     pkt->getAddr() + pkt->getSize() - 1).isSubset(phyRange));
+                     pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
 
     uint8_t *host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
 

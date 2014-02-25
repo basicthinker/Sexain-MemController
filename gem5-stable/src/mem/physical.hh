@@ -86,9 +86,9 @@ class PhysicalMemory : public Serializable
     uint64_t size;
 
     // The physical memory and backing store
-    std::vector<std::pair<AddrRange, uint8_t*> > phyBackingStore;
-    // The mach memory and backing store
-    std::vector<std::pair<AddrRange, uint8_t*> > machBackingStore;
+    std::vector<std::pair<AddrRange, uint8_t*> > backingStore;
+    // The backing store and its size
+    std::vector<std::pair<uint8_t*, uint64_t> > backingSize;
 
     // Prevent copying
     PhysicalMemory(const PhysicalMemory&);
@@ -165,7 +165,7 @@ class PhysicalMemory : public Serializable
      * @return Pointers to the phy memory backing store
      */
     std::vector<std::pair<AddrRange, uint8_t*> > getBackingStore() const
-    { return phyBackingStore; }
+    { return backingStore; }
 
     /**
      * Perform an untimed memory access and update all the state

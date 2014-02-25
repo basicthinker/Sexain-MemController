@@ -206,7 +206,7 @@ AddrRangeList
 SimpleMemory::MemoryPort::getAddrRanges() const
 {
     AddrRangeList ranges;
-    ranges.push_back(memory.getPhyAddrRange());
+    ranges.push_back(memory.getAddrRange());
     return ranges;
 }
 
