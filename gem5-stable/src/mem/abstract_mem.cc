@@ -59,15 +59,13 @@ AbstractMemory::AbstractMemory(const Params *p) :
     blockMapper(p->block_table_length), pageMapper(p->page_table_length),
     blockTable(p->block_bits, blockMapper, *this),
     pageTable(p->page_bits, pageMapper, *this),
-    addrController(p->dram_size, p->nvm_size, blockTable, pageTable),
+    addrController(range.size(), blockTable, pageTable, p->dram_size),
     pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)
 {
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
-
-    assert(range.size() == addrController.phy_limit());
 }
 
 void

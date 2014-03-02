@@ -9,10 +9,10 @@ CPU_TYPE=atomic # timing, detailed
 NUM_CPUS=1
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
-MEM_SIZE=2GB
-NVM_SIZE=2052MB
+MEM_SIZE=2GB # for whole physical address space
+DRAM_SIZE=2GB
 ATT_LENGTH=0
-MC_PT_LEN=1024
+MC_PT_LEN=256 # secondary page table length
 
 L1D_SIZE=32kB
 L1D_ASSOC=8
@@ -38,14 +38,14 @@ while getopts "hc:o:b:t:" opt; do
       ;;
     c)
       COMMAND="-c $OPTARG"
-      ALIAS=$OPTARG
+      ALIAS=`basename $OPTARG`
       ;;
     o)
       COMMAND="$COMMAND -o $OPTARG"
       ;;
     b)
       COMMAND="--cpu-2006=$OPTARG"
-      ALIAS=$OPTARG
+      ALIAS=`basename $OPTARG`
       ;;
     t)
       $GEM5 $SE_SCRIPT --cpu-2006-root=$CPU2006ROOT --check-cpu-2006=$OPTARG
@@ -67,7 +67,7 @@ OPTIONS+=" --cpu-type=$CPU_TYPE"
 OPTIONS+=" --num-cpus=$NUM_CPUS"
 OPTIONS+=" --mem-type=$MEM_TYPE"
 OPTIONS+=" --mem-size=$MEM_SIZE"
-OPTIONS+=" --nvm-size=$NVM_SIZE"
+OPTIONS+=" --dram-size=$DRAM_SIZE"
 OPTIONS+=" --att-length=$ATT_LENGTH"
 OPTIONS+=" --mc-page-table-length=$MC_PT_LEN"
 OPTIONS+=" --l1d_size=$L1D_SIZE"

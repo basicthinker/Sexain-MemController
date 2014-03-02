@@ -53,7 +53,6 @@ class AbstractMemory(MemObject):
     block_bits = Param.Int(6, "Number of bits of cache block size")
     page_bits = Param.Int(12, "Number of bits of page size in 2nd page table")
     dram_size = Param.Addr(AddrRange('512MB').size(), "DRAM size")
-    nvm_size = Param.Addr(AddrRange('2048MB').size(), "NVM size")
     null = Param.Bool(False, "Do not store data, always return zero")
 
     # All memories are passed to the global physical memory, and

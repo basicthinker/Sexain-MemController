@@ -113,7 +113,8 @@ parser = optparse.OptionParser()
 Options.addCommonOptions(parser)
 Options.addSEOptions(parser)
 
-parser.add_option("--nvm-size", type="string", default="0B", help="Size of NVM")
+parser.add_option("--dram-size", type="string", default="0B",
+        help="Size of DRAM")
 parser.add_option("--att-length", type="int", default=0,
         help="Number of Addr Translation Table entries (for NVM)")
 parser.add_option("--mc-page-table-length", type="int", default=0,
@@ -198,12 +199,12 @@ if options.smt and options.num_cpus > 1:
 
 np = options.num_cpus
 system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
-                physmem = MemClass(block_table_length=options.att_length,
+                physmem = MemClass(range=AddrRange(options.mem_size),
+                        block_table_length=options.att_length,
                         page_table_length=options.mc_page_table_length,
                         block_bits=options.block_bits,
                         page_bits=options.page_bits,
-                        dram_size=options.mem_size,
-                        nvm_size=options.nvm_size),
+                        dram_size=options.dram_size),
                 mem_mode = test_mem_mode,
                 clk_domain = SrcClockDomain(clock = options.sys_clock))
 
