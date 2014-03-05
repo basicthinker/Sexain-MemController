@@ -37,6 +37,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Authors: Lisa Hsu
+#          Jinglei Ren <jinglei.ren@stanzax.org>
 
 # Configure the M5 cache hierarchy config in one place
 #
@@ -59,7 +60,17 @@ def config_cache(options, system):
         dcache_class, icache_class, l2_cache_class = \
             L1Cache, L1Cache, L2Cache
 
-    if options.l2cache:
+    if options.l3cache:
+        system.l3cache = L3Cache(clk_domain=system.cpu_clk_domain,
+                                 size=options.l3_size,
+                                 assoc=options.l3_assoc,
+                                 block_size=options.cacheline_size)
+
+        system.tol3bus = CoherentBus(clk_domain = system.cpu_clk_domain,
+                                     width = 32)
+        system.l3cache.cpu_side = system.tol3bus.master
+        system.l3cache.mem_side = system.membus.slave
+    elif options.l2cache:
         # Provide a clock for the L2 and the L1-to-L2 bus here as they
         # are not connected using addTwoLevelCacheHierarchy. Use the
         # same clock as the CPUs, and set the L1-to-L2 bus width to 32
@@ -82,19 +93,30 @@ def config_cache(options, system):
             dcache = dcache_class(size=options.l1d_size,
                                   assoc=options.l1d_assoc,
                                   block_size=options.cacheline_size)
-
+            if buildEnv['TARGET_ISA'] == 'x86':
+                iwc = PageTableWalkerCache()
+                dwc = PageTableWalkerCache()
+            else:
+                iwc = dwc = None
             # When connecting the caches, the clock is also inherited
             # from the CPU in question
-            if buildEnv['TARGET_ISA'] == 'x86':
-                system.cpu[i].addPrivateSplitL1Caches(icache, dcache,
-                                                      PageTableWalkerCache(),
-                                                      PageTableWalkerCache())
+            if options.l3cache:
+                l2c = l2_cache_class(clk_domain=system.cpu_clk_domain,
+                                     size=options.l2_size,
+                                     assoc=options.l2_assoc,
+                                     block_size=options.cacheline_size)
+                system.cpu[i].addTwoLevelCacheHierarchy(icache, dcache,
+                                                        l2c, iwc, dwc)
             else:
-                system.cpu[i].addPrivateSplitL1Caches(icache, dcache)
+                system.cpu[i].addPrivateSplitL1Caches(icache, dcache,
+                                                      iwc, dwc)
         system.cpu[i].createInterruptController()
-        if options.l2cache:
+        if options.l3cache:
+            system.cpu[i].connectAllPorts(system.tol3bus, system.membus)
+        elif options.l2cache:
             system.cpu[i].connectAllPorts(system.tol2bus, system.membus)
         else:
             system.cpu[i].connectAllPorts(system.membus)
 
     return system
+

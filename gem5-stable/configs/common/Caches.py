@@ -37,6 +37,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Authors: Lisa Hsu
+#          Jinglei Ren <jinglei.ren@stanzax.org>
 
 from m5.objects import *
 
@@ -60,6 +61,15 @@ class L2Cache(BaseCache):
     block_size = 64
     hit_latency = 20
     response_latency = 20
+    mshrs = 20
+    tgts_per_mshr = 12
+    write_buffers = 8
+
+class L3Cache(BaseCache):
+    assoc = 24
+    block_size = 64
+    hit_latency = 50
+    response_latency = 50
     mshrs = 20
     tgts_per_mshr = 12
     write_buffers = 8
