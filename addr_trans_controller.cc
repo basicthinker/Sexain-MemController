@@ -5,7 +5,7 @@
 #include <iostream> //DEBUG
 
 // Space partition (low -> high):
-// DRAM direct |(DRAM size)| NVM direct |(phy_limit)|
+// DRAM direct |(DRAM size)|| NVM direct |(phy_limit)||
 // ATT buffer || DRAM backup || Page table buffer 
 AddrTransController::AddrTransController(uint64_t dram_size, uint64_t nvm_size, 
     AddrTransTable& blk_tbl, AddrTransTable& pg_tbl): 
@@ -21,14 +21,14 @@ AddrTransController::AddrTransController(uint64_t dram_size, uint64_t nvm_size,
       page_table_.image_floor() - dram_size_); 
 }
 
-AddrTransController::AddrTransController(uint64_t phy_size, 
+AddrTransController::AddrTransController(uint64_t phy_range, 
     AddrTransTable& blk_tbl, AddrTransTable& pg_tbl, uint64_t dram_size):
 
     AddrTransController(dram_size,
-        phy_size + blk_tbl.image_size() + pg_tbl.image_size(),
+        phy_range + blk_tbl.image_size() + pg_tbl.image_size(),
         blk_tbl, pg_tbl) {
  
-  assert(phy_limit() == phy_size); 
+  assert(phy_limit() == phy_range); 
 }
 
 uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {

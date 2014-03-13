@@ -11,7 +11,7 @@ class AddrTransController {
  public:
   AddrTransController(uint64_t dram_size, uint64_t nvm_size,
     AddrTransTable& blk_tbl, AddrTransTable& pg_tbl);
-  AddrTransController(uint64_t phy_limit, AddrTransTable& blk_tbl,
+  AddrTransController(uint64_t phy_range, AddrTransTable& blk_tbl,
     AddrTransTable& pg_tbl, uint64_t dram_size);
 
   uint64_t LoadAddr(uint64_t phy_addr);

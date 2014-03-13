@@ -25,7 +25,7 @@ class DirectMapper : public ShadowTagMapper {
 
   uint64_t MapShadowTag(uint64_t phy_tag, int table_index) {
     assert(floor() >= 0);
-    assert(table_index < length_ && alloc_map_[table_index] == false);
+    assert(table_index < length() && alloc_map_[table_index] == false);
     alloc_map_[table_index] = true; 
     return floor() + table_index;
   }

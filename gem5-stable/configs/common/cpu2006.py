@@ -47,7 +47,7 @@ def make_process(bench_name, bench_root):
         hmmer.executable = bench_dir + '/hmmer'
         input_file = test_data + '/input/bombesin.hmm'
         hmmer.cmd = [hmmer.executable] + ['--fixed', '0', '--mean', '325',
-                '--num', '5000', '--sd', '200', '--seed', '0', input_file]
+                '--num', '45000', '--sd', '200', '--seed', '0', input_file]
         hmmer.output = output_dir + '/bombesin.out'
         return (hmmer, hmmer.output, test_data + '/output/bombesin.out')
     elif bench_name == '458.sjeng':
@@ -69,7 +69,7 @@ def make_process(bench_name, bench_root):
         libquantum=LiveProcess()
         libquantum.executable = bench_dir + '/libquantum'
         libquantum.cmd = [libquantum.executable] + ['33', '5']
-        libquantum.output = output_dir + '/test.out'
+        libquantum.output = output_dir + '/462.test.out'
         return (libquantum, libquantum.output, test_data + '/output/test.out')
     elif bench_name == '470.lbm':
         lbm = LiveProcess()
@@ -91,7 +91,7 @@ def make_process(bench_name, bench_root):
         xalancbmk.executable = bench_dir + '/Xalan'
         xalancbmk.cmd = [xalancbmk.executable, '-v'] + \
                 [test_data + '/input/test.xml', test_data + '/input/xalanc.xsl']
-        xalancbmk.output = output_dir + '/test.out'
+        xalancbmk.output = output_dir + '/483.test.out'
         return (xalancbmk, xalancbmk.output, test_data + '/output/test.out')
     elif bench_name == '998.specrand':
         specrand_i = LiveProcess()

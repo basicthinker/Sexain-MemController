@@ -7,12 +7,13 @@ SE_SCRIPT=$GEM5ROOT/configs/thnvm-se.py
 
 CPU_TYPE=atomic # timing, detailed
 NUM_CPUS=1
+CPU_CLOCK=3GHz
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
-DRAM_SIZE=2GB
-ATT_LENGTH=0
-MC_PT_LEN=256 # secondary page table length
+DRAM_SIZE=0B
+ATT_LENGTH=4096
+MC_PT_LEN=0 # secondary page table length
 
 L1D_SIZE=32kB
 L1D_ASSOC=8
@@ -28,27 +29,32 @@ L3_ASSOC=24
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
 OUT_DIR=~/Documents/gem5out
 
+to_run=0
+to_test=0
+
 while getopts "hc:o:b:t:" opt; do
   case $opt in
     h)
       $GEM5 -h
       $GEM5 $SE_SCRIPT -h
-      exit 0
       ;;
     c)
       COMMAND="-c $OPTARG"
       ALIAS=`basename $OPTARG`
+      to_run=1
       ;;
     o)
       COMMAND="$COMMAND -o $OPTARG"
       ;;
     b)
       COMMAND="--cpu-2006=$OPTARG"
-      ALIAS=`basename $OPTARG`
+      ALIAS=$OPTARG
+      to_run=1
+      to_test=1
       ;;
     t)
-      $GEM5 $SE_SCRIPT --cpu-2006-root=$CPU2006ROOT --check-cpu-2006=$OPTARG
-      exit 0
+      ALIAS=$OPTARG
+      to_test=1
       ;;
     \?)
       exit -1
@@ -56,14 +62,10 @@ while getopts "hc:o:b:t:" opt; do
   esac
 done
 
-if [ -z "$COMMAND" ]; then
-  echo "Usage: $0 [-h] [-c COMMAND] [-o OPTIONS] [-b|-t BENCHMARK]" >&2
-  exit -1
-fi
-
 OPTIONS="--caches --l2cache --l3cache"
 OPTIONS+=" --cpu-type=$CPU_TYPE"
 OPTIONS+=" --num-cpus=$NUM_CPUS"
+OPTIONS+=" --cpu-clock=$CPU_CLOCK"
 OPTIONS+=" --mem-type=$MEM_TYPE"
 OPTIONS+=" --mem-size=$MEM_SIZE"
 OPTIONS+=" --dram-size=$DRAM_SIZE"
@@ -79,5 +81,11 @@ OPTIONS+=" --l3_size=$L3_SIZE"
 OPTIONS+=" --l3_assoc=$L3_ASSOC"
 OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
 
-$GEM5 -d $OUT_DIR/$ALIAS-`date +%F` $SE_SCRIPT $OPTIONS $COMMAND
+if [ $to_run = 1 ]; then
+	$GEM5 -d $OUT_DIR/$ALIAS-`date +%F` $SE_SCRIPT $OPTIONS $COMMAND
+fi
+
+if [ $to_test = 1 ]; then
+  $GEM5 $SE_SCRIPT --cpu-2006-root=$CPU2006ROOT --check-cpu-2006=$ALIAS 1>&2
+fi
 
