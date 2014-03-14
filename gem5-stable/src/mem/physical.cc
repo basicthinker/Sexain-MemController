@@ -147,8 +147,15 @@ PhysicalMemory::createBackingStore(AddrRange range,
 
     assert(!_memories.empty());
     uint64_t host_size = _memories[0]->hostSize();
+    int num_thnvm = 0;
     for (int i = 0; i < _memories.size(); ++i) {
         assert(_memories[i]->hostSize() == host_size);
+        num_thnvm += (_memories[i]->params()->block_table_length != 0 ||
+                _memories[i]->params()->page_table_length != 0);
+    }
+    if (_memories.size() != 1 && num_thnvm > 0) {
+        panic("Cannot create backing store for multiple THNVM %s\n",
+              range.to_string());
     }
 
     // perform the actual mmap

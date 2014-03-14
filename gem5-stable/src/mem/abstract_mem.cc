@@ -59,7 +59,7 @@ AbstractMemory::AbstractMemory(const Params *p) :
     blockMapper(p->block_table_length), pageMapper(p->page_table_length),
     blockTable(p->block_bits, blockMapper, *this),
     pageTable(p->page_bits, pageMapper, *this),
-    addrController(range.size(), blockTable, pageTable, p->dram_size),
+    addrController(range.span(), blockTable, pageTable, p->dram_size),
     pmemAddr(NULL),
     confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
     _system(NULL)

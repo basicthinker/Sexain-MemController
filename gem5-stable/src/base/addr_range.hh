@@ -164,6 +164,11 @@ class AddrRange
         return (_end - _start + 1) >> intlvBits;
     }
 
+    Addr span() const
+    {
+        return _end - _start + 1;
+    }
+
     /**
      * Determine if the range is valid.
      */
