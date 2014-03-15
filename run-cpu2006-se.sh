@@ -17,6 +17,6 @@ BENCHMARKS=(
 
 for benchmark in ${BENCHMARKS[@]}
 do
-  nohup ./run-thnvm-se.py -b $benchmark >cpu2006.log 2>cpu2006.err &
+  nohup ./run-thnvm-se.py -b $benchmark >>cpu2006.log 2>>cpu2006.err &
 done
 
