@@ -23,6 +23,11 @@ class MemStore {
 
   // When a new epoch is to start
   virtual void OnEpochEnd(int bits) = 0;
+
+  virtual void OnNVMRead(uint64_t mach_addr) = 0;
+  virtual void OnNVMWrite(uint64_t mach_addr) = 0;
+  virtual void OnDRAMRead(uint64_t mach_addr) = 0;
+  virtual void OnDRAMWrite(uint64_t mach_addr) = 0;
 };
 
 class TraceMemStore : public MemStore {
@@ -30,37 +35,61 @@ class TraceMemStore : public MemStore {
   void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits) {
     std::cout << std::hex;
     std::cout << "[Info] MemStore directly writes: "
-        << phy_tag << " => " << mach_tag << " (" << bits << ')' << std::endl;
-    std::cout << std::dec; 
+        << phy_tag << " => " << mach_tag
+        << std::dec << " (" << bits << ')' << std::endl;
   }
 
   void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits) {
     assert(phy_tag != mach_tag);
     std::cout << std::hex;
     std::cout << "[Info] MemStore writes back from "
-        << mach_tag << " to " << phy_tag << " (" << bits << ')' << std::endl;
-    std::cout << std::dec;
+        << mach_tag << " to " << phy_tag
+        << std::dec << " (" << bits << ')' << std::endl;
   }
 
   void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits) {
     assert(phy_tag != mach_tag);
     std::cout << std::hex;
     std::cout << "[Info] MemStore overwrites: "
-        << phy_tag << " => " << mach_tag << " (" << bits << ')' << std::endl;
-    std::cout << std::dec; 
+        << phy_tag << " => " << mach_tag
+        << std::dec << " (" << bits << ')' << std::endl;
   }
 
   void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits) {
     assert(phy_tag != mach_tag);
     std::cout << std::hex;
     std::cout << "[Info] MemStore shrinks: "
-        << phy_tag << " => " << mach_tag << " (" << bits << ')' << std::endl;
-    std::cout << std::dec;
+        << phy_tag << " => " << mach_tag
+        << std::dec << " (" << bits << ')' << std::endl;
   }
 
   void OnEpochEnd(int bits) {
     std::cout << "[Info] MemStore meets epoch end (" << bits << ")."
         << std::endl;
+  }
+
+  void OnNVMRead(uint64_t mach_addr) {
+    std::cout << std::hex;
+    std::cout << "[Info] MemStore reads NVM: " << mach_addr << std::endl;
+    std::cout << std::dec;
+  }
+
+  void OnNVMWrite(uint64_t mach_addr) {
+    std::cout << std::hex;
+    std::cout << "[Info] MemStore writes to NVM: " << mach_addr << std::endl;
+    std::cout << std::dec;
+  }
+
+  void OnDRAMRead(uint64_t mach_addr) {
+    std::cout << std::hex;
+    std::cout << "[Info] MemStore reads DRAM: " << mach_addr << std::endl;
+    std::cout << std::dec;
+  }
+
+  void OnDRAMWrite(uint64_t mach_addr) {
+    std::cout << std::hex;
+    std::cout << "[Info] MemStore writes to DRAM: " << mach_addr << std::endl;
+    std::cout << std::dec;
   }
 };
 
