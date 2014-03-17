@@ -92,8 +92,16 @@ class SimpleMemory : public AbstractMemory
 
     MemoryPort port;
 
-    Tick lat;
-    Tick lat_var;
+    const Tick lat;
+    const Tick lat_var;
+
+    const Tick latATTLookup;
+    const Tick latATTUpdate;
+    const Tick latBlkWriteback;
+    const Tick latNVMRead;
+    const Tick latNVMWrite;
+
+    Tick latATT;
 
     /// Bandwidth in ticks per byte
     const double bandwidth;
@@ -134,6 +142,14 @@ class SimpleMemory : public AbstractMemory
     virtual BaseSlavePort& getSlavePort(const std::string& if_name,
                                         PortID idx = InvalidPortID);
     virtual void init();
+
+    virtual void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits);
+    virtual void OnEpochEnd(int bits);
+    virtual void OnNVMRead(uint64_t mach_addr);
+    virtual void OnNVMWrite(uint64_t mach_addr);
 
   protected:
 

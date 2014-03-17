@@ -50,9 +50,13 @@ using namespace std;
 SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     AbstractMemory(p),
     port(name() + ".port", *this), lat(p->latency),
-    lat_var(p->latency_var), bandwidth(p->bandwidth),
+    lat_var(p->latency_var), latATTLookup(p->lat_att_lookup),
+    latATTUpdate(p->lat_att_update), latBlkWriteback(p->lat_blk_writeback),
+	latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
+	bandwidth(p->bandwidth),
     isBusy(false), retryReq(false), releaseEvent(this)
 {
+    latATT = 0;
 }
 
 void
@@ -74,15 +78,16 @@ SimpleMemory::calculateLatency(PacketPtr pkt)
         Tick latency = lat;
         if (lat_var != 0)
             latency += random_mt.random<Tick>(0, lat_var);
-        return latency;
+        return latency + latATTLookup;
     }
 }
 
 Tick
 SimpleMemory::doAtomicAccess(PacketPtr pkt)
 {
+    latATT = 0;
     access(pkt);
-    return calculateLatency(pkt);
+    return calculateLatency(pkt) + latATT;
 }
 
 void
@@ -241,4 +246,47 @@ SimpleMemory*
 SimpleMemoryParams::create()
 {
     return new SimpleMemory(this);
+}
+
+void
+SimpleMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
+{
+    AbstractMemory::OnDirectWrite(phy_tag, mach_tag, bits);
+    latATT += latATTUpdate;
+}
+
+void
+SimpleMemory::OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits)
+{
+    AbstractMemory::OnWriteBack(phy_tag, mach_tag, bits);
+    latATT += latBlkWriteback;
+}
+
+void
+SimpleMemory::OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
+{
+    AbstractMemory::OnOverwrite(phy_tag, mach_tag, bits);
+}
+
+void
+SimpleMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
+{
+    AbstractMemory::OnShrink(phy_tag, mach_tag, bits);
+    latATT += latATTUpdate;
+}
+
+void
+SimpleMemory::OnEpochEnd(int bits)
+{
+    AbstractMemory::OnEpochEnd(bits);
+}
+
+void
+SimpleMemory::OnNVMRead(uint64_t mach_addr) {
+    latATT += latNVMRead;
+}
+
+void
+SimpleMemory::OnNVMWrite(uint64_t mach_addr) {
+    latATT += latNVMWrite;
 }
