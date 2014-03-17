@@ -28,9 +28,9 @@ class AddrTransController {
  private:
   const uint64_t dram_size_;
   const uint64_t nvm_size_;
-  const uint64_t phy_limit_;
   AddrTransTable& block_table_;
   AddrTransTable& page_table_;
+  const uint64_t phy_limit_;
   MemStore* mem_store_;
 };
 
