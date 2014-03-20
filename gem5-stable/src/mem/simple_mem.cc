@@ -78,7 +78,11 @@ SimpleMemory::calculateLatency(PacketPtr pkt)
         Tick latency = lat;
         if (lat_var != 0)
             latency += random_mt.random<Tick>(0, lat_var);
-        return latency + latATTLookup;
+        if (isLatATT) {
+            latency += latATTLookup;
+            sumLatATT += latATTLookup;
+        }
+        return latency;
     }
 }
 
@@ -87,8 +91,13 @@ SimpleMemory::doAtomicAccess(PacketPtr pkt)
 {
     latATT = 0;
     access(pkt);
-    ticksATTLatency += latATT;
-    return calculateLatency(pkt) + latATT;
+
+    Tick latency = calculateLatency(pkt); 
+    if (isLatATT) {
+        latency += latATT;
+        sumLatATT += latATT;
+    }
+    return latency;
 }
 
 void
@@ -162,7 +171,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // atomic response
         assert(pkt->isResponse());
         port.schedTimingResp(pkt, curTick() + latency);
-        ticksTotalLatency += latency;
+        totalLatency += latency;
     } else {
         pendingDelete.push_back(pkt);
     }

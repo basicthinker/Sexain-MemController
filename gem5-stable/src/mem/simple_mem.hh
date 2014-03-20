@@ -155,9 +155,9 @@ class SimpleMemory : public AbstractMemory
   protected:
 
     /** Total latency in responding */
-    Stats::Scalar ticksTotalLatency;
+    Stats::Scalar totalLatency;
     /** Additional latency due to ATT in responding */
-    Stats::Scalar ticksATTLatency;
+    Stats::Scalar sumLatATT;
 
     Tick doAtomicAccess(PacketPtr pkt);
     void doFunctionalAccess(PacketPtr pkt);
