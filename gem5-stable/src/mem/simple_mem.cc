@@ -52,8 +52,8 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     port(name() + ".port", *this), lat(p->latency),
     lat_var(p->latency_var), latATTLookup(p->lat_att_lookup),
     latATTUpdate(p->lat_att_update), latBlkWriteback(p->lat_blk_writeback),
-	latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
-	bandwidth(p->bandwidth),
+    latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
+    isLatATT(p->is_lat_att), bandwidth(p->bandwidth),
     isBusy(false), retryReq(false), releaseEvent(this)
 {
     latATT = 0;

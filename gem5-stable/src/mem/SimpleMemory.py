@@ -58,3 +58,4 @@ class SimpleMemory(AbstractMemory):
                                       "Latency of block writeback for ATT")
     lat_nvm_read = Param.Latency('30ns', "Additional latency for NVM read")
     lat_nvm_write = Param.Latency('470ns', "Additional latency for NVM write")
+    is_lat_att = Param.Bool(True, "If ATT latency is counted")

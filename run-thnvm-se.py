@@ -32,7 +32,7 @@ OUT_DIR=~/Documents/gem5out
 to_run=0
 to_test=0
 
-while getopts "hc:o:b:t:" opt; do
+while getopts "hc:o:b:t:l" opt; do
   case $opt in
     h)
       $GEM5 -h
@@ -44,13 +44,16 @@ while getopts "hc:o:b:t:" opt; do
       to_run=1
       ;;
     o)
-      COMMAND="$COMMAND -o $OPTARG"
+      COMMAND+=" -o $OPTARG"
       ;;
     b)
       COMMAND="--cpu-2006=$OPTARG"
       ALIAS=$OPTARG
       to_run=1
       to_test=1
+      ;;
+    l)
+      OPTIONS+=" --att-latency"
       ;;
     t)
       ALIAS=$OPTARG
@@ -62,7 +65,7 @@ while getopts "hc:o:b:t:" opt; do
   esac
 done
 
-OPTIONS="--caches --l2cache --l3cache"
+OPTIONS+=" --caches --l2cache --l3cache"
 OPTIONS+=" --cpu-type=$CPU_TYPE"
 OPTIONS+=" --num-cpus=$NUM_CPUS"
 OPTIONS+=" --cpu-clock=$CPU_CLOCK"

@@ -123,6 +123,8 @@ parser.add_option("--block-bits", type="int", default=6,
         help="Number of bits of cache line/block")
 parser.add_option("--page-bits", type="int", default=12,
         help="Number of bits of page in the secondary page table")
+parser.add_option("--att-latency", action="store_true", default=False,
+        help="Whether to enable ATT latency")
 
 parser.add_option("--cpu-2006", default="", type="string",
         help="The CPU 2006 benchmark to be loaded.")
@@ -204,7 +206,8 @@ system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
                         page_table_length=options.mc_page_table_length,
                         block_bits=options.block_bits,
                         page_bits=options.page_bits,
-                        dram_size=options.dram_size),
+                        dram_size=options.dram_size,
+                        is_lat_att=options.att_latency),
                 mem_mode = test_mem_mode,
                 clk_domain = SrcClockDomain(clock = options.sys_clock))
 

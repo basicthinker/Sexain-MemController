@@ -102,6 +102,7 @@ class SimpleMemory : public AbstractMemory
     const Tick latNVMWrite;
 
     Tick latATT;
+    bool isLatATT;
 
     /// Bandwidth in ticks per byte
     const double bandwidth;
