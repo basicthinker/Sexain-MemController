@@ -15,8 +15,10 @@ BENCHMARKS=(
 999.specrand
 )
 
+OUT_FILE=cpu2006-`date +%T`
+
 for benchmark in ${BENCHMARKS[@]}
 do
-  nohup ./run-thnvm-se.py -b $benchmark >>cpu2006.log 2>>cpu2006.err &
+  nohup ./run-thnvm-se.py -b $benchmark $* >>$OUT_FILE.log 2>>$OUT_FILE.err &
 done
 

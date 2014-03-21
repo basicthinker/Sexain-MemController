@@ -5,7 +5,7 @@ ARCH=X86 #X86_MESI_CMP_directory # in ./build_opts
 GEM5=$GEM5ROOT/build/$ARCH/gem5.opt
 SE_SCRIPT=$GEM5ROOT/configs/thnvm-se.py
 
-CPU_TYPE=atomic # timing, detailed
+CPU_TYPE=timing # atomic, detailed
 NUM_CPUS=1
 CPU_CLOCK=3GHz
 
@@ -27,7 +27,7 @@ L3_SIZE=$((3*NUM_CPUS))MB
 L3_ASSOC=24
 
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
-OUT_DIR=~/Documents/gem5out
+OUT_DIR=~/Documents/gem5out-`date +%m-%d`
 
 to_run=0
 to_test=0
@@ -53,6 +53,7 @@ while getopts "hc:o:b:t:l" opt; do
       to_test=1
       ;;
     l)
+      OUT_DIR+="-lat"
       OPTIONS+=" --att-latency"
       ;;
     t)
@@ -85,7 +86,7 @@ OPTIONS+=" --l3_assoc=$L3_ASSOC"
 OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
 
 if [ $to_run = 1 ]; then
-	$GEM5 -d $OUT_DIR/$ALIAS-`date +%F` $SE_SCRIPT $OPTIONS $COMMAND
+	$GEM5 -d $OUT_DIR/$ALIAS $SE_SCRIPT $OPTIONS $COMMAND
 fi
 
 if [ $to_test = 1 ]; then
