@@ -144,6 +144,11 @@ class SimpleMemory : public AbstractMemory
                                         PortID idx = InvalidPortID);
     virtual void init();
 
+    /**
+     * Register Statistics
+     */
+    virtual void regStats();
+
     virtual void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);

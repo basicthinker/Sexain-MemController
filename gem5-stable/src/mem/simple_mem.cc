@@ -69,6 +69,20 @@ SimpleMemory::init()
     }
 }
 
+void
+SimpleMemory::regStats()
+{
+    using namespace Stats;
+    AbstractMemory::regStats();
+
+    totalLatency
+        .name(name() + ".totalLatency")
+        .desc("Total latency in memory responds");
+    sumLatATT
+        .name(name() + ".sumLatATT")
+        .desc("Additional latency due to ATT in memory responds");
+}
+
 Tick
 SimpleMemory::calculateLatency(PacketPtr pkt)
 {
