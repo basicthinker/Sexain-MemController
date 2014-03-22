@@ -32,6 +32,7 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
     }
 
     uint64_t mach_tag = mapper_.MapShadowTag(phy_tag, i);
+    mem_store_.OnNewMapping(phy_tag, mach_tag, block_bits_);
     if (!entry.valid) mem_store_.OnDirectWrite(phy_tag, mach_tag, block_bits_);
 
     entries_[i].phy_tag = phy_tag;

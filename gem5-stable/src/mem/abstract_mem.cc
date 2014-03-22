@@ -448,6 +448,15 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
+AbstractMemory::OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits)
+{
+    int size = (1 << bits);
+    if (size == pageTable.block_size()) {
+        memcpy(hostAddr(mach_tag << bits), hostAddr(phy_tag << bits), size);
+    }
+}
+
+void
 AbstractMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     ++numDirectWrites;
@@ -470,6 +479,10 @@ void
 AbstractMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     ++numShrinks;
+    int size = (1 << bits);
+    if (size == pageTable.block_size()) {
+        memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size);
+    }
 }
 
 void

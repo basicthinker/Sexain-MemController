@@ -11,9 +11,9 @@ CPU_CLOCK=3GHz
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
-DRAM_SIZE=0B
-ATT_LENGTH=1024
-MC_PT_LEN=0 # secondary page table length
+DRAM_SIZE=2GB
+ATT_LENGTH=0
+MC_PT_LEN=256 # secondary page table length
 
 L1D_SIZE=32kB
 L1D_ASSOC=8

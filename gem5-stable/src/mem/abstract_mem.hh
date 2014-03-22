@@ -345,6 +345,7 @@ class AbstractMemory : public MemObject, public MemStore
      */
     virtual void regStats();
 
+    virtual void OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);

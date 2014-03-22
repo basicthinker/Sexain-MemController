@@ -10,6 +10,8 @@
 
 class MemStore {
  public:
+  // When a new entry is created
+  virtual void OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits) = 0;
   // When no entry is hit and no mapping is evicted
   virtual void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag,
       int bits) = 0;
@@ -32,6 +34,13 @@ class MemStore {
 
 class TraceMemStore : public MemStore {
  public:
+  void OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits) {
+    std::cout << std::hex;
+    std::cout << "[Info] MemStore creates new mapping: "
+        << phy_tag << " => " << mach_tag
+        << std::dec << " (" << bits << ')' << std::endl;
+  }
+
   void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits) {
     std::cout << std::hex;
     std::cout << "[Info] MemStore directly writes: "
