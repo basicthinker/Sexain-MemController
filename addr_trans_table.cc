@@ -21,7 +21,7 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
   uint64_t phy_tag = Tag(phy_addr);
   std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
-    if (queues_[0].Empty()) return -EINVAL;
+    assert(!queues_[0].Empty());
     int i = queues_[0].PopFront(); // clean queue
     ATTEntry& entry = entries_[i];
 

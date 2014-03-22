@@ -20,6 +20,7 @@ class DirectMapper : public ShadowTagMapper {
  public:
   DirectMapper(int length) : length_(length),
       alloc_map_(length, false) {
+    assert(length >= 0);
     set_floor(-EINVAL);
   }
 

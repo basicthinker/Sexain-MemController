@@ -68,6 +68,7 @@ inline AddrTransTable::AddrTransTable(int block_bits,
 }
 
 inline bool AddrTransTable::Probe(uint64_t phy_addr) {
+  assert(length() != 0);
   uint64_t phy_tag = Tag(phy_addr);
   return !queues_[0].Empty() || tag_index_.find(phy_tag) != tag_index_.end();
 }
