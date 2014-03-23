@@ -143,6 +143,37 @@ namespace X86ISA
     }
 
     /**
+     * Convert an x87 tag word to abridged tag format.
+     *
+     * Convert from the x87 tag representation to the tag abridged
+     * representation used in the FXSAVE area. The classic format uses
+     * 2 bits per stack position to indicate if a position is valid,
+     * zero, special, or empty. The abridged format only stores
+     * whether a position is empty or not.
+     *
+     * @param ftw Tag word in classic x87 format.
+     * @return Tag word in the abridged format.
+     */
+    uint8_t convX87TagsToXTags(uint16_t ftw);
+
+    /**
+     * Convert an x87 xtag word to normal tags format.
+     *
+     * Convert from the abridged x87 tag representation used in the
+     * FXSAVE area to a full x87 tag. The classic format uses 2 bits
+     * per stack position to indicate if a position is valid, zero,
+     * special, or empty. The abridged format only stores whether a
+     * position is empty or not.
+     *
+     * @todo Reconstruct the correct state of stack positions instead
+     * of just valid/invalid.
+     *
+     * @param ftwx Tag word in the abridged format.
+     * @return Tag word in classic x87 format.
+     */
+    uint16_t convX87XTagsToTags(uint8_t ftwx);
+
+    /**
      * Generate and updated x87 tag register after a push/pop
      * operation.
      *
@@ -156,6 +187,22 @@ namespace X86ISA
      * @return New value of the FTW register.
      */
     uint16_t genX87Tags(uint16_t ftw, uint8_t top, int8_t spm);
+
+    /**
+     * Load an 80-bit float from memory and convert it to double.
+     *
+     * @param mem Pointer to an 80-bit float.
+     * @return double representation of the 80-bit float.
+     */
+    double loadFloat80(const void *mem);
+
+    /**
+     * Convert and store a double as an 80-bit float.
+     *
+     * @param mem Pointer to destination for the 80-bit float.
+     * @param value Double precision float to store.
+     */
+    void storeFloat80(void *mem, double value);
 }
 
 #endif // __ARCH_X86_UTILITY_HH__

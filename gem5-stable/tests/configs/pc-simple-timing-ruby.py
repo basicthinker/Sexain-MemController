@@ -55,19 +55,24 @@ options.num_cpus = 2
 
 #the system
 mdesc = SysConfig(disk = 'linux-x86.img')
-system = FSConfig.makeLinuxX86System('timing', DDR3_1600_x64, options.num_cpus,
+system = FSConfig.makeLinuxX86System('timing', options.num_cpus,
                                      mdesc=mdesc, Ruby=True)
+# Dummy voltage domain for all our clock domains
+system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
 
 system.kernel = FSConfig.binary('x86_64-vmlinux-2.6.22.9.smp')
-system.clk_domain = SrcClockDomain(clock = '1GHz')
-system.cpu_clk_domain = SrcClockDomain(clock = '2GHz')
+system.clk_domain = SrcClockDomain(clock = '1GHz',
+                                   voltage_domain = system.voltage_domain)
+system.cpu_clk_domain = SrcClockDomain(clock = '2GHz',
+                                       voltage_domain = system.voltage_domain)
 system.cpu = [TimingSimpleCPU(cpu_id=i, clk_domain = system.cpu_clk_domain)
               for i in xrange(options.num_cpus)]
 
 Ruby.create_system(options, system, system.piobus, system._dma_ports)
 
 # Create a seperate clock domain for Ruby
-system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock)
+system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock,
+                                        voltage_domain = system.voltage_domain)
 
 for (i, cpu) in enumerate(system.cpu):
     # create the interrupt controller
@@ -83,6 +88,11 @@ for (i, cpu) in enumerate(system.cpu):
 
     # Set access_phys_mem to True for ruby port
     system.ruby._cpu_ruby_ports[i].access_phys_mem = True
+
+system.physmem = [DDR3_1600_x64(range = r)
+                  for r in system.mem_ranges]
+for i in xrange(len(system.physmem)):
+    system.physmem[i].port = system.piobus.master
 
 root = Root(full_system = True, system = system)
 m5.ticks.setGlobalFrequency('1THz')

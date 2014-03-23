@@ -30,7 +30,9 @@
 
 Import('*')
 
-if env['TARGET_ISA'] == 'no':
+if env['TARGET_ISA'] == 'null':
+    SimObject('IntrControl.py')
+    Source('intr_control_noisa.cc')
     Return()
 
 #################################################################
@@ -116,6 +118,7 @@ Source('nativetrace.cc')
 Source('pc_event.cc')
 Source('profile.cc')
 Source('quiesce_event.cc')
+Source('reg_class.cc')
 Source('static_inst.cc')
 Source('simple_thread.cc')
 Source('thread_context.cc')

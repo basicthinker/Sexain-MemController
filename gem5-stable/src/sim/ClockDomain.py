@@ -38,6 +38,7 @@
 
 from m5.params import *
 from m5.SimObject import SimObject
+from m5.proxy import *
 
 # Abstract clock domain
 class ClockDomain(SimObject):
@@ -50,6 +51,9 @@ class SrcClockDomain(ClockDomain):
     type = 'SrcClockDomain'
     cxx_header = "sim/clock_domain.hh"
     clock = Param.Clock("Clock period")
+
+    # A source clock must be associated with a voltage domain
+    voltage_domain = Param.VoltageDomain("Voltage domain")
 
 # Derived clock domain with a parent clock domain and a frequency
 # divider

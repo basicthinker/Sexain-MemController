@@ -52,13 +52,13 @@ from Uart import Uart
 from SimpleMemory import SimpleMemory
 from Gic import *
 
-class AmbaDevice(BasicPioDevice):
-    type = 'AmbaDevice'
+class AmbaPioDevice(BasicPioDevice):
+    type = 'AmbaPioDevice'
     abstract = True
     cxx_header = "dev/arm/amba_device.hh"
     amba_id = Param.UInt32("ID of AMBA device for kernel detection")
 
-class AmbaIntDevice(AmbaDevice):
+class AmbaIntDevice(AmbaPioDevice):
     type = 'AmbaIntDevice'
     abstract = True
     cxx_header = "dev/arm/amba_device.hh"
@@ -88,7 +88,7 @@ class RealViewCtrl(BasicPioDevice):
     proc_id1 = Param.UInt32(0x0C000222, "Processor ID, SYS_PROCID1")
     idreg = Param.UInt32(0x00000000, "ID Register, SYS_ID")
 
-class AmbaFake(AmbaDevice):
+class AmbaFake(AmbaPioDevice):
     type = 'AmbaFake'
     cxx_header = "dev/arm/amba_fake.hh"
     ignore_access = Param.Bool(False, "Ignore reads/writes to this device, (e.g. IsaFake + AMBA)")
@@ -102,7 +102,7 @@ class Pl011(Uart):
     end_on_eot = Param.Bool(False, "End the simulation when a EOT is received on the UART")
     int_delay = Param.Latency("100ns", "Time between action and interrupt generation by UART")
 
-class Sp804(AmbaDevice):
+class Sp804(AmbaPioDevice):
     type = 'Sp804'
     cxx_header = "dev/arm/timer_sp804.hh"
     gic = Param.BaseGic(Parent.any, "Gic to use for interrupting")
@@ -139,6 +139,8 @@ class Pl111(AmbaDmaDevice):
     pixel_clock = Param.Clock('24MHz', "Pixel clock")
     vnc   = Param.VncInput(Parent.any, "Vnc server for remote frame buffer display")
     amba_id = 0x00141111
+    enable_capture = Param.Bool(True, "capture frame to system.framebuffer.bmp")
+
 
 class HDLcd(AmbaDmaDevice):
     type = 'HDLcd'
@@ -149,6 +151,7 @@ class HDLcd(AmbaDmaDevice):
     vnc = Param.VncInput(Parent.any, "Vnc server for remote frame buffer "
                                      "display")
     amba_id = 0x00141000
+    enable_capture = Param.Bool(True, "capture frame to system.framebuffer.bmp")
 
 class RealView(Platform):
     type = 'RealView'
@@ -159,8 +162,8 @@ class RealView(Platform):
     max_mem_size = Param.Addr('256MB', "Maximum amount of RAM supported by platform")
 
     def setupBootLoader(self, mem_bus, cur_sys, loc):
-        self.nvmem = SimpleMemory(range = AddrRange(Addr('2GB'),
-                                                    size = '64MB'))
+        self.nvmem = SimpleMemory(range = AddrRange('2GB', size = '64MB'),
+                                  conf_table_reported = False)
         self.nvmem.port = mem_bus.master
         cur_sys.boot_loader = loc('boot.arm')
 
@@ -357,7 +360,8 @@ class VExpress_EMM(RealView):
                         InterruptLine=2, InterruptPin=2)
 
 
-    vram           = SimpleMemory(range = AddrRange(0x18000000, size='32MB'))
+    vram           = SimpleMemory(range = AddrRange(0x18000000, size='32MB'),
+                                  conf_table_reported = False)
     rtc            = PL031(pio_addr=0x1C170000, int_num=36)
 
     l2x0_fake      = IsaFake(pio_addr=0x2C100000, pio_size=0xfff)
@@ -372,7 +376,8 @@ class VExpress_EMM(RealView):
     mmc_fake       = AmbaFake(pio_addr=0x1c050000)
 
     def setupBootLoader(self, mem_bus, cur_sys, loc):
-        self.nvmem = SimpleMemory(range = AddrRange(0, size = '64MB'))
+        self.nvmem = SimpleMemory(range = AddrRange('64MB'),
+                                  conf_table_reported = False)
         self.nvmem.port = mem_bus.master
         cur_sys.boot_loader = loc('boot_emm.arm')
         cur_sys.atags_addr = 0x80000100

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010-2012 ARM Limited
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -41,12 +42,16 @@
  *          Korey Sewell
  */
 
+#ifndef __CPU_O3_RENAME_IMPL_HH__
+#define __CPU_O3_RENAME_IMPL_HH__
+
 #include <list>
 
 #include "arch/isa_traits.hh"
 #include "arch/registers.hh"
 #include "config/the_isa.hh"
 #include "cpu/o3/rename.hh"
+#include "cpu/reg_class.hh"
 #include "debug/Activity.hh"
 #include "debug/Rename.hh"
 #include "debug/O3PipeView.hh"
@@ -63,7 +68,8 @@ DefaultRename<Impl>::DefaultRename(O3CPU *_cpu, DerivO3CPUParams *params)
       renameWidth(params->renameWidth),
       commitWidth(params->commitWidth),
       numThreads(params->numThreads),
-      maxPhysicalRegs(params->numPhysIntRegs + params->numPhysFloatRegs)
+      maxPhysicalRegs(params->numPhysIntRegs + params->numPhysFloatRegs
+                      + params->numPhysCCRegs)
 {
     // @todo: Make into a parameter.
     skidBufferMax = (2 * (decodeToRenameDelay * params->decodeWidth)) + renameWidth;
@@ -335,14 +341,11 @@ DefaultRename<Impl>::squash(const InstSeqNum &squash_seq_num, ThreadID tid)
     renameStatus[tid] = Squashing;
 
     // Squash any instructions from decode.
-    unsigned squashCount = 0;
-
     for (int i=0; i<fromDecode->size; i++) {
         if (fromDecode->insts[i]->threadNumber == tid &&
             fromDecode->insts[i]->seqNum > squash_seq_num) {
             fromDecode->insts[i]->setSquashed();
             wroteToTimeBuffer = true;
-            squashCount++;
         }
 
     }
@@ -869,22 +872,25 @@ DefaultRename<Impl>::doSquash(const InstSeqNum &squashed_seq_num, ThreadID tid)
     // Go through the most recent instructions, undoing the mappings
     // they did and freeing up the registers.
     while (!historyBuffer[tid].empty() &&
-           (*hb_it).instSeqNum > squashed_seq_num) {
+           hb_it->instSeqNum > squashed_seq_num) {
         assert(hb_it != historyBuffer[tid].end());
 
         DPRINTF(Rename, "[tid:%u]: Removing history entry with sequence "
-                "number %i.\n", tid, (*hb_it).instSeqNum);
+                "number %i.\n", tid, hb_it->instSeqNum);
 
-        // Tell the rename map to set the architected register to the
-        // previous physical register that it was renamed to.
-        renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
+        // Undo the rename mapping only if it was really a change.
+        // Special regs that are not really renamed (like misc regs
+        // and the zero reg) can be recognized because the new mapping
+        // is the same as the old one.  While it would be merely a
+        // waste of time to update the rename table, we definitely
+        // don't want to put these on the free list.
+        if (hb_it->newPhysReg != hb_it->prevPhysReg) {
+            // Tell the rename map to set the architected register to the
+            // previous physical register that it was renamed to.
+            renameMap[tid]->setEntry(hb_it->archReg, hb_it->prevPhysReg);
 
-        // Put the renamed physical register back on the free list.
-        freeList->addReg(hb_it->newPhysReg);
-
-        // Be sure to mark its register as ready if it's a misc register.
-        if (hb_it->newPhysReg >= maxPhysicalRegs) {
-            scoreboard->setReg(hb_it->newPhysReg);
+            // Put the renamed physical register back on the free list.
+            freeList->addReg(hb_it->newPhysReg);
         }
 
         historyBuffer[tid].erase(hb_it++);
@@ -921,13 +927,19 @@ DefaultRename<Impl>::removeFromHistory(InstSeqNum inst_seq_num, ThreadID tid)
     // renamed.
     while (!historyBuffer[tid].empty() &&
            hb_it != historyBuffer[tid].end() &&
-           (*hb_it).instSeqNum <= inst_seq_num) {
+           hb_it->instSeqNum <= inst_seq_num) {
 
         DPRINTF(Rename, "[tid:%u]: Freeing up older rename of reg %i, "
                 "[sn:%lli].\n",
-                tid, (*hb_it).prevPhysReg, (*hb_it).instSeqNum);
+                tid, hb_it->prevPhysReg, hb_it->instSeqNum);
 
-        freeList->addReg((*hb_it).prevPhysReg);
+        // Don't free special phys regs like misc and zero regs, which
+        // can be recognized because the new mapping is the same as
+        // the old one.
+        if (hb_it->newPhysReg != hb_it->prevPhysReg) {
+            freeList->addReg(hb_it->prevPhysReg);
+        }
+
         ++renameCommittedMaps;
 
         historyBuffer[tid].erase(hb_it--);
@@ -938,47 +950,54 @@ template <class Impl>
 inline void
 DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
 {
-    assert(renameMap[tid] != 0);
-
+    ThreadContext *tc = inst->tcBase();
+    RenameMap *map = renameMap[tid];
     unsigned num_src_regs = inst->numSrcRegs();
 
     // Get the architectual register numbers from the source and
-    // destination operands, and redirect them to the right register.
-    // Will need to mark dependencies though.
+    // operands, and redirect them to the right physical register.
     for (int src_idx = 0; src_idx < num_src_regs; src_idx++) {
         RegIndex src_reg = inst->srcRegIdx(src_idx);
-        RegIndex flat_src_reg = src_reg;
-        if (src_reg < TheISA::FP_Base_DepTag) {
-            flat_src_reg = inst->tcBase()->flattenIntIndex(src_reg);
-            DPRINTF(Rename, "Flattening index %d to %d.\n",
-                    (int)src_reg, (int)flat_src_reg);
-        } else if (src_reg < TheISA::Ctrl_Base_DepTag) {
-            src_reg = src_reg - TheISA::FP_Base_DepTag;
-            flat_src_reg = inst->tcBase()->flattenFloatIndex(src_reg);
-            DPRINTF(Rename, "Flattening index %d to %d.\n",
-                    (int)src_reg, (int)flat_src_reg);
-            flat_src_reg += TheISA::NumIntRegs;
-        } else if (src_reg < TheISA::Max_DepTag) {
-            flat_src_reg = src_reg - TheISA::Ctrl_Base_DepTag +
-                           TheISA::NumFloatRegs + TheISA::NumIntRegs;
-            DPRINTF(Rename, "Adjusting reg index from %d to %d.\n",
-                    src_reg, flat_src_reg);
-        } else {
+        RegIndex rel_src_reg;
+        RegIndex flat_rel_src_reg;
+        PhysRegIndex renamed_reg;
+
+        switch (regIdxToClass(src_reg, &rel_src_reg)) {
+          case IntRegClass:
+            flat_rel_src_reg = tc->flattenIntIndex(rel_src_reg);
+            renamed_reg = map->lookupInt(flat_rel_src_reg);
+            intRenameLookups++;
+            break;
+
+          case FloatRegClass:
+            flat_rel_src_reg = tc->flattenFloatIndex(rel_src_reg);
+            renamed_reg = map->lookupFloat(flat_rel_src_reg);
+            fpRenameLookups++;
+            break;
+
+          case CCRegClass:
+            flat_rel_src_reg = tc->flattenCCIndex(rel_src_reg);
+            renamed_reg = map->lookupCC(flat_rel_src_reg);
+            break;
+
+          case MiscRegClass:
+            // misc regs don't get flattened
+            flat_rel_src_reg = rel_src_reg;
+            renamed_reg = map->lookupMisc(flat_rel_src_reg);
+            break;
+
+          default:
             panic("Reg index is out of bound: %d.", src_reg);
         }
 
-        // Look up the source registers to get the phys. register they've
-        // been renamed to, and set the sources to those registers.
-        PhysRegIndex renamed_reg = renameMap[tid]->lookup(flat_src_reg);
-
-        DPRINTF(Rename, "[tid:%u]: Looking up arch reg %i, got "
-                "physical reg %i.\n", tid, (int)flat_src_reg,
-                (int)renamed_reg);
+        DPRINTF(Rename, "[tid:%u]: Looking up %s arch reg %i (flattened %i), "
+                "got phys reg %i\n", tid, RegClassStrings[regIdxToClass(src_reg)],
+                (int)src_reg, (int)flat_rel_src_reg, (int)renamed_reg);
 
         inst->renameSrcReg(src_idx, renamed_reg);
 
         // See if the register is ready or not.
-        if (scoreboard->getReg(renamed_reg) == true) {
+        if (scoreboard->getReg(renamed_reg)) {
             DPRINTF(Rename, "[tid:%u]: Register %d is ready.\n",
                     tid, renamed_reg);
 
@@ -989,7 +1008,6 @@ DefaultRename<Impl>::renameSrcRegs(DynInstPtr &inst, ThreadID tid)
         }
 
         ++renameRenameLookups;
-        inst->isFloating() ? fpRenameLookups++ : intRenameLookups++;
     }
 }
 
@@ -997,52 +1015,59 @@ template <class Impl>
 inline void
 DefaultRename<Impl>::renameDestRegs(DynInstPtr &inst, ThreadID tid)
 {
-    typename RenameMap::RenameInfo rename_result;
-
+    ThreadContext *tc = inst->tcBase();
+    RenameMap *map = renameMap[tid];
     unsigned num_dest_regs = inst->numDestRegs();
 
     // Rename the destination registers.
     for (int dest_idx = 0; dest_idx < num_dest_regs; dest_idx++) {
         RegIndex dest_reg = inst->destRegIdx(dest_idx);
-        RegIndex flat_dest_reg = dest_reg;
-        if (dest_reg < TheISA::FP_Base_DepTag) {
-            // Integer registers are flattened.
-            flat_dest_reg = inst->tcBase()->flattenIntIndex(dest_reg);
-            DPRINTF(Rename, "Flattening index %d to %d.\n",
-                    (int)dest_reg, (int)flat_dest_reg);
-        } else if (dest_reg < TheISA::Ctrl_Base_DepTag) {
-            dest_reg = dest_reg - TheISA::FP_Base_DepTag;
-            flat_dest_reg = inst->tcBase()->flattenFloatIndex(dest_reg);
-            DPRINTF(Rename, "Flattening index %d to %d.\n",
-                    (int)dest_reg, (int)flat_dest_reg);
-            flat_dest_reg += TheISA::NumIntRegs;
-        } else if (dest_reg < TheISA::Max_DepTag) {
-            // Floating point and Miscellaneous registers need their indexes
-            // adjusted to account for the expanded number of flattened int regs.
-            flat_dest_reg = dest_reg - TheISA::Ctrl_Base_DepTag +
-                            TheISA::NumIntRegs + TheISA::NumFloatRegs;
-            DPRINTF(Rename, "Adjusting reg index from %d to %d.\n",
-                    dest_reg, flat_dest_reg);
-        } else {
+        RegIndex rel_dest_reg;
+        RegIndex flat_rel_dest_reg;
+        RegIndex flat_uni_dest_reg;
+        typename RenameMap::RenameInfo rename_result;
+
+        switch (regIdxToClass(dest_reg, &rel_dest_reg)) {
+          case IntRegClass:
+            flat_rel_dest_reg = tc->flattenIntIndex(rel_dest_reg);
+            rename_result = map->renameInt(flat_rel_dest_reg);
+            flat_uni_dest_reg = flat_rel_dest_reg;  // 1:1 mapping
+            break;
+
+          case FloatRegClass:
+            flat_rel_dest_reg = tc->flattenFloatIndex(rel_dest_reg);
+            rename_result = map->renameFloat(flat_rel_dest_reg);
+            flat_uni_dest_reg = flat_rel_dest_reg + TheISA::FP_Reg_Base;
+            break;
+
+          case CCRegClass:
+            flat_rel_dest_reg = tc->flattenCCIndex(rel_dest_reg);
+            rename_result = map->renameCC(flat_rel_dest_reg);
+            flat_uni_dest_reg = flat_rel_dest_reg + TheISA::CC_Reg_Base;
+            break;
+
+          case MiscRegClass:
+            // misc regs don't get flattened
+            flat_rel_dest_reg = rel_dest_reg;
+            rename_result = map->renameMisc(flat_rel_dest_reg);
+            flat_uni_dest_reg = flat_rel_dest_reg + TheISA::Misc_Reg_Base;
+            break;
+
+          default:
             panic("Reg index is out of bound: %d.", dest_reg);
         }
 
-        inst->flattenDestReg(dest_idx, flat_dest_reg);
+        inst->flattenDestReg(dest_idx, flat_uni_dest_reg);
 
-        // Get the physical register that the destination will be
-        // renamed to.
-        rename_result = renameMap[tid]->rename(flat_dest_reg);
-
-        //Mark Scoreboard entry as not ready
-        if (dest_reg < TheISA::Ctrl_Base_DepTag)
-            scoreboard->unsetReg(rename_result.first);
+        // Mark Scoreboard entry as not ready
+        scoreboard->unsetReg(rename_result.first);
 
         DPRINTF(Rename, "[tid:%u]: Renaming arch reg %i to physical "
-                "reg %i.\n", tid, (int)flat_dest_reg,
+                "reg %i.\n", tid, (int)flat_rel_dest_reg,
                 (int)rename_result.first);
 
         // Record the rename information so that a history can be kept.
-        RenameHistory hb_entry(inst->seqNum, flat_dest_reg,
+        RenameHistory hb_entry(inst->seqNum, flat_uni_dest_reg,
                                rename_result.first,
                                rename_result.second);
 
@@ -1361,3 +1386,5 @@ DefaultRename<Impl>::dumpHistory()
         }
     }
 }
+
+#endif//__CPU_O3_RENAME_IMPL_HH__

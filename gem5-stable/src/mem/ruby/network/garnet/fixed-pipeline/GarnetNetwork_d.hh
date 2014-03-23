@@ -63,8 +63,8 @@ class GarnetNetwork_d : public BaseGarnetNetwork
     int getBuffersPerDataVC() {return m_buffers_per_data_vc; }
     int getBuffersPerCtrlVC() {return m_buffers_per_ctrl_vc; }
 
-    void printLinkStats(std::ostream& out) const;
-    void printPowerStats(std::ostream& out) const;
+    void collateStats();
+    void regStats();
     void print(std::ostream& out) const;
 
     VNET_type
@@ -73,8 +73,6 @@ class GarnetNetwork_d : public BaseGarnetNetwork
         int vnet = vc/getVCsPerVnet();
         return m_vnet_type[vnet];
     }
-
-    void reset();
 
     // Methods used by Topology to setup the network
     void makeOutLink(SwitchID src, NodeID dest, BasicLink* link, 
@@ -98,15 +96,34 @@ class GarnetNetwork_d : public BaseGarnetNetwork
     GarnetNetwork_d(const GarnetNetwork_d& obj);
     GarnetNetwork_d& operator=(const GarnetNetwork_d& obj);
 
+    void collateLinkStats();
+    void collatePowerStats();
+    void regLinkStats();
+    void regPowerStats();
+
     std::vector<VNET_type > m_vnet_type;
 
-    std::vector<Router_d *> m_router_ptr_vector;   // All Routers in Network
-    std::vector<NetworkLink_d *> m_link_ptr_vector; // All links in the network
-    std::vector<CreditLink_d *> m_creditlink_ptr_vector; // All links in net
-    std::vector<NetworkInterface_d *> m_ni_ptr_vector;   // All NI's in Network
+    std::vector<Router_d *> m_routers;   // All Routers in Network
+    std::vector<NetworkLink_d *> m_links; // All links in the network
+    std::vector<CreditLink_d *> m_creditlinks; // All links in net
+    std::vector<NetworkInterface_d *> m_nis;   // All NI's in Network
 
     int m_buffers_per_data_vc;
     int m_buffers_per_ctrl_vc;
+
+    // Statistical variables for power
+    Stats::Scalar m_dynamic_link_power;
+    Stats::Scalar m_static_link_power;
+    Stats::Formula m_total_link_power;
+
+    Stats::Scalar m_dynamic_router_power;
+    Stats::Scalar m_static_router_power;
+    Stats::Scalar m_clk_power;
+    Stats::Formula m_total_router_power;
+
+    // Statistical variables for performance
+    Stats::Scalar m_average_link_utilization;
+    Stats::Vector m_average_vc_load;
 };
 
 inline std::ostream&

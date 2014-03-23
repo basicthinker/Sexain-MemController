@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010-2012 ARM Limited
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -40,6 +41,9 @@
  * Authors: Kevin Lim
  *          Korey Sewell
  */
+
+#ifndef __CPU_O3_THREAD_CONTEXT_IMPL_HH__
+#define __CPU_O3_THREAD_CONTEXT_IMPL_HH__
 
 #include "arch/kernel_stats.hh"
 #include "arch/registers.hh"
@@ -206,6 +210,13 @@ O3ThreadContext<Impl>::readFloatRegBitsFlat(int reg_idx)
 }
 
 template <class Impl>
+TheISA::CCReg
+O3ThreadContext<Impl>::readCCRegFlat(int reg_idx)
+{
+    return cpu->readArchCCReg(reg_idx, thread->threadId());
+}
+
+template <class Impl>
 void
 O3ThreadContext<Impl>::setIntRegFlat(int reg_idx, uint64_t val)
 {
@@ -228,6 +239,15 @@ void
 O3ThreadContext<Impl>::setFloatRegBitsFlat(int reg_idx, FloatRegBits val)
 {
     cpu->setArchFloatRegInt(reg_idx, val, thread->threadId());
+
+    conditionalSquash();
+}
+
+template <class Impl>
+void
+O3ThreadContext<Impl>::setCCRegFlat(int reg_idx, TheISA::CCReg val)
+{
+    cpu->setArchCCReg(reg_idx, val, thread->threadId());
 
     conditionalSquash();
 }
@@ -265,6 +285,13 @@ O3ThreadContext<Impl>::flattenFloatIndex(int reg)
 }
 
 template <class Impl>
+int
+O3ThreadContext<Impl>::flattenCCIndex(int reg)
+{
+    return cpu->isa[thread->threadId()]->flattenCCIndex(reg);
+}
+
+template <class Impl>
 void
 O3ThreadContext<Impl>::setMiscRegNoEffect(int misc_reg, const MiscReg &val)
 {
@@ -273,6 +300,7 @@ O3ThreadContext<Impl>::setMiscRegNoEffect(int misc_reg, const MiscReg &val)
     conditionalSquash();
 }
 
+#endif//__CPU_O3_THREAD_CONTEXT_IMPL_HH__
 template <class Impl>
 void
 O3ThreadContext<Impl>::setMiscReg(int misc_reg, const MiscReg &val)

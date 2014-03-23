@@ -37,7 +37,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Authors: Lisa Hsu
-#          Jinglei Ren <jinglei.ren@stanzax.org>
+#          Jinglei Ren <jinglei@ren.systems>
 
 from m5.objects import *
 
@@ -51,14 +51,12 @@ class L1Cache(BaseCache):
     assoc = 2
     hit_latency = 4
     response_latency = 2
-    block_size = 64
     mshrs = 4
     tgts_per_mshr = 20
     is_top_level = True
 
 class L2Cache(BaseCache):
     assoc = 8
-    block_size = 64
     hit_latency = 12
     response_latency = 6
     mshrs = 20
@@ -67,7 +65,6 @@ class L2Cache(BaseCache):
 
 class L3Cache(BaseCache):
     assoc = 24
-    block_size = 64
     hit_latency = 28
     response_latency = 14
     mshrs = 20
@@ -76,7 +73,6 @@ class L3Cache(BaseCache):
 
 class IOCache(BaseCache):
     assoc = 8
-    block_size = 64
     hit_latency = 50
     response_latency = 50
     mshrs = 20
@@ -87,7 +83,6 @@ class IOCache(BaseCache):
 
 class PageTableWalkerCache(BaseCache):
     assoc = 2
-    block_size = 64
     hit_latency = 4
     response_latency = 2
     mshrs = 10

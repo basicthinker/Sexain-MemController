@@ -30,7 +30,6 @@
 
 #include "base/cast.hh"
 #include "base/stl_helpers.hh"
-#include "mem/protocol/MessageSizeType.hh"
 #include "mem/ruby/buffers/MessageBuffer.hh"
 #include "mem/ruby/network/simple/PerfectSwitch.hh"
 #include "mem/ruby/network/simple/SimpleNetwork.hh"
@@ -43,12 +42,12 @@ using m5::stl_helpers::operator<<;
 
 Switch::Switch(const Params *p) : BasicRouter(p)
 {
-    m_perfect_switch_ptr = new PerfectSwitch(m_id, this, p->virt_nets);
+    m_perfect_switch = new PerfectSwitch(m_id, this, p->virt_nets);
 }
 
 Switch::~Switch()
 {
-    delete m_perfect_switch_ptr;
+    delete m_perfect_switch;
 
     // Delete throttles (one per output port)
     deletePointers(m_throttles);
@@ -61,13 +60,13 @@ void
 Switch::init()
 {
     BasicRouter::init();
-    m_perfect_switch_ptr->init(m_network_ptr);
+    m_perfect_switch->init(m_network_ptr);
 }
 
 void
 Switch::addInPort(const vector<MessageBuffer*>& in)
 {
-    m_perfect_switch_ptr->addInPort(in);
+    m_perfect_switch->addInPort(in);
 
     for (int i = 0; i < in.size(); i++) {
         in[i]->setReceiver(this);
@@ -104,33 +103,10 @@ Switch::addOutPort(const vector<MessageBuffer*>& out,
     }
 
     // Hook the queues to the PerfectSwitch
-    m_perfect_switch_ptr->addOutPort(intermediateBuffers, routing_table_entry);
+    m_perfect_switch->addOutPort(intermediateBuffers, routing_table_entry);
 
     // Hook the queues to the Throttle
     throttle_ptr->addLinks(intermediateBuffers, out);
-}
-
-void
-Switch::clearRoutingTables()
-{
-    m_perfect_switch_ptr->clearRoutingTables();
-}
-
-void
-Switch::clearBuffers()
-{
-    m_perfect_switch_ptr->clearBuffers();
-    for (int i = 0; i < m_throttles.size(); i++) {
-        if (m_throttles[i] != NULL) {
-            m_throttles[i]->clear();
-        }
-    }
-}
-
-void
-Switch::reconfigureOutPort(const NetDest& routing_table_entry)
-{
-    m_perfect_switch_ptr->reconfigureOutPort(routing_table_entry);
 }
 
 const Throttle*
@@ -147,77 +123,54 @@ Switch::getThrottles() const
 }
 
 void
-Switch::printStats(std::ostream& out) const
+Switch::regStats()
 {
-    ccprintf(out, "switch_%d_inlinks: %d\n", m_id,
-        m_perfect_switch_ptr->getInLinks());
-    ccprintf(out, "switch_%d_outlinks: %d\n", m_id,
-        m_perfect_switch_ptr->getOutLinks());
-
-    // Average link utilizations
-    double average_utilization = 0.0;
-    int throttle_count = 0;
-
-    for (int i = 0; i < m_throttles.size(); i++) {
-        Throttle* throttle_ptr = m_throttles[i];
-        if (throttle_ptr) {
-            average_utilization += throttle_ptr->getUtilization();
-            throttle_count++;
-        }
-    }
-    average_utilization =
-        throttle_count == 0 ? 0 : average_utilization / throttle_count;
-
-    // Individual link utilizations
-    out << "links_utilized_percent_switch_" << m_id << ": "
-        << average_utilization << endl;
-
     for (int link = 0; link < m_throttles.size(); link++) {
-        Throttle* throttle_ptr = m_throttles[link];
-        if (throttle_ptr != NULL) {
-            out << "  links_utilized_percent_switch_" << m_id
-                << "_link_" << link << ": "
-                << throttle_ptr->getUtilization() << " bw: "
-                << throttle_ptr->getLinkBandwidth()
-                << " base_latency: " << throttle_ptr->getLatency() << endl;
-        }
+        m_throttles[link]->regStats(name());
     }
-    out << endl;
 
-    // Traffic breakdown
-    for (int link = 0; link < m_throttles.size(); link++) {
-        Throttle* throttle_ptr = m_throttles[link];
-        if (!throttle_ptr)
-            continue;
-
-        const vector<vector<int> >& message_counts =
-            throttle_ptr->getCounters();
-        for (int int_type = 0; int_type < MessageSizeType_NUM; int_type++) {
-            MessageSizeType type = MessageSizeType(int_type);
-            const vector<int> &mct = message_counts[type];
-            int sum = accumulate(mct.begin(), mct.end(), 0);
-            if (sum == 0)
-                continue;
-
-            out << "  outgoing_messages_switch_" << m_id
-                << "_link_" << link << "_" << type << ": " << sum << " "
-                << sum * m_network_ptr->MessageSizeType_to_int(type)
-                << " ";
-            out << mct;
-            out << " base_latency: "
-                << throttle_ptr->getLatency() << endl;
-        }
+    m_avg_utilization.name(name() + ".percent_links_utilized");
+    for (unsigned int i = 0; i < m_throttles.size(); i++) {
+        m_avg_utilization += m_throttles[i]->getUtilization();
     }
-    out << endl;
+    m_avg_utilization /= Stats::constant(m_throttles.size());
+
+    for (unsigned int type = MessageSizeType_FIRST;
+         type < MessageSizeType_NUM; ++type) {
+        m_msg_counts[type]
+            .name(name() + ".msg_count." +
+                MessageSizeType_to_string(MessageSizeType(type)))
+            .flags(Stats::nozero)
+            ;
+        m_msg_bytes[type]
+            .name(name() + ".msg_bytes." +
+                MessageSizeType_to_string(MessageSizeType(type)))
+            .flags(Stats::nozero)
+            ;
+
+        for (unsigned int i = 0; i < m_throttles.size(); i++) {
+            m_msg_counts[type] += m_throttles[i]->getMsgCount(type);
+        }
+        m_msg_bytes[type] = m_msg_counts[type] * Stats::constant(
+                Network::MessageSizeType_to_int(MessageSizeType(type)));
+    }
 }
 
 void
-Switch::clearStats()
+Switch::resetStats()
 {
-    m_perfect_switch_ptr->clearStats();
+    m_perfect_switch->clearStats();
     for (int i = 0; i < m_throttles.size(); i++) {
-        if (m_throttles[i] != NULL)
-            m_throttles[i]->clearStats();
+        m_throttles[i]->clearStats();
+    }
+}
+
+void
+Switch::collateStats()
+{
+    m_perfect_switch->collateStats();
+    for (int i = 0; i < m_throttles.size(); i++) {
+        m_throttles[i]->collateStats();
     }
 }
 

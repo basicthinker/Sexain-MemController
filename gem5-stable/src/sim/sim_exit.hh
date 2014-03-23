@@ -39,8 +39,6 @@
 
 // forward declaration
 class Callback;
-class EventQueue;
-class SimLoopExitEvent;
 
 /// Register a callback to be called when Python exits.  Defined in
 /// sim/main.cc.
@@ -51,6 +49,7 @@ void registerExitCallback(Callback *);
 /// and exit_code parameters are saved in the SimLoopExitEvent to
 /// indicate why the exit occurred.
 void exitSimLoop(const std::string &message, int exit_code = 0,
-                 Tick when = curTick(), Tick repeat = 0);
+                 Tick when = curTick(), Tick repeat = 0,
+                 bool serialize = false);
 
 #endif // __SIM_EXIT_HH__

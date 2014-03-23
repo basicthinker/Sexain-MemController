@@ -53,6 +53,7 @@ from SysPaths import *
 from Benchmarks import *
 import Simulation
 import CacheConfig
+import MemConfig
 from Caches import *
 import Options
 
@@ -102,26 +103,36 @@ else:
 np = options.num_cpus
 
 if buildEnv['TARGET_ISA'] == "alpha":
-    test_sys = makeLinuxAlphaSystem(test_mem_mode, TestMemClass, bm[0])
+    test_sys = makeLinuxAlphaSystem(test_mem_mode, bm[0])
 elif buildEnv['TARGET_ISA'] == "mips":
-    test_sys = makeLinuxMipsSystem(test_mem_mode, TestMemClass, bm[0])
+    test_sys = makeLinuxMipsSystem(test_mem_mode, bm[0])
 elif buildEnv['TARGET_ISA'] == "sparc":
-    test_sys = makeSparcSystem(test_mem_mode, TestMemClass, bm[0])
+    test_sys = makeSparcSystem(test_mem_mode, bm[0])
 elif buildEnv['TARGET_ISA'] == "x86":
-    test_sys = makeLinuxX86System(test_mem_mode, TestMemClass,
-                                  options.num_cpus, bm[0])
+    test_sys = makeLinuxX86System(test_mem_mode, options.num_cpus, bm[0])
 elif buildEnv['TARGET_ISA'] == "arm":
-    test_sys = makeArmSystem(test_mem_mode, options.machine_type,
-                             TestMemClass, bm[0], options.dtb_filename,
+    test_sys = makeArmSystem(test_mem_mode, options.machine_type, bm[0],
+                             options.dtb_filename,
                              bare_metal=options.bare_metal)
+    if options.enable_context_switch_stats_dump:
+        test_sys.enable_context_switch_stats_dump = True
 else:
     fatal("Incapable of building %s full system!", buildEnv['TARGET_ISA'])
 
+# Create a top-level voltage domain
+test_sys.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
+
 # Create a source clock for the system and set the clock period
-test_sys.clk_domain = SrcClockDomain(clock =  options.sys_clock)
+test_sys.clk_domain = SrcClockDomain(clock =  options.sys_clock,
+                                     voltage_domain = test_sys.voltage_domain)
+
+# Create a CPU voltage domain
+test_sys.cpu_voltage_domain = VoltageDomain()
 
 # Create a source clock for the CPUs and set the clock period
-test_sys.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock)
+test_sys.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
+                                         voltage_domain =
+                                         test_sys.cpu_voltage_domain)
 
 if options.kernel is not None:
     test_sys.kernel = binary(options.kernel)
@@ -163,25 +174,33 @@ for i in xrange(np):
     test_sys.cpu[i].createThreads()
 
 CacheConfig.config_cache(options, test_sys)
+MemConfig.config_mem(options, test_sys)
 
 if len(bm) == 2:
     if buildEnv['TARGET_ISA'] == 'alpha':
-        drive_sys = makeLinuxAlphaSystem(drive_mem_mode, DriveMemClass, bm[1])
+        drive_sys = makeLinuxAlphaSystem(drive_mem_mode, bm[1])
     elif buildEnv['TARGET_ISA'] == 'mips':
-        drive_sys = makeLinuxMipsSystem(drive_mem_mode, DriveMemClass, bm[1])
+        drive_sys = makeLinuxMipsSystem(drive_mem_mode, bm[1])
     elif buildEnv['TARGET_ISA'] == 'sparc':
-        drive_sys = makeSparcSystem(drive_mem_mode, DriveMemClass, bm[1])
+        drive_sys = makeSparcSystem(drive_mem_mode, bm[1])
     elif buildEnv['TARGET_ISA'] == 'x86':
-        drive_sys = makeX86System(drive_mem_mode, DriveMemClass, np, bm[1])
+        drive_sys = makeX86System(drive_mem_mode, np, bm[1])
     elif buildEnv['TARGET_ISA'] == 'arm':
-        drive_sys = makeArmSystem(drive_mem_mode, options.machine_type,
-                                  DriveMemClass, bm[1])
+        drive_sys = makeArmSystem(drive_mem_mode, options.machine_type, bm[1])
+
+    # Create a top-level voltage domain
+    drive_sys.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
 
     # Create a source clock for the system and set the clock period
     drive_sys.clk_domain = SrcClockDomain(clock =  options.sys_clock)
 
+    # Create a CPU voltage domain
+    drive_sys.cpu_voltage_domain = VoltageDomain()
+
     # Create a source clock for the CPUs and set the clock period
-    drive_sys.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock)
+    drive_sys.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
+                                              voltage_domain =
+                                              drive_sys.cpu_voltage_domain)
 
     drive_sys.cpu = DriveCPUClass(clk_domain=drive_sys.cpu_clk_domain,
                                   cpu_id=0)
@@ -200,6 +219,13 @@ if len(bm) == 2:
                                 ranges = drive_sys.mem_ranges)
     drive_sys.iobridge.slave = drive_sys.iobus.master
     drive_sys.iobridge.master = drive_sys.membus.slave
+
+    # Create the appropriate memory controllers and connect them to the
+    # memory bus
+    drive_sys.mem_ctrls = [DriveMemClass(range = r)
+                           for r in drive_sys.mem_ranges]
+    for i in xrange(len(drive_sys.mem_ctrls)):
+        drive_sys.mem_ctrls[i].port = drive_sys.membus.master
 
     drive_sys.init_param = options.init_param
     root = makeDualRoot(True, test_sys, drive_sys, options.etherdump)

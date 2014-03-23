@@ -46,12 +46,9 @@
 #include "mem/packet.hh"
 #include "mem/packet_access.hh"
 
-using namespace AmbaDev;
-
 AmbaFake::AmbaFake(const Params *p)
-    : AmbaDevice(p)
+    : AmbaPioDevice(p, 0xfff)
 {
-    pioSize = 0xfff;
 }
 
 Tick

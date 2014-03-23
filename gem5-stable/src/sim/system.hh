@@ -57,9 +57,9 @@
 #include "cpu/pc_event.hh"
 #include "enums/MemoryMode.hh"
 #include "kern/system_events.hh"
-#include "mem/fs_translating_port_proxy.hh"
 #include "mem/mem_object.hh"
 #include "mem/port.hh"
+#include "mem/port_proxy.hh"
 #include "mem/physical.hh"
 #include "params/System.hh"
 
@@ -179,7 +179,14 @@ class System : public MemObject
     void setMemoryMode(Enums::MemoryMode mode);
     /** @} */
 
+    /**
+     * Get the cache line size of the system.
+     */
+    unsigned int cacheLineSize() const { return _cacheLineSize; }
+
+#if THE_ISA != NULL_ISA
     PCEventQueue pcEventQueue;
+#endif
 
     std::vector<ThreadContext *> threadContexts;
     int _numContexts;
@@ -206,7 +213,6 @@ class System : public MemObject
     /** Port to physical memory used for writing object files into ram at
      * boot.*/
     PortProxy physProxy;
-    FSTranslatingPortProxy virtProxy;
 
     /** kernel symbol table */
     SymbolTable *kernelSymtab;
@@ -263,6 +269,9 @@ class System : public MemObject
     PhysicalMemory physmem;
 
     Enums::MemoryMode memoryMode;
+
+    const unsigned int _cacheLineSize;
+
     uint64_t workItemsBegin;
     uint64_t workItemsEnd;
     uint32_t numWorkIds;
@@ -371,13 +380,15 @@ class System : public MemObject
     T *addFuncEvent(const SymbolTable *symtab, const char *lbl,
                     const std::string &desc, Args... args)
     {
-        Addr addr = 0; // initialize only to avoid compiler warning
+        Addr addr M5_VAR_USED = 0; // initialize only to avoid compiler warning
 
+#if THE_ISA != NULL_ISA
         if (symtab->findAddress(lbl, addr)) {
             T *ev = new T(&pcEventQueue, desc, fixFuncEventAddr(addr),
                           std::forward<Args>(args)...);
             return ev;
         }
+#endif
 
         return NULL;
     }

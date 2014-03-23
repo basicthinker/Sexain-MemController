@@ -62,7 +62,7 @@ GarnetNetwork_d::GarnetNetwork_d(const Params *p)
     for (vector<BasicRouter*>::const_iterator i =  p->routers.begin();
          i != p->routers.end(); ++i) {
         Router_d* router = safe_cast<Router_d*>(*i);
-        m_router_ptr_vector.push_back(router);
+        m_routers.push_back(router);
     }
 }
 
@@ -72,8 +72,8 @@ GarnetNetwork_d::init()
     BaseGarnetNetwork::init();
 
     // initialize the router's network pointers
-    for (vector<Router_d*>::const_iterator i = m_router_ptr_vector.begin();
-         i != m_router_ptr_vector.end(); ++i) {
+    for (vector<Router_d*>::const_iterator i = m_routers.begin();
+         i != m_routers.end(); ++i) {
         Router_d* router = safe_cast<Router_d*>(*i);
         router->init_net_ptr(this);
     }
@@ -86,21 +86,21 @@ GarnetNetwork_d::init()
         NetworkInterface_d *ni = new NetworkInterface_d(i, m_virtual_networks,
                                                         this);
         ni->addNode(m_toNetQueues[i], m_fromNetQueues[i]);
-        m_ni_ptr_vector.push_back(ni);
+        m_nis.push_back(ni);
     }
     m_topology_ptr->createLinks(this);
 
     // initialize the link's network pointers
-   for (vector<NetworkLink_d*>::const_iterator i = m_link_ptr_vector.begin();
-         i != m_link_ptr_vector.end(); ++i) {
+   for (vector<NetworkLink_d*>::const_iterator i = m_links.begin();
+         i != m_links.end(); ++i) {
         NetworkLink_d* net_link = safe_cast<NetworkLink_d*>(*i);
         net_link->init_net_ptr(this);
     }
 
     // FaultModel: declare each router to the fault model
     if(isFaultModelEnabled()){
-        for (vector<Router_d*>::const_iterator i= m_router_ptr_vector.begin();
-             i != m_router_ptr_vector.end(); ++i) {
+        for (vector<Router_d*>::const_iterator i= m_routers.begin();
+             i != m_routers.end(); ++i) {
             Router_d* router = safe_cast<Router_d*>(*i);
             int router_id M5_VAR_USED =
                 fault_model->declare_router(router->get_num_inports(),
@@ -121,22 +121,11 @@ GarnetNetwork_d::~GarnetNetwork_d()
         deletePointers(m_toNetQueues[i]);
         deletePointers(m_fromNetQueues[i]);
     }
-    deletePointers(m_router_ptr_vector);
-    deletePointers(m_ni_ptr_vector);
-    deletePointers(m_link_ptr_vector);
-    deletePointers(m_creditlink_ptr_vector);
+    deletePointers(m_routers);
+    deletePointers(m_nis);
+    deletePointers(m_links);
+    deletePointers(m_creditlinks);
     delete m_topology_ptr;
-}
-
-void
-GarnetNetwork_d::reset()
-{
-    for (int node = 0; node < m_nodes; node++) {
-        for (int j = 0; j < m_virtual_networks; j++) {
-            m_toNetQueues[node][j]->clear();
-            m_fromNetQueues[node][j]->clear();
-        }
-    }
 }
 
 /*
@@ -157,11 +146,11 @@ GarnetNetwork_d::makeInLink(NodeID src, SwitchID dest, BasicLink* link,
     NetworkLink_d* net_link = garnet_link->m_network_links[direction];
     CreditLink_d* credit_link = garnet_link->m_credit_links[direction];
 
-    m_link_ptr_vector.push_back(net_link);
-    m_creditlink_ptr_vector.push_back(credit_link);
+    m_links.push_back(net_link);
+    m_creditlinks.push_back(credit_link);
 
-    m_router_ptr_vector[dest]->addInPort(net_link, credit_link);
-    m_ni_ptr_vector[src]->addOutPort(net_link, credit_link);
+    m_routers[dest]->addInPort(net_link, credit_link);
+    m_nis[src]->addOutPort(net_link, credit_link);
 }
 
 /*
@@ -176,19 +165,19 @@ GarnetNetwork_d::makeOutLink(SwitchID src, NodeID dest, BasicLink* link,
                              const NetDest& routing_table_entry)
 {
     assert(dest < m_nodes);
-    assert(src < m_router_ptr_vector.size());
-    assert(m_router_ptr_vector[src] != NULL);
+    assert(src < m_routers.size());
+    assert(m_routers[src] != NULL);
 
     GarnetExtLink_d* garnet_link = safe_cast<GarnetExtLink_d*>(link);
     NetworkLink_d* net_link = garnet_link->m_network_links[direction];
     CreditLink_d* credit_link = garnet_link->m_credit_links[direction];
 
-    m_link_ptr_vector.push_back(net_link);
-    m_creditlink_ptr_vector.push_back(credit_link);
+    m_links.push_back(net_link);
+    m_creditlinks.push_back(credit_link);
 
-    m_router_ptr_vector[src]->addOutPort(net_link, routing_table_entry,
+    m_routers[src]->addOutPort(net_link, routing_table_entry,
                                          link->m_weight, credit_link);
-    m_ni_ptr_vector[dest]->addInPort(net_link, credit_link);
+    m_nis[dest]->addInPort(net_link, credit_link);
 }
 
 /*
@@ -204,11 +193,11 @@ GarnetNetwork_d::makeInternalLink(SwitchID src, SwitchID dest, BasicLink* link,
     NetworkLink_d* net_link = garnet_link->m_network_links[direction];
     CreditLink_d* credit_link = garnet_link->m_credit_links[direction];
 
-    m_link_ptr_vector.push_back(net_link);
-    m_creditlink_ptr_vector.push_back(credit_link);
+    m_links.push_back(net_link);
+    m_creditlinks.push_back(credit_link);
 
-    m_router_ptr_vector[dest]->addInPort(net_link, credit_link);
-    m_router_ptr_vector[src]->addOutPort(net_link, routing_table_entry,
+    m_routers[dest]->addInPort(net_link, credit_link);
+    m_routers[src]->addOutPort(net_link, routing_table_entry,
                                          link->m_weight, credit_link);
 }
 
@@ -232,81 +221,82 @@ GarnetNetwork_d::checkNetworkAllocation(NodeID id, bool ordered,
 }
 
 void
-GarnetNetwork_d::printLinkStats(ostream& out) const
+GarnetNetwork_d::regStats()
 {
-    double average_link_utilization = 0;
-    vector<double> average_vc_load;
-    average_vc_load.resize(m_virtual_networks*m_vcs_per_vnet);
-
-    for (int i = 0; i < m_virtual_networks*m_vcs_per_vnet; i++) {
-        average_vc_load[i] = 0;
-    }
-
-    out << endl;
-    for (int i = 0; i < m_link_ptr_vector.size(); i++) {
-        average_link_utilization +=
-            (double(m_link_ptr_vector[i]->getLinkUtilization())) /
-            (double(curCycle() - g_ruby_start));
-
-        vector<int> vc_load = m_link_ptr_vector[i]->getVcLoad();
-        for (int j = 0; j < vc_load.size(); j++) {
-            assert(vc_load.size() == m_vcs_per_vnet*m_virtual_networks);
-            average_vc_load[j] += vc_load[j];
-        }
-    }
-    average_link_utilization =
-        average_link_utilization/m_link_ptr_vector.size();
-    out << "Average Link Utilization :: " << average_link_utilization
-        << " flits/cycle" << endl;
-    out << "-------------" << endl;
-
-    for (int i = 0; i < m_vcs_per_vnet*m_virtual_networks; i++) {
-        if (!m_in_use[i/m_vcs_per_vnet])
-            continue;
-
-        average_vc_load[i] = (double(average_vc_load[i])) /
-            (double(curCycle() - g_ruby_start));
-        out << "Average VC Load [" << i << "] = " << average_vc_load[i]
-            << " flits/cycle " << endl;
-    }
-    out << "-------------" << endl;
-    out << endl;
+    BaseGarnetNetwork::regStats();
+    regLinkStats();
+    regPowerStats();
 }
 
 void
-GarnetNetwork_d::printPowerStats(ostream& out) const
+GarnetNetwork_d::regLinkStats()
 {
-    out << "Network Power" << endl;
-    out << "-------------" << endl;
-    double m_total_link_power = 0.0;
-    double m_dynamic_link_power = 0.0;
-    double m_static_link_power = 0.0;
-    double m_total_router_power = 0.0;
-    double m_dynamic_router_power = 0.0;
-    double m_static_router_power = 0.0;
-    double m_clk_power = 0.0;
+    m_average_link_utilization.name(name() + ".avg_link_utilization");
 
-    for (int i = 0; i < m_link_ptr_vector.size(); i++) {
-        m_total_link_power += m_link_ptr_vector[i]->calculate_power();
-        m_dynamic_link_power += m_link_ptr_vector[i]->get_dynamic_power();
-        m_static_link_power += m_link_ptr_vector[i]->get_static_power();
+    m_average_vc_load
+        .init(m_virtual_networks * m_vcs_per_vnet)
+        .name(name() + ".avg_vc_load")
+        .flags(Stats::pdf | Stats::total | Stats::nozero | Stats::oneline)
+        ;
+}
+
+void
+GarnetNetwork_d::regPowerStats()
+{
+    m_dynamic_link_power.name(name() + ".link_dynamic_power");
+    m_static_link_power.name(name() + ".link_static_power");
+
+    m_total_link_power.name(name() + ".link_total_power");
+    m_total_link_power = m_dynamic_link_power + m_static_link_power;
+
+    m_dynamic_router_power.name(name() + ".router_dynamic_power");
+    m_static_router_power.name(name() + ".router_static_power");
+    m_clk_power.name(name() + ".clk_power");
+
+    m_total_router_power.name(name() + ".router_total_power");
+    m_total_router_power = m_dynamic_router_power +
+                           m_static_router_power +
+                           m_clk_power;
+}
+
+void
+GarnetNetwork_d::collateStats()
+{
+    collateLinkStats();
+    collatePowerStats();
+}
+
+void
+GarnetNetwork_d::collateLinkStats()
+{
+    for (int i = 0; i < m_links.size(); i++) {
+        m_average_link_utilization +=
+            (double(m_links[i]->getLinkUtilization())) /
+            (double(curCycle() - g_ruby_start));
+
+        vector<unsigned int> vc_load = m_links[i]->getVcLoad();
+        for (int j = 0; j < vc_load.size(); j++) {
+            m_average_vc_load[j] +=
+                ((double)vc_load[j] / (double)(curCycle() - g_ruby_start));
+        }
+    }
+}
+
+void
+GarnetNetwork_d::collatePowerStats()
+{
+    for (int i = 0; i < m_links.size(); i++) {
+        m_links[i]->calculate_power();
+        m_dynamic_link_power += m_links[i]->get_dynamic_power();
+        m_static_link_power += m_links[i]->get_static_power();
     }
 
-    for (int i = 0; i < m_router_ptr_vector.size(); i++) {
-        m_total_router_power += m_router_ptr_vector[i]->calculate_power();
-        m_dynamic_router_power += m_router_ptr_vector[i]->get_dynamic_power();
-        m_static_router_power += m_router_ptr_vector[i]->get_static_power();
-        m_clk_power += m_router_ptr_vector[i]->get_clk_power();
+    for (int i = 0; i < m_routers.size(); i++) {
+        m_routers[i]->calculate_power();
+        m_dynamic_router_power += m_routers[i]->get_dynamic_power();
+        m_static_router_power += m_routers[i]->get_static_power();
+        m_clk_power += m_routers[i]->get_clk_power();
     }
-    out << "Link Dynamic Power = " << m_dynamic_link_power << " W" << endl;
-    out << "Link Static Power = " << m_static_link_power << " W" << endl;
-    out << "Total Link Power = " << m_total_link_power << " W " << endl;
-    out << "Router Dynamic Power = " << m_dynamic_router_power << " W" << endl;
-    out << "Router Clock Power = " << m_clk_power << " W" << endl;
-    out << "Router Static Power = " << m_static_router_power << " W" << endl;
-    out << "Total Router Power = " << m_total_router_power << " W " <<endl;
-    out << "-------------" << endl;
-    out << endl;
 }
 
 void
@@ -326,16 +316,16 @@ GarnetNetwork_d::functionalWrite(Packet *pkt)
 {
     uint32_t num_functional_writes = 0;
 
-    for (unsigned int i = 0; i < m_router_ptr_vector.size(); i++) {
-        num_functional_writes += m_router_ptr_vector[i]->functionalWrite(pkt);
+    for (unsigned int i = 0; i < m_routers.size(); i++) {
+        num_functional_writes += m_routers[i]->functionalWrite(pkt);
     }
 
-    for (unsigned int i = 0; i < m_ni_ptr_vector.size(); ++i) {
-        num_functional_writes += m_ni_ptr_vector[i]->functionalWrite(pkt);
+    for (unsigned int i = 0; i < m_nis.size(); ++i) {
+        num_functional_writes += m_nis[i]->functionalWrite(pkt);
     }
 
-    for (unsigned int i = 0; i < m_link_ptr_vector.size(); ++i) {
-        num_functional_writes += m_link_ptr_vector[i]->functionalWrite(pkt);
+    for (unsigned int i = 0; i < m_links.size(); ++i) {
+        num_functional_writes += m_links[i]->functionalWrite(pkt);
     }
 
     return num_functional_writes;

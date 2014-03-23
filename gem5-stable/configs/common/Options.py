@@ -64,6 +64,10 @@ def addCommonOptions(parser):
                       help = "type of cpu to run with")
     parser.add_option("--checker", action="store_true");
     parser.add_option("-n", "--num-cpus", type="int", default=1)
+    parser.add_option("--sys-voltage", action="store", type="string",
+                      default='1.0V',
+                      help = """Top-level voltage for blocks running at system
+                      power supply""")
     parser.add_option("--sys-clock", action="store", type="string",
                       default='1GHz',
                       help = """Top-level clock for blocks running at system
@@ -84,6 +88,8 @@ def addCommonOptions(parser):
     parser.add_option("--mem-type", type="choice", default="simple_mem",
                       choices=MemConfig.mem_names(),
                       help = "type of memory to use")
+    parser.add_option("--mem-channels", type="int", default=1,
+                      help = "number of memory channels")
     parser.add_option("--mem-size", action="store", type="string",
                       default="512MB",
                       help="Specify the physical memory size (single memory)")
@@ -108,9 +114,16 @@ def addCommonOptions(parser):
     parser.add_option("--ruby", action="store_true")
 
     # Run duration options
-    parser.add_option("-m", "--maxtick", type="int", default=m5.MaxTick,
-                      metavar="T", help="Stop after T ticks")
-    parser.add_option("--maxtime", type="float")
+    parser.add_option("-m", "--abs-max-tick", type="int", default=m5.MaxTick,
+                      metavar="TICKS", help="Run to absolute simulated tick " \
+                      "specified including ticks from a restored checkpoint")
+    parser.add_option("--rel-max-tick", type="int", default=None,
+                      metavar="TICKS", help="Simulate for specified number of" \
+                      " ticks relative to the simulation start tick (e.g. if " \
+                      "restoring a checkpoint)")
+    parser.add_option("--maxtime", type="float", default=None,
+                      help="Run to the specified absolute simulated time in " \
+                      "seconds")
     parser.add_option("-I", "--maxinsts", action="store", type="int",
                       default=None, help="""Total number of instructions to
                                             simulate (default: run forever)""")
@@ -218,6 +231,10 @@ def addFSOptions(parser):
         parser.add_option("--dtb-filename", action="store", type="string",
               help="Specifies device tree blob file to use with device-tree-"\
               "enabled kernels")
+        parser.add_option("--enable-context-switch-stats-dump", \
+                action="store_true", help="Enable stats dump at context "\
+                "switches and dump tasks file (required for Streamline)")
+
     # Benchmark options
     parser.add_option("--dual", action="store_true",
                       help="Simulate two systems attached with an ethernet link")

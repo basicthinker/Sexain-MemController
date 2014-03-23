@@ -247,6 +247,19 @@ class SimObjectVector(VectorParamValue):
             a.append(v.get_config_as_dict())
         return a
 
+    # If we are replacing an item in the vector, make sure to set the
+    # parent reference of the new SimObject to be the same as the parent
+    # of the SimObject being replaced. Useful to have if we created
+    # a SimObjectVector of temporary objects that will be modified later in
+    # configuration scripts.
+    def __setitem__(self, key, value):
+        val = self[key]
+        if value.has_parent():
+            warn("SimObject %s already has a parent" % value.get_name() +\
+                 " that is being overwritten by a SimObjectVector")
+        value.set_parent(val.get_parent(), val._name)
+        super(SimObjectVector, self).__setitem__(key, value)
+
 class VectorParamDesc(ParamDesc):
     # Convert assigned value to appropriate type.  If the RHS is not a
     # list or tuple, it generates a single-element list.
@@ -697,7 +710,7 @@ class EthernetAddr(ParamValue):
             raise TypeError, 'invalid ethernet address %s' % value
 
         for byte in bytes:
-            if not 0 <= int(byte) <= 0xff:
+            if not 0 <= int(byte, base=16) <= 0xff:
                 raise TypeError, 'invalid ethernet address %s' % value
 
         self.value = value
@@ -1250,6 +1263,23 @@ class Clock(ParamValue):
     def ini_str(self):
         return self.period.ini_str()
 
+class Voltage(float,ParamValue):
+    cxx_type = 'double'
+    def __new__(cls, value):
+        # convert to voltage
+        val = convert.toVoltage(value)
+        return super(cls, Voltage).__new__(cls, val)
+
+    def __str__(self):
+        return str(self.val)
+
+    def getValue(self):
+        value = float(self)
+        return value
+
+    def ini_str(self):
+        return '%f' % self.getValue()
+
 class NetworkBandwidth(float,ParamValue):
     cxx_type = 'float'
     def __new__(cls, value):
@@ -1637,7 +1667,7 @@ __all__ = ['Param', 'VectorParam',
            'TcpPort', 'UdpPort', 'EthernetAddr',
            'IpAddress', 'IpNetmask', 'IpWithPort',
            'MemorySize', 'MemorySize32',
-           'Latency', 'Frequency', 'Clock',
+           'Latency', 'Frequency', 'Clock', 'Voltage',
            'NetworkBandwidth', 'MemoryBandwidth',
            'AddrRange',
            'MaxAddr', 'MaxTick', 'AllMemory',

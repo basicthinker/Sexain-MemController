@@ -86,10 +86,17 @@ class Request
 {
   public:
     typedef uint32_t FlagsType;
+    typedef uint8_t ArchFlagsType;
     typedef ::Flags<FlagsType> Flags;
 
-    /** ASI information for this request if it exists. */
-    static const FlagsType ASI_BITS                    = 0x000000FF;
+    /**
+     * Architecture specific flags.
+     *
+     * These bits int the flag field are reserved for
+     * architecture-specific code. For example, SPARC uses them to
+     * represent ASIs.
+     */
+    static const FlagsType ARCH_BITS                   = 0x000000FF;
     /** The request was an instruction fetch. */
     static const FlagsType INST_FETCH                  = 0x00000100;
     /** The virtual address is also the physical address. */
@@ -104,6 +111,8 @@ class Request
     static const FlagsType MMAPPED_IPR                  = 0x00002000;
     /** This request is a clear exclusive. */
     static const FlagsType CLEAR_LL                    = 0x00004000;
+    /** This request is made in privileged mode. */
+    static const FlagsType PRIVILEGED                   = 0x00008000;
 
     /** The request should not cause a memory access. */
     static const FlagsType NO_ACCESS                   = 0x00080000;
@@ -126,6 +135,10 @@ class Request
     static const FlagsType PF_EXCLUSIVE                = 0x02000000;
     /** The request should be marked as LRU. */
     static const FlagsType EVICT_NEXT                  = 0x04000000;
+
+    /** The request should be handled by the generic IPR code (only
+     * valid together with MMAPPED_IPR) */
+    static const FlagsType GENERIC_IPR                 = 0x08000000;
 
     /** These flags are *not* cleared when a Request object is reused
        (assigned a new address). */
@@ -418,6 +431,13 @@ class Request
         _flags.set(flags);
     }
 
+    void
+    setArchFlags(Flags flags)
+    {
+        assert(privateFlags.isSet(VALID_PADDR|VALID_VADDR));
+        _flags.set(flags & ARCH_BITS);
+    }
+
     /** Accessor function for vaddr.*/
     Addr
     getVaddr()
@@ -448,12 +468,12 @@ class Request
         _asid = asid;
     }
 
-    /** Accessor function for asi.*/
-    uint8_t
-    getAsi()
+    /** Accessor function for architecture-specific flags.*/
+    ArchFlagsType
+    getArchFlags()
     {
-        assert(privateFlags.isSet(VALID_VADDR));
-        return _flags & ASI_BITS;
+        assert(privateFlags.isSet(VALID_PADDR|VALID_VADDR));
+        return _flags & ARCH_BITS;
     }
 
     /** Accessor function to check if sc result is valid. */
@@ -521,6 +541,7 @@ class Request
     bool isInstFetch() const { return _flags.isSet(INST_FETCH); }
     bool isPrefetch() const { return _flags.isSet(PREFETCH); }
     bool isLLSC() const { return _flags.isSet(LLSC); }
+    bool isPriv() const { return _flags.isSet(PRIVILEGED); }
     bool isLocked() const { return _flags.isSet(LOCKED); }
     bool isSwap() const { return _flags.isSet(MEM_SWAP|MEM_SWAP_COND); }
     bool isCondSwap() const { return _flags.isSet(MEM_SWAP_COND); }

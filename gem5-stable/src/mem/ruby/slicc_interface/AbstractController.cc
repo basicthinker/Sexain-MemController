@@ -104,10 +104,10 @@ AbstractController::stallBuffer(MessageBuffer* buf, Address addr)
 {
     if (m_waiting_buffers.count(addr) == 0) {
         MsgVecType* msgVec = new MsgVecType;
-        msgVec->resize(m_max_in_port_rank, NULL);
+        msgVec->resize(m_in_ports, NULL);
         m_waiting_buffers[addr] = msgVec;
     }
-    (*(m_waiting_buffers[addr]))[m_cur_in_port_rank] = buf;
+    (*(m_waiting_buffers[addr]))[m_cur_in_port] = buf;
 }
 
 void
@@ -118,7 +118,7 @@ AbstractController::wakeUpBuffers(Address addr)
         // Wake up all possible lower rank (i.e. lower priority) buffers that could
         // be waiting on this message.
         //
-        for (int in_port_rank = m_cur_in_port_rank - 1;
+        for (int in_port_rank = m_cur_in_port - 1;
              in_port_rank >= 0;
              in_port_rank--) {
             if ((*(m_waiting_buffers[addr]))[in_port_rank] != NULL) {
@@ -138,7 +138,7 @@ AbstractController::wakeUpAllBuffers(Address addr)
         // Wake up all possible lower rank (i.e. lower priority) buffers that could
         // be waiting on this message.
         //
-        for (int in_port_rank = m_max_in_port_rank - 1;
+        for (int in_port_rank = m_in_ports - 1;
              in_port_rank >= 0;
              in_port_rank--) {
             if ((*(m_waiting_buffers[addr]))[in_port_rank] != NULL) {
@@ -180,5 +180,21 @@ AbstractController::wakeUpAllBuffers()
         }
 
         m_waiting_buffers.clear();
+    }
+}
+
+void
+AbstractController::blockOnQueue(Address addr, MessageBuffer* port)
+{
+    m_is_blocking = true;
+    m_block_map[addr] = port;
+}
+
+void
+AbstractController::unblock(Address addr)
+{
+    m_block_map.erase(addr);
+    if (m_block_map.size() == 0) {
+       m_is_blocking = false;
     }
 }

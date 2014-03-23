@@ -11,7 +11,8 @@
 # modified or unmodified, in source code or in binary form.
 #
 # Copyright (c) 2004-2006 The Regents of The University of Michigan
-# Copyright (c) 2010 Advanced Micro Devices, Inc.
+# Copyright (c) 2010-20013 Advanced Micro Devices, Inc.
+# Copyright (c) 2013 Mark D. Hill and David A. Wood
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -528,8 +529,6 @@ struct PyObject;
 #endif
 
 #include <string>
-
-class EventQueue;
 ''')
         for param in params:
             param.cxx_predecls(code)
@@ -558,16 +557,11 @@ class EventQueue;
         code.indent()
         if cls == SimObject:
             code('''
-    SimObjectParams()
-    {
-        extern EventQueue mainEventQueue;
-        eventq = &mainEventQueue;
-    }
+    SimObjectParams() {}
     virtual ~SimObjectParams() {}
 
     std::string name;
     PyObject *pyobj;
-    EventQueue *eventq;
             ''')
         for param in params:
             param.cxx_decl(code)
@@ -582,6 +576,14 @@ class EventQueue;
         return code
 
 
+# This *temporary* definition is required to support calls from the
+# SimObject class definition to the MetaSimObject methods (in
+# particular _set_param, which gets called for parameters with default
+# values defined on the SimObject class itself).  It will get
+# overridden by the permanent definition (which requires that
+# SimObject be defined) lower in this file.
+def isSimObjectOrVector(value):
+    return False
 
 # The SimObject class is the root of the special hierarchy.  Most of
 # the code in this class deals with the configuration hierarchy itself
@@ -592,9 +594,10 @@ class SimObject(object):
     __metaclass__ = MetaSimObject
     type = 'SimObject'
     abstract = True
-    cxx_header = "sim/sim_object.hh"
 
+    cxx_header = "sim/sim_object.hh"
     cxx_bases = [ "Drainable", "Serializable" ]
+    eventq_index = Param.UInt32(Parent.eventq_index, "Event Queue Index")
 
     @classmethod
     def export_method_swig_predecls(cls, code):
@@ -698,7 +701,7 @@ class SimObject(object):
         # via __setattr__.  There is only ever one reference
         # object per port, but we create them lazily here.
         ref = self._port_refs.get(attr)
-        if not ref:
+        if ref == None:
             ref = self._ports[attr].makeRef(self)
             self._port_refs[attr] = ref
         return ref
@@ -721,8 +724,14 @@ class SimObject(object):
         if self._ccObject and hasattr(self._ccObject, attr):
             return getattr(self._ccObject, attr)
 
-        raise AttributeError, "object '%s' has no attribute '%s'" \
+        err_string = "object '%s' has no attribute '%s'" \
               % (self.__class__.__name__, attr)
+
+        if not self._ccObject:
+            err_string += "\n  (C++ object is not yet constructed," \
+                          " so wrapped C++ methods are unavailable.)"
+
+        raise AttributeError, err_string
 
     # Set attribute (called on foo.attr = value when foo is an
     # instance of class cls).
@@ -736,11 +745,6 @@ class SimObject(object):
             # set up port connection
             self._get_port_ref(attr).connect(value)
             return
-
-        if isSimObjectOrSequence(value) and self._instantiated:
-            raise RuntimeError, \
-                  "cannot set SimObject parameter '%s' after\n" \
-                  "    instance been cloned %s" % (attr, `self`)
 
         param = self._params.get(attr)
         if param:
@@ -783,6 +787,11 @@ class SimObject(object):
     def set_parent(self, parent, name):
         self._parent = parent
         self._name = name
+
+    # Return parent object of this SimObject, not implemented by SimObjectVector
+    # because the elements in a SimObjectVector may not share the same parent
+    def get_parent(self):
+        return self._parent
 
     # Also implemented by SimObjectVector
     def get_name(self):

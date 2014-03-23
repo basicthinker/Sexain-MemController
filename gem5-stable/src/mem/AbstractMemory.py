@@ -38,7 +38,7 @@
 #
 # Authors: Nathan Binkert
 #          Andreas Hansson
-#          Jinglei Ren <jinglei.ren@stanzax.org>
+#          Jinglei Ren <jinglei@ren.systems>
 
 from m5.params import *
 from MemObject import MemObject
@@ -63,4 +63,4 @@ class AbstractMemory(MemObject):
     # Should the bootloader include this memory when passing
     # configuration information about the physical memory layout to
     # the kernel, e.g. using ATAG or ACPI
-    conf_table_reported = Param.Bool(False, "Report to configuration table")
+    conf_table_reported = Param.Bool(True, "Report to configuration table")

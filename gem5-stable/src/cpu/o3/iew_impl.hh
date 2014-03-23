@@ -40,6 +40,9 @@
  * Authors: Kevin Lim
  */
 
+#ifndef __CPU_O3_IEW_IMPL_IMPL_HH__
+#define __CPU_O3_IEW_IMPL_IMPL_HH__
+
 // @todo: Fix the instantaneous communication among all the stages within
 // iew.  There's a clear delay between issue and execute, yet backwards
 // communication happens simultaneously.
@@ -53,7 +56,6 @@
 #include "cpu/o3/iew.hh"
 #include "cpu/timebuf.hh"
 #include "debug/Activity.hh"
-#include "debug/Decode.hh"
 #include "debug/Drain.hh"
 #include "debug/IEW.hh"
 #include "debug/O3PipeView.hh"
@@ -645,7 +647,7 @@ DefaultIEW<Impl>::skidInsert(ThreadID tid)
 
         insts[tid].pop();
 
-        DPRINTF(Decode,"[tid:%i]: Inserting [sn:%lli] PC:%s into "
+        DPRINTF(IEW,"[tid:%i]: Inserting [sn:%lli] PC:%s into "
                 "dispatch skidBuffer %i\n",tid, inst->seqNum,
                 inst->pcState(),tid);
 
@@ -1672,3 +1674,5 @@ DefaultIEW<Impl>::checkMisprediction(DynInstPtr &inst)
         }
     }
 }
+
+#endif//__CPU_O3_IEW_IMPL_IMPL_HH__

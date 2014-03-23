@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "mem/packet.hh"
+#include "mem/protocol/MessageSizeType.hh"
 #include "mem/ruby/common/TypeDefines.hh"
 #include "mem/ruby/network/BasicRouter.hh"
 #include "params/Switch.hh"
@@ -67,12 +68,13 @@ class Switch : public BasicRouter
         int bw_multiplier);
     const Throttle* getThrottle(LinkID link_number) const;
     const std::vector<Throttle*>* getThrottles() const;
-    void clearRoutingTables();
-    void clearBuffers();
-    void reconfigureOutPort(const NetDest& routing_table_entry);
 
-    void printStats(std::ostream& out) const;
-    void clearStats();
+    void resetStats();
+    void collateStats();
+    void regStats();
+    const Stats::Formula & getMsgCount(unsigned int type) const
+    { return m_msg_counts[type]; }
+
     void print(std::ostream& out) const;
     void init_net_ptr(SimpleNetwork* net_ptr) { m_network_ptr = net_ptr; }
 
@@ -84,10 +86,15 @@ class Switch : public BasicRouter
     Switch(const Switch& obj);
     Switch& operator=(const Switch& obj);
 
-    PerfectSwitch* m_perfect_switch_ptr;
+    PerfectSwitch* m_perfect_switch;
     SimpleNetwork* m_network_ptr;
     std::vector<Throttle*> m_throttles;
     std::vector<MessageBuffer*> m_buffers_to_free;
+
+    // Statistical variables
+    Stats::Formula m_avg_utilization;
+    Stats::Formula m_msg_counts[MessageSizeType_NUM];
+    Stats::Formula m_msg_bytes[MessageSizeType_NUM];
 };
 
 inline std::ostream&

@@ -51,12 +51,10 @@
 #include "mem/packet_access.hh"
 
 Pl050::Pl050(const Params *p)
-    : AmbaIntDevice(p), control(0), status(0x43), clkdiv(0), interrupts(0),
-      rawInterrupts(0), ackNext(false), shiftDown(false), vnc(p->vnc),
-      driverInitialized(false), intEvent(this)
+    : AmbaIntDevice(p, 0xfff), control(0), status(0x43), clkdiv(0),
+      interrupts(0), rawInterrupts(0), ackNext(false), shiftDown(false),
+      vnc(p->vnc), driverInitialized(false), intEvent(this)
 {
-    pioSize = 0xfff;
-
     if (vnc) {
         if (!p->is_mouse)
             vnc->setKeyboard(this);
@@ -108,7 +106,7 @@ Pl050::read(PacketPtr pkt)
         DPRINTF(Pl050, "Read Interrupts: %#x\n", (uint32_t)interrupts);
         break;
       default:
-        if (AmbaDev::readId(pkt, ambaId, pioAddr)) {
+        if (readId(pkt, ambaId, pioAddr)) {
             // Hack for variable size accesses
             data = pkt->get<uint32_t>();
             break;

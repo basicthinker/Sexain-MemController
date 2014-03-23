@@ -72,7 +72,7 @@ namespace X86ISA {
 
 ApicRegIndex decodeAddr(Addr paddr);
 
-class Interrupts : public BasicPioDevice, IntDev
+class Interrupts : public BasicPioDevice, IntDevice
 {
   protected:
     // Storage for the APIC registers
@@ -92,8 +92,6 @@ class Interrupts : public BasicPioDevice, IntDev
     /*
      * Timing related stuff.
      */
-    Tick latency;
-
     class ApicTimerEvent : public Event
     {
       private:
@@ -217,7 +215,7 @@ class Interrupts : public BasicPioDevice, IntDev
     void init();
 
     /*
-     * Functions to interact with the interrupt port from IntDev.
+     * Functions to interact with the interrupt port from IntDevice.
      */
     Tick read(PacketPtr pkt);
     Tick write(PacketPtr pkt);
@@ -233,7 +231,6 @@ class Interrupts : public BasicPioDevice, IntDev
         return entry.periodic;
     }
 
-    AddrRangeList getAddrRanges() const;
     AddrRangeList getIntAddrRange() const;
 
     BaseMasterPort &getMasterPort(const std::string &if_name,
@@ -277,6 +274,13 @@ class Interrupts : public BasicPioDevice, IntDev
      */
 
     bool checkInterrupts(ThreadContext *tc) const;
+    /**
+     * Check if there are pending interrupts without ignoring the
+     * interrupts disabled flag.
+     *
+     * @return true if there are interrupts pending.
+     */
+    bool checkInterruptsRaw() const;
     Fault getInterrupt(ThreadContext *tc);
     void updateIntrInfo(ThreadContext *tc);
 

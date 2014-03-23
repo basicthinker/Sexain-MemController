@@ -52,6 +52,9 @@ typedef uint64_t FloatRegBits;
 typedef double FloatReg;
 typedef uint64_t MiscReg;
 
+// dummy typedef since we don't have CC regs
+typedef uint8_t CCReg;
+
 // Constants Related to the number of registers
 const int NumIntArchRegs = 32;
 
@@ -64,6 +67,7 @@ const int NumInternalProcRegs = 0;
 
 const int NumIntRegs = NumIntArchRegs + NumIntSpecialRegs;
 const int NumFloatRegs = NumFloatArchRegs + NumFloatSpecialRegs;
+const int NumCCRegs = 0;
 const int NumMiscRegs = NUM_MISCREGS;
 
 // Semantically meaningful register indices
@@ -84,9 +88,10 @@ const int SyscallPseudoReturnReg = 3;
 const int SyscallSuccessReg = 3;
 
 // These help enumerate all the registers for dependence tracking.
-const int FP_Base_DepTag = NumIntRegs;
-const int Ctrl_Base_DepTag = FP_Base_DepTag + NumFloatRegs;
-const int Max_DepTag = Ctrl_Base_DepTag + NumMiscRegs;
+const int FP_Reg_Base = NumIntRegs;
+const int CC_Reg_Base = FP_Reg_Base + NumFloatRegs;
+const int Misc_Reg_Base = CC_Reg_Base + NumCCRegs; // NumCCRegs == 0
+const int Max_Reg_Index = Misc_Reg_Base + NumMiscRegs;
 
 typedef union {
     IntReg   intreg;

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013 ARM Limited
+ * Copyright (c) 2013 Cornell University
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -36,6 +37,7 @@
  *
  * Authors: Vasileios Spiliopoulos
  *          Akash Bagdia
+ *          Christopher Torng
  */
 
 /**
@@ -45,6 +47,8 @@
 
 #ifndef __SIM_CLOCK_DOMAIN_HH__
 #define __SIM_CLOCK_DOMAIN_HH__
+
+#include <algorithm>
 
 #include "base/statistics.hh"
 #include "params/ClockDomain.hh"
@@ -56,10 +60,13 @@
  * Forward declaration
  */
 class DerivedClockDomain;
+class VoltageDomain;
+class ClockedObject;
 
 /**
  * The ClockDomain provides clock to group of clocked objects bundled
- * under the same clock domain. The clock domains provide support for
+ * under the same clock domain. The clock domains, in turn, are
+ * grouped into voltage domains. The clock domains provide support for
  * a hierarchial structure with source and derived domains.
  */
 class ClockDomain : public SimObject
@@ -74,15 +81,29 @@ class ClockDomain : public SimObject
     Tick _clockPeriod;
 
     /**
+     * Voltage domain this clock domain belongs to
+     */
+    VoltageDomain *_voltageDomain;
+
+    /**
      * Pointers to potential derived clock domains so we can propagate
      * changes.
      */
     std::vector<DerivedClockDomain*> children;
 
+    /**
+     * Pointers to members of this clock domain, so that when the clock
+     * period changes, we can update each member's tick.
+     */
+    std::vector<ClockedObject*> members;
+
   public:
 
     typedef ClockDomainParams Params;
-    ClockDomain(const Params *p) : SimObject(p), _clockPeriod(0) {}
+    ClockDomain(const Params *p, VoltageDomain *voltage_domain) :
+        SimObject(p),
+        _clockPeriod(0),
+        _voltageDomain(voltage_domain) {}
 
     /**
      * Get the clock period.
@@ -90,6 +111,33 @@ class ClockDomain : public SimObject
      * @return Clock period in ticks
      */
     inline Tick clockPeriod() const { return _clockPeriod; }
+
+    /**
+     * Register a ClockedObject to this ClockDomain.
+     *
+     * @param ClockedObject to add as a member
+     */
+    void registerWithClockDomain(ClockedObject *c)
+    {
+        assert(c != NULL);
+        assert(std::find(members.begin(), members.end(), c) == members.end());
+        members.push_back(c);
+    }
+
+    /**
+     * Get the voltage domain.
+     *
+     * @return Voltage domain this clock domain belongs to
+     */
+    inline VoltageDomain *voltageDomain() const { return _voltageDomain; }
+
+
+    /**
+     * Get the current voltage this clock domain operates at.
+     *
+     * @return Voltage applied to the clock domain
+     */
+    inline double voltage() const;
 
     /**
      * Add a derived domain.
@@ -120,6 +168,8 @@ class SrcClockDomain : public ClockDomain
      */
     void clockPeriod(Tick clock_period);
 
+    // Explicitly import the otherwise hidden clockPeriod
+    using ClockDomain::clockPeriod;
 };
 
 /**

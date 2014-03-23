@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010 ARM Limited
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -49,6 +50,7 @@
 #include "cpu/o3/isa_specific.hh"
 #include "cpu/base_dyn_inst.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/reg_class.hh"
 
 class Packet;
 
@@ -76,6 +78,9 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     typedef TheISA::IntReg   IntReg;
     typedef TheISA::FloatReg FloatReg;
     typedef TheISA::FloatRegBits FloatRegBits;
+#ifdef ISA_HAS_CC_REGS
+    typedef TheISA::CCReg   CCReg;
+#endif
     /** Misc register index type. */
     typedef TheISA::MiscReg  MiscReg;
 
@@ -173,7 +178,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     TheISA::MiscReg readMiscRegOperand(const StaticInst *si, int idx)
     {
         return this->cpu->readMiscReg(
-                si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag,
+                si->srcRegIdx(idx) - TheISA::Misc_Reg_Base,
                 this->threadNumber);
     }
 
@@ -183,7 +188,7 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     void setMiscRegOperand(const StaticInst *si, int idx,
                                      const MiscReg &val)
     {
-        int misc_reg = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        int misc_reg = si->destRegIdx(idx) - TheISA::Misc_Reg_Base;
         setMiscReg(misc_reg, val);
     }
 
@@ -209,11 +214,25 @@ class BaseO3DynInst : public BaseDynInst<Impl>
 
         for (int idx = 0; idx < this->numDestRegs(); idx++) {
             PhysRegIndex prev_phys_reg = this->prevDestRegIdx(idx);
-            TheISA::RegIndex original_dest_reg = this->staticInst->destRegIdx(idx);
-            if (original_dest_reg <  TheISA::FP_Base_DepTag)
-                this->setIntRegOperand(this->staticInst.get(), idx, this->cpu->readIntReg(prev_phys_reg));
-            else if (original_dest_reg < TheISA::Ctrl_Base_DepTag)
-                this->setFloatRegOperandBits(this->staticInst.get(), idx, this->cpu->readFloatRegBits(prev_phys_reg));
+            TheISA::RegIndex original_dest_reg =
+                this->staticInst->destRegIdx(idx);
+            switch (regIdxToClass(original_dest_reg)) {
+              case IntRegClass:
+                this->setIntRegOperand(this->staticInst.get(), idx,
+                                       this->cpu->readIntReg(prev_phys_reg));
+                break;
+              case FloatRegClass:
+                this->setFloatRegOperandBits(this->staticInst.get(), idx,
+                                             this->cpu->readFloatRegBits(prev_phys_reg));
+                break;
+              case CCRegClass:
+                this->setCCRegOperand(this->staticInst.get(), idx,
+                                      this->cpu->readCCReg(prev_phys_reg));
+                break;
+              case MiscRegClass:
+                // no need to forward misc reg values
+                break;
+            }
         }
     }
     /** Calls hardware return from error interrupt. */
@@ -253,6 +272,11 @@ class BaseO3DynInst : public BaseDynInst<Impl>
         return this->cpu->readFloatRegBits(this->_srcRegIdx[idx]);
     }
 
+    uint64_t readCCRegOperand(const StaticInst *si, int idx)
+    {
+        return this->cpu->readCCReg(this->_srcRegIdx[idx]);
+    }
+
     /** @todo: Make results into arrays so they can handle multiple dest
      *  registers.
      */
@@ -273,6 +297,12 @@ class BaseO3DynInst : public BaseDynInst<Impl>
     {
         this->cpu->setFloatRegBits(this->_destRegIdx[idx], val);
         BaseDynInst<Impl>::setFloatRegOperandBits(si, idx, val);
+    }
+
+    void setCCRegOperand(const StaticInst *si, int idx, uint64_t val)
+    {
+        this->cpu->setCCReg(this->_destRegIdx[idx], val);
+        BaseDynInst<Impl>::setCCRegOperand(si, idx, val);
     }
 
 #if THE_ISA == MIPS_ISA

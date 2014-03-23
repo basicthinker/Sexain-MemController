@@ -84,6 +84,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
                                       cacheMemory = cache,
                                       send_evictions = (
                                           options.cpu_type == "detailed"),
+                                      transitions_per_cycle = options.ports,
                                       ruby_system = ruby_system)
 
         cpu_seq = RubySequencer(version = i,
@@ -105,8 +106,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
 
         cntrl_count += 1
 
-    phys_mem_size = sum(map(lambda mem: mem.range.size(),
-                            system.memories.unproxy(system)))
+    phys_mem_size = sum(map(lambda r: r.size(), system.mem_ranges))
     assert(phys_mem_size % options.num_dirs == 0)
     mem_module_size = phys_mem_size / options.num_dirs
 
@@ -140,6 +140,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
                                                     map_levels = \
                                                       options.map_levels),
                                          memBuffer = mem_cntrl,
+                                         transitions_per_cycle = options.ports,
                                          ruby_system = ruby_system)
 
         exec("ruby_system.dir_cntrl%d = dir_cntrl" % i)
@@ -157,6 +158,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
         dma_cntrl = DMA_Controller(version = i,
                                    cntrl_id = cntrl_count,
                                    dma_sequencer = dma_seq,
+                                   transitions_per_cycle = options.ports,
                                    ruby_system = ruby_system)
 
         exec("ruby_system.dma_cntrl%d = dma_cntrl" % i)

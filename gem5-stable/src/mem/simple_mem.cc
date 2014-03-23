@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 ARM Limited
+ * Copyright (c) 2010-2013 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -49,12 +49,14 @@ using namespace std;
 
 SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     AbstractMemory(p),
-    port(name() + ".port", *this), lat(p->latency),
-    lat_var(p->latency_var), latATTLookup(p->lat_att_lookup),
+    port(name() + ".port", *this), latency(p->latency),
+    latATTLookup(p->lat_att_lookup),
     latATTUpdate(p->lat_att_update), latBlkWriteback(p->lat_blk_writeback),
     latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
-    isLatATT(p->is_lat_att), bandwidth(p->bandwidth),
-    isBusy(false), retryReq(false), releaseEvent(this)
+    isLatATT(p->is_lat_att), latency_var(p->latency_var),
+    bandwidth(p->bandwidth), isBusy(false),
+    retryReq(false), retryResp(false),
+    releaseEvent(this), dequeueEvent(this), drainManager(NULL)
 {
     latATT = 0;
 }
@@ -84,40 +86,24 @@ SimpleMemory::regStats()
 }
 
 Tick
-SimpleMemory::calculateLatency(PacketPtr pkt)
+SimpleMemory::recvAtomic(PacketPtr pkt)
 {
-    if (pkt->memInhibitAsserted()) {
-        return 0;
-    } else {
-        Tick latency = lat;
-        if (lat_var != 0)
-            latency += random_mt.random<Tick>(0, lat_var);
-        if (isLatATT) {
-            latency += latATTLookup;
-            sumLatATT += latATTLookup;
-        }
-        return latency;
-    }
-}
-
-Tick
-SimpleMemory::doAtomicAccess(PacketPtr pkt)
-{
-    latATT = 0;
     access(pkt);
-
-    Tick latency = calculateLatency(pkt); 
-    if (isLatATT) {
-        latency += latATT;
-        sumLatATT += latATT;
-    }
-    return latency;
+    return pkt->memInhibitAsserted() ? 0 : getLatency();
 }
 
 void
-SimpleMemory::doFunctionalAccess(PacketPtr pkt)
+SimpleMemory::recvFunctional(PacketPtr pkt)
 {
+    pkt->pushLabel(name());
+
     functionalAccess(pkt);
+
+    // potentially update the packets in our packet queue as well
+    for (auto i = packetQueue.begin(); i != packetQueue.end(); ++i)
+        pkt->checkFunctional(i->pkt);
+
+    pkt->popLabel();
 }
 
 bool
@@ -178,14 +164,20 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
-    Tick latency = doAtomicAccess(pkt);
+    recvAtomic(pkt);
     // turn packet around to go back to requester if response expected
     if (needsResponse) {
-        // doAtomicAccess() should already have turned packet into
+        // recvAtomic() should already have turned packet into
         // atomic response
         assert(pkt->isResponse());
-        port.schedTimingResp(pkt, curTick() + latency);
-        totalLatency += latency;
+        // to keep things simple (and in order), we put the packet at
+        // the end even if the latency suggests it should be sent
+        // before the packet(s) before it
+        packetQueue.push_back(DeferredPacket(pkt, curTick() + getLatency()));
+        if (!retryResp && !dequeueEvent.scheduled())
+            schedule(dequeueEvent, packetQueue.back().tick);
+        //TODO: port.schedTimingResp(pkt, curTick() + latency);
+        //TODO: totalLatency += latency;
     } else {
         pendingDelete.push_back(pkt);
     }
@@ -204,6 +196,46 @@ SimpleMemory::release()
     }
 }
 
+void
+SimpleMemory::dequeue()
+{
+    assert(!packetQueue.empty());
+    DeferredPacket deferred_pkt = packetQueue.front();
+
+    retryResp = !port.sendTimingResp(deferred_pkt.pkt);
+
+    if (!retryResp) {
+        packetQueue.pop_front();
+
+        // if the queue is not empty, schedule the next dequeue event,
+        // otherwise signal that we are drained if we were asked to do so
+        if (!packetQueue.empty()) {
+            // if there were packets that got in-between then we
+            // already have an event scheduled, so use re-schedule
+            reschedule(dequeueEvent,
+                       std::max(packetQueue.front().tick, curTick()), true);
+        } else if (drainManager) {
+            drainManager->signalDrainDone();
+            drainManager = NULL;
+        }
+    }
+}
+
+Tick
+SimpleMemory::getLatency() const
+{
+    return latency +
+        (latency_var ? random_mt.random<Tick>(0, latency_var) : 0);
+}
+
+void
+SimpleMemory::recvRetry()
+{
+    assert(retryResp);
+
+    dequeue();
+}
+
 BaseSlavePort &
 SimpleMemory::getSlavePort(const std::string &if_name, PortID idx)
 {
@@ -217,7 +249,13 @@ SimpleMemory::getSlavePort(const std::string &if_name, PortID idx)
 unsigned int
 SimpleMemory::drain(DrainManager *dm)
 {
-    int count = port.drain(dm);
+    int count = 0;
+
+    // also track our internal queue
+    if (!packetQueue.empty()) {
+        count += 1;
+        drainManager = dm;
+    }
 
     if (count)
         setDrainState(Drainable::Draining);
@@ -228,8 +266,7 @@ SimpleMemory::drain(DrainManager *dm)
 
 SimpleMemory::MemoryPort::MemoryPort(const std::string& _name,
                                      SimpleMemory& _memory)
-    : QueuedSlavePort(_name, &_memory, queueImpl),
-      queueImpl(_memory, *this), memory(_memory)
+    : SlavePort(_name, &_memory), memory(_memory)
 { }
 
 AddrRangeList
@@ -243,28 +280,25 @@ SimpleMemory::MemoryPort::getAddrRanges() const
 Tick
 SimpleMemory::MemoryPort::recvAtomic(PacketPtr pkt)
 {
-    return memory.doAtomicAccess(pkt);
+    return memory.recvAtomic(pkt);
 }
 
 void
 SimpleMemory::MemoryPort::recvFunctional(PacketPtr pkt)
 {
-    pkt->pushLabel(memory.name());
-
-    if (!queue.checkFunctional(pkt)) {
-        // Default implementation of SimpleTimingPort::recvFunctional()
-        // calls recvAtomic() and throws away the latency; we can save a
-        // little here by just not calculating the latency.
-        memory.doFunctionalAccess(pkt);
-    }
-
-    pkt->popLabel();
+    memory.recvFunctional(pkt);
 }
 
 bool
 SimpleMemory::MemoryPort::recvTimingReq(PacketPtr pkt)
 {
     return memory.recvTimingReq(pkt);
+}
+
+void
+SimpleMemory::MemoryPort::recvRetry()
+{
+    memory.recvRetry();
 }
 
 SimpleMemory*

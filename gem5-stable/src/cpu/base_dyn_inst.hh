@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2011 ARM Limited
+ * Copyright (c) 2011,2013 ARM Limited
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -633,6 +634,12 @@ class BaseDynInst : public RefCounted
         setResult<uint64_t>(val);
     }
 
+    /** Records a CC register being set to a value. */
+    void setCCRegOperand(const StaticInst *si, int idx, uint64_t val)
+    {
+        setResult<uint64_t>(val);
+    }
+
     /** Records an fp register being set to a value. */
     void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val,
                             int width)
@@ -976,7 +983,7 @@ BaseDynInst<Impl>::splitRequest(RequestPtr req, RequestPtr &sreqLow,
                                 RequestPtr &sreqHigh)
 {
     // Check to see if the request crosses the next level block boundary.
-    unsigned block_size = cpu->getDataPort().peerBlockSize();
+    unsigned block_size = cpu->cacheLineSize();
     Addr addr = req->getVaddr();
     Addr split_addr = roundDown(addr + req->getSize() - 1, block_size);
     assert(split_addr <= addr || split_addr - addr < block_size);
@@ -1002,8 +1009,16 @@ BaseDynInst<Impl>::initiateTranslation(RequestPtr req, RequestPtr sreqLow,
         // One translation if the request isn't split.
         DataTranslation<BaseDynInstPtr> *trans =
             new DataTranslation<BaseDynInstPtr>(this, state);
+
         cpu->dtb->translateTiming(req, thread->getTC(), trans, mode);
+
         if (!translationCompleted()) {
+            // The translation isn't yet complete, so we can't possibly have a
+            // fault. Overwrite any existing fault we might have from a previous
+            // execution of this instruction (e.g. an uncachable load that
+            // couldn't execute because it wasn't at the head of the ROB).
+            fault = NoFault;
+
             // Save memory requests.
             savedReq = state->mainReq;
             savedSreqLow = state->sreqLow;
@@ -1021,7 +1036,14 @@ BaseDynInst<Impl>::initiateTranslation(RequestPtr req, RequestPtr sreqLow,
 
         cpu->dtb->translateTiming(sreqLow, thread->getTC(), stransLow, mode);
         cpu->dtb->translateTiming(sreqHigh, thread->getTC(), stransHigh, mode);
+
         if (!translationCompleted()) {
+            // The translation isn't yet complete, so we can't possibly have a
+            // fault. Overwrite any existing fault we might have from a previous
+            // execution of this instruction (e.g. an uncachable load that
+            // couldn't execute because it wasn't at the head of the ROB).
+            fault = NoFault;
+
             // Save memory requests.
             savedReq = state->mainReq;
             savedSreqLow = state->sreqLow;

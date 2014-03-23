@@ -51,6 +51,9 @@ if env['USE_KVM']:
     if env['TARGET_ISA'] == 'arm':
         SimObject('ArmKvmCPU.py')
         Source('arm_cpu.cc')
+    elif env['TARGET_ISA'] == 'x86':
+        SimObject('X86KvmCPU.py')
+        Source('x86_cpu.cc')
 
     DebugFlag('Kvm', 'Basic KVM Functionality')
     DebugFlag('KvmContext', 'KVM/gem5 context synchronization')

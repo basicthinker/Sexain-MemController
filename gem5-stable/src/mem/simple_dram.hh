@@ -11,6 +11,9 @@
  * unmodified and in its entirety in all distributions of the software,
  * modified or unmodified, in source code or in binary form.
  *
+ * Copyright (c) 2013 Amin Farmahini-Farahani
+ * All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met: redistributions of source code must retain the above copyright
@@ -36,6 +39,7 @@
  *
  * Authors: Andreas Hansson
  *          Ani Udipi
+ *          Neha Agarwal
  */
 
 /**
@@ -130,7 +134,7 @@ class SimpleDRAM : public AbstractMemory
     bool stopReads;
 
     /** List to keep track of activate ticks */
-    std::deque<Tick> actTicks;
+    std::vector<std::deque<Tick>> actTicks;
 
     /**
      * A basic class to track the bank state indirectly via times
@@ -149,12 +153,35 @@ class SimpleDRAM : public AbstractMemory
 
         Tick freeAt;
         Tick tRASDoneAt;
+        Tick actAllowedAt;
 
         uint32_t bytesAccessed;
 
         Bank() :
-            openRow(INVALID_ROW), freeAt(0), tRASDoneAt(0), bytesAccessed(0)
+            openRow(INVALID_ROW), freeAt(0), tRASDoneAt(0), actAllowedAt(0),
+            bytesAccessed(0)
         { }
+    };
+
+    /**
+     * A burst helper helps organize and manage a packet that is larger than
+     * the DRAM burst size. A system packet that is larger than the burst size
+     * is split into multiple DRAM packets and all those DRAM packets point to
+     * a single burst helper such that we know when the whole packet is served.
+     */
+    class BurstHelper {
+
+      public:
+
+        /** Number of DRAM bursts requred for a system packet **/
+        const unsigned int burstCount;
+
+        /** Number of DRAM bursts serviced so far for a system packet **/
+        unsigned int burstsServiced;
+
+        BurstHelper(unsigned int _burstCount)
+            : burstCount(_burstCount), burstsServiced(0)
+            { }
     };
 
     /**
@@ -174,18 +201,48 @@ class SimpleDRAM : public AbstractMemory
         /** This comes from the outside world */
         const PacketPtr pkt;
 
+        const bool isRead;
+
         /** Will be populated by address decoder */
         const uint8_t rank;
-        const uint16_t bank;
+        const uint8_t bank;
         const uint16_t row;
-        const Addr addr;
-        Bank& bank_ref;
 
-        DRAMPacket(PacketPtr _pkt, uint8_t _rank,
-                   uint16_t _bank, uint16_t _row, Addr _addr, Bank& _bank_ref)
+        /**
+         * Bank id is calculated considering banks in all the ranks
+         * eg: 2 ranks each with 8 banks, then bankId = 0 --> rank0, bank0 and
+         * bankId = 8 --> rank1, bank0
+         */
+        const uint16_t bankId;
+
+        /**
+         * The starting address of the DRAM packet.
+         * This address could be unaligned to burst size boundaries. The
+         * reason is to keep the address offset so we can accurately check
+         * incoming read packets with packets in the write queue.
+         */
+        Addr addr;
+
+        /**
+         * The size of this dram packet in bytes
+         * It is always equal or smaller than DRAM burst size
+         */
+        unsigned int size;
+
+        /**
+         * A pointer to the BurstHelper if this DRAMPacket is a split packet
+         * If not a split packet (common case), this is set to NULL
+         */
+        BurstHelper* burstHelper;
+        Bank& bankRef;
+
+        DRAMPacket(PacketPtr _pkt, bool is_read, uint8_t _rank, uint8_t _bank,
+                   uint16_t _row, uint16_t bank_id, Addr _addr,
+                   unsigned int _size, Bank& bank_ref)
             : entryTime(curTick()), readyTime(curTick()),
-              pkt(_pkt), rank(_rank), bank(_bank), row(_row), addr(_addr),
-              bank_ref(_bank_ref)
+              pkt(_pkt), isRead(is_read), rank(_rank), bank(_bank), row(_row),
+              bankId(bank_id), addr(_addr), size(_size), burstHelper(NULL),
+              bankRef(bank_ref)
         { }
 
     };
@@ -212,28 +269,34 @@ class SimpleDRAM : public AbstractMemory
     /**
      * Check if the read queue has room for more entries
      *
+     * @param pktCount The number of entries needed in the read queue
      * @return true if read queue is full, false otherwise
      */
-    bool readQueueFull() const;
+    bool readQueueFull(unsigned int pktCount) const;
 
     /**
      * Check if the write queue has room for more entries
      *
+     * @param pktCount The number of entries needed in the write queue
      * @return true if write queue is full, false otherwise
      */
-    bool writeQueueFull() const;
+    bool writeQueueFull(unsigned int pktCount) const;
 
     /**
      * When a new read comes in, first check if the write q has a
      * pending request to the same address.\ If not, decode the
-     * address to populate rank/bank/row, create a "dram_pkt", and
-     * push it to the back of the read queue.\ If this is the only
+     * address to populate rank/bank/row, create one or mutliple
+     * "dram_pkt", and push them to the back of the read queue.\
+     * If this is the only
      * read request in the system, schedule an event to start
      * servicing it.
      *
      * @param pkt The request packet from the outside world
+     * @param pktCount The number of DRAM bursts the pkt
+     * translate to. If pkt size is larger then one full burst,
+     * then pktCount is greater than one.
      */
-    void addToReadQueue(PacketPtr pkt);
+    void addToReadQueue(PacketPtr pkt, unsigned int pktCount);
 
     /**
      * Decode the incoming pkt, create a dram_pkt and push to the
@@ -242,8 +305,11 @@ class SimpleDRAM : public AbstractMemory
      * to get full, stop reads, and start draining writes.
      *
      * @param pkt The request packet from the outside world
+     * @param pktCount The number of DRAM bursts the pkt
+     * translate to. If pkt size is larger then one full burst,
+     * then pktCount is greater than one.
      */
-    void addToWriteQueue(PacketPtr pkt);
+    void addToWriteQueue(PacketPtr pkt, unsigned int pktCount);
 
     /**
      * Actually do the DRAM access - figure out the latency it
@@ -276,12 +342,17 @@ class SimpleDRAM : public AbstractMemory
 
     /**
      * Address decoder to figure out physical mapping onto ranks,
-     * banks, and rows.
+     * banks, and rows. This function is called multiple times on the same
+     * system packet if the pakcet is larger than burst of the memory. The
+     * dramPktAddr is used for the offset within the packet.
      *
      * @param pkt The packet from the outside world
+     * @param dramPktAddr The starting address of the DRAM packet
+     * @param size The size of the DRAM packet in bytes
+     * @param isRead Is the request for a read or a write to DRAM
      * @return A DRAMPacket pointer with the decoded information
      */
-    DRAMPacket* decodeAddr(PacketPtr pkt);
+    DRAMPacket* decodeAddr(PacketPtr pkt, Addr dramPktAddr, unsigned int size, bool isRead);
 
     /**
      * The memory schduler/arbiter - picks which read request needs to
@@ -327,6 +398,12 @@ class SimpleDRAM : public AbstractMemory
     void chooseNextWrite();
 
     /**
+     * For FR-FCFS policy reorder the read/write queue depending on row buffer
+     * hits and earliest banks available in DRAM
+     */
+    void reorderQueue(std::deque<DRAMPacket*>& queue);
+
+    /**
      * Looking at all banks, determine the moment in time when they
      * are all free.
      *
@@ -334,6 +411,14 @@ class SimpleDRAM : public AbstractMemory
      */
     Tick maxBankFreeAt() const;
 
+    /**
+     * Find which are the earliest available banks for the enqueued
+     * requests. Assumes maximum of 64 banks per DIMM
+     *
+     * @param Queued requests to consider
+     * @return One-hot encoded mask of bank indices
+     */
+    uint64_t minBankFreeAt(const std::deque<DRAMPacket*>& queue) const;
 
     /**
      * Keep track of when row activations happen, in order to enforce
@@ -341,7 +426,7 @@ class SimpleDRAM : public AbstractMemory
      * method updates the time that the banks become available based
      * on the current limits.
      */
-    void recordActivate(Tick act_tick);
+    void recordActivate(Tick act_tick, uint8_t rank, uint8_t bank);
 
     void printParams() const;
     void printQs() const;
@@ -349,8 +434,8 @@ class SimpleDRAM : public AbstractMemory
     /**
      * The controller's main read and write queues
      */
-    std::list<DRAMPacket*> readQueue;
-    std::list<DRAMPacket*> writeQueue;
+    std::deque<DRAMPacket*> readQueue;
+    std::deque<DRAMPacket*> writeQueue;
 
     /**
      * Response queue where read packets wait after we're done working
@@ -360,7 +445,7 @@ class SimpleDRAM : public AbstractMemory
      * as sizing the read queue, this and the main read queue need to
      * be added together.
      */
-    std::list<DRAMPacket*> respQueue;
+    std::deque<DRAMPacket*> respQueue;
 
     /**
      * If we need to drain, keep the drain manager around until we're
@@ -376,22 +461,27 @@ class SimpleDRAM : public AbstractMemory
 
     /**
      * The following are basic design parameters of the memory
-     * controller, and are initialized based on parameter values. The
-     * bytesPerCacheLine is based on the neighbouring ports cache line
-     * size and thus determined outside the constructor. Similarly,
-     * the rowsPerBank is determined based on the capacity, number of
-     * ranks and banks, the cache line size, and the row buffer size.
+     * controller, and are initialized based on parameter values.
+     * The rowsPerBank is determined based on the capacity, number of
+     * ranks and banks, the burst size, and the row buffer size.
      */
-    uint32_t bytesPerCacheLine;
-    const uint32_t linesPerRowBuffer;
+    const uint32_t deviceBusWidth;
+    const uint32_t burstLength;
+    const uint32_t deviceRowBufferSize;
+    const uint32_t devicesPerRank;
+    const uint32_t burstSize;
+    const uint32_t rowBufferSize;
     const uint32_t ranksPerChannel;
     const uint32_t banksPerRank;
     const uint32_t channels;
     uint32_t rowsPerBank;
+    uint32_t columnsPerRowBuffer;
     const uint32_t readBufferSize;
     const uint32_t writeBufferSize;
-    const double writeThresholdPerc;
-    uint32_t writeThreshold;
+    const double writeHighThresholdPerc;
+    uint32_t writeHighThreshold;
+    const double writeLowThresholdPerc;
+    uint32_t writeLowThreshold;
 
     /**
      * Basic memory timing parameters initialized based on parameter
@@ -402,8 +492,10 @@ class SimpleDRAM : public AbstractMemory
     const Tick tRCD;
     const Tick tCL;
     const Tick tRP;
+    const Tick tRAS;
     const Tick tRFC;
     const Tick tREFI;
+    const Tick tRRD;
     const Tick tXAW;
     const uint32_t activationLimit;
 
@@ -438,18 +530,30 @@ class SimpleDRAM : public AbstractMemory
     Tick prevArrival;
     int numReqs;
 
+    // Tracks number of writes done to meet the write threshold
+    uint32_t numWritesThisTime;
+
+    // The absolute soonest you have to start thinking about the
+    // next request is the longest access time that can occur before
+    // busBusyUntil. Assuming you need to precharge,
+    // open a new row, and access, it is tRP + tRCD + tCL
+    Tick newTime;
+
     // All statistics that the model needs to capture
     Stats::Scalar readReqs;
     Stats::Scalar writeReqs;
-    Stats::Scalar cpuReqs;
-    Stats::Scalar bytesRead;
+    Stats::Scalar readBursts;
+    Stats::Scalar writeBursts;
+    Stats::Scalar bytesReadDRAM;
+    Stats::Scalar bytesReadWrQ;
     Stats::Scalar bytesWritten;
-    Stats::Scalar bytesConsumedRd;
-    Stats::Scalar bytesConsumedWr;
+    Stats::Scalar bytesReadSys;
+    Stats::Scalar bytesWrittenSys;
     Stats::Scalar servicedByWrQ;
+    Stats::Scalar mergedWrBursts;
     Stats::Scalar neitherReadNorWrite;
-    Stats::Vector perBankRdReqs;
-    Stats::Vector perBankWrReqs;
+    Stats::Vector perBankRdBursts;
+    Stats::Vector perBankWrBursts;
     Stats::Scalar numRdRetry;
     Stats::Scalar numWrRetry;
     Stats::Scalar totGap;
@@ -474,10 +578,12 @@ class SimpleDRAM : public AbstractMemory
     // Average bandwidth
     Stats::Formula avgRdBW;
     Stats::Formula avgWrBW;
-    Stats::Formula avgConsumedRdBW;
-    Stats::Formula avgConsumedWrBW;
+    Stats::Formula avgRdBWSys;
+    Stats::Formula avgWrBWSys;
     Stats::Formula peakBW;
     Stats::Formula busUtil;
+    Stats::Formula busUtilRead;
+    Stats::Formula busUtilWrite;
 
     // Average queue lengths
     Stats::Average avgRdQLen;
@@ -489,6 +595,16 @@ class SimpleDRAM : public AbstractMemory
     Stats::Formula readRowHitRate;
     Stats::Formula writeRowHitRate;
     Stats::Formula avgGap;
+
+    // DRAM Power Calculation
+    Stats::Formula pageHitRate;
+    Stats::Formula prechargeAllPercent;
+    Stats::Scalar prechargeAllTime;
+
+    // To track number of cycles all the banks are precharged
+    Tick startTickPrechargeAll;
+    // To track number of banks which are currently active
+    unsigned int numBanksActive;
 
     /** @todo this is a temporary workaround until the 4-phase code is
      * committed. upstream caches needs this packet until true is returned, so

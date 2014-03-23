@@ -253,20 +253,14 @@ class $c_ident : public AbstractController
     static int getNumControllers();
     void init();
     MessageBuffer* getMandatoryQueue() const;
-    const int & getVersion() const;
     const std::string toString() const;
-    const std::string getName() const;
-    void initNetworkPtr(Network* net_ptr) { m_net_ptr = net_ptr; }
 
     void print(std::ostream& out) const;
     void wakeup();
-    void printStats(std::ostream& out) const;
     void clearStats();
     void regStats();
     void collateStats();
 
-    void blockOnQueue(Address addr, MessageBuffer* port);
-    void unblock(Address addr);
     void recordCacheTrace(int cntrl, CacheRecorder* tr);
     Sequencer* getSequencer() const;
 
@@ -466,12 +460,8 @@ $c_ident::$c_ident(const Params *p)
 {
     m_name = "${ident}";
 ''')
-        #
-        # max_port_rank is used to size vectors and thus should be one plus the
-        # largest port rank
-        #
-        max_port_rank = self.in_ports[0].pairs["max_port_rank"] + 1
-        code('    m_max_in_port_rank = $max_port_rank;')
+        num_in_ports = len(self.in_ports)
+        code('    m_in_ports = $num_in_ports;')
         code.indent()
 
         #
@@ -840,60 +830,16 @@ $c_ident::getSequencer() const
     return $seq_ident;
 }
 
-const int &
-$c_ident::getVersion() const
-{
-    return m_version;
-}
-
 const string
 $c_ident::toString() const
 {
     return "$c_ident";
 }
 
-const string
-$c_ident::getName() const
-{
-    return m_name;
-}
-
-void
-$c_ident::blockOnQueue(Address addr, MessageBuffer* port)
-{
-    m_is_blocking = true;
-    m_block_map[addr] = port;
-}
-
-void
-$c_ident::unblock(Address addr)
-{
-    m_block_map.erase(addr);
-    if (m_block_map.size() == 0) {
-       m_is_blocking = false;
-    }
-}
-
 void
 $c_ident::print(ostream& out) const
 {
     out << "[$c_ident " << m_version << "]";
-}
-
-void
-$c_ident::printStats(ostream& out) const
-{
-''')
-        #
-        # Cache and Memory Controllers have specific profilers associated with
-        # them.  Print out these stats before dumping state transition stats.
-        #
-        for param in self.config_parameters:
-            if param.type_ast.type.ident == "DirectoryMemory":
-                assert(param.pointer)
-                code('    m_${{param.ident}}_ptr->printStats(out);')
-
-        code('''
 }
 
 void $c_ident::clearStats()
@@ -1154,9 +1100,9 @@ ${ident}_Controller::wakeup()
             code.indent()
             code('// ${ident}InPort $port')
             if port.pairs.has_key("rank"):
-                code('m_cur_in_port_rank = ${{port.pairs["rank"]}};')
+                code('m_cur_in_port = ${{port.pairs["rank"]}};')
             else:
-                code('m_cur_in_port_rank = 0;')
+                code('m_cur_in_port = 0;')
             code('${{port["c_code_in_port"]}}')
             code.dedent()
 

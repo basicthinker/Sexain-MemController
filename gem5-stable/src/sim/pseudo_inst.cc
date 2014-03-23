@@ -98,8 +98,10 @@ pseudoInst(ThreadContext *tc, uint8_t func, uint8_t subfunc)
     // used the Argument class, but due to the possible side effects
     // from getArgument, it'd most likely break.
     int arg_num(0);
-    for (int i = 0; i < sizeof(args) / sizeof(*args); ++i)
-        args[arg_num++] = getArgument(tc, arg_num, sizeof(uint64_t), false);
+    for (int i = 0; i < sizeof(args) / sizeof(*args); ++i) {
+        args[arg_num] = getArgument(tc, arg_num, sizeof(uint64_t), false);
+        ++arg_num;
+    }
 
     switch (func) {
       case 0x00: // arm_func
@@ -345,7 +347,7 @@ m5exit(ThreadContext *tc, Tick delay)
 {
     DPRINTF(PseudoInst, "PseudoInst::m5exit(%i)\n", delay);
     Tick when = curTick() + delay * SimClock::Int::ns;
-    exitSimLoop("m5_exit instruction encountered", 0, when);
+    exitSimLoop("m5_exit instruction encountered", 0, when, 0, true);
 }
 
 void
@@ -353,7 +355,7 @@ m5fail(ThreadContext *tc, Tick delay, uint64_t code)
 {
     DPRINTF(PseudoInst, "PseudoInst::m5fail(%i, %i)\n", delay, code);
     Tick when = curTick() + delay * SimClock::Int::ns;
-    exitSimLoop("m5_fail instruction encountered", code, when);
+    exitSimLoop("m5_fail instruction encountered", code, when, 0, true);
 }
 
 void

@@ -53,6 +53,9 @@ typedef uint64_t FloatRegBits;
 // control register file contents
 typedef uint64_t MiscReg;
 
+// dummy typedef since we don't have CC regs
+typedef uint8_t CCReg;
+
 union AnyReg
 {
     IntReg  intreg;
@@ -88,24 +91,23 @@ const RegIndex SyscallSuccessReg = 19;
 const int NumIntArchRegs = 32;
 const int NumPALShadowRegs = 8;
 const int NumFloatArchRegs = 32;
-const int NumMiscArchRegs = NUM_MISCREGS;
 
 const int NumIntRegs = NumIntArchRegs + NumPALShadowRegs;
 const int NumFloatRegs = NumFloatArchRegs;
-const int NumMiscRegs = NumMiscArchRegs;
+const int NumCCRegs = 0;
+const int NumMiscRegs = NUM_MISCREGS;
 
 const int TotalNumRegs =
     NumIntRegs + NumFloatRegs + NumMiscRegs;
 
-const int TotalDataRegs = NumIntRegs + NumFloatRegs;
-
 // These enumerate all the registers for dependence tracking.
 enum DependenceTags {
     // 0..31 are the integer regs 0..31
-    // 32..63 are the FP regs 0..31, i.e. use (reg + FP_Base_DepTag)
-    FP_Base_DepTag = 40,
-    Ctrl_Base_DepTag = 72,
-    Max_DepTag = Ctrl_Base_DepTag + NumMiscRegs + NumInternalProcRegs
+    // 32..63 are the FP regs 0..31, i.e. use (reg + FP_Reg_Base)
+    FP_Reg_Base = NumIntRegs,
+    CC_Reg_Base = FP_Reg_Base + NumFloatRegs,
+    Misc_Reg_Base = CC_Reg_Base + NumCCRegs, // NumCCRegs == 0
+    Max_Reg_Index = Misc_Reg_Base + NumMiscRegs + NumInternalProcRegs
 };
 
 } // namespace AlphaISA

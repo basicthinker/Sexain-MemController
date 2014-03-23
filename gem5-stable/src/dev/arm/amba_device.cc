@@ -49,13 +49,14 @@
 
 const uint64_t AmbaVendor = ULL(0xb105f00d00000000);
 
-AmbaDevice::AmbaDevice(const Params *p)
-    : BasicPioDevice(p), ambaId(AmbaVendor | p->amba_id)
+AmbaPioDevice::AmbaPioDevice(const Params *p, Addr pio_size)
+    : BasicPioDevice(p, pio_size), ambaId(AmbaVendor | p->amba_id)
 {
 }
 
-AmbaIntDevice::AmbaIntDevice(const Params *p)
-    : AmbaDevice(p), intNum(p->int_num), gic(p->gic), intDelay(p->int_delay)
+AmbaIntDevice::AmbaIntDevice(const Params *p, Addr pio_size)
+    : AmbaPioDevice(p, pio_size),
+      intNum(p->int_num), gic(p->gic), intDelay(p->int_delay)
 {
 }
 
@@ -68,9 +69,8 @@ AmbaDmaDevice::AmbaDmaDevice(const Params *p)
 {
 }
 
-namespace AmbaDev {
 bool
-readId(PacketPtr pkt, uint64_t amba_id, Addr pio_addr)
+AmbaDevice::readId(PacketPtr pkt, uint64_t amba_id, Addr pio_addr)
 {
     Addr daddr = pkt->getAddr() - pio_addr;
     if (daddr < AMBA_PER_ID0 || daddr > AMBA_CEL_ID3)
@@ -80,11 +80,10 @@ readId(PacketPtr pkt, uint64_t amba_id, Addr pio_addr)
 
     int byte = (daddr - AMBA_PER_ID0) << 1;
     // Too noisy right now
-    DPRINTF(AMBA, "Returning %#x for offset %#x(%d)\n", (amba_id >> byte) & 0xFF,
+    DPRINTF(AMBA, "Returning %#x for offset %#x(%d)\n",
+            (amba_id >> byte) & 0xFF,
             pkt->getAddr() - pio_addr, byte);
     assert(pkt->getSize() == 4);
     pkt->set<uint32_t>((amba_id >> byte) & 0xFF);
     return true;
 }
-
-} // namespace AmbaDev

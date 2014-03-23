@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2010-2012 ARM Limited
  * All rights reserved
@@ -40,6 +41,9 @@
  * Authors: Kevin Lim
  *          Korey Sewell
  */
+
+#ifndef __CPU_O3_LSQ_UNIT_IMPL_HH__
+#define __CPU_O3_LSQ_UNIT_IMPL_HH__
 
 #include "arch/generic/debugfaults.hh"
 #include "arch/locked_mem.hh"
@@ -157,6 +161,10 @@ LSQUnit<Impl>::init(O3CPU *cpu_ptr, IEW *iew_ptr, DerivO3CPUParams *params,
     LQEntries = maxLQEntries + 1;
     SQEntries = maxSQEntries + 1;
 
+    //Due to uint8_t index in LSQSenderState
+    assert(LQEntries <= 256);
+    assert(SQEntries <= 256);
+
     loadQueue.resize(LQEntries);
     storeQueue.resize(SQEntries);
 
@@ -190,7 +198,7 @@ LSQUnit<Impl>::resetState()
     isLoadBlocked = false;
     loadBlockedHandled = false;
 
-    cacheBlockMask = 0;
+    cacheBlockMask = ~(cpu->cacheLineSize() - 1);
 }
 
 template<class Impl>
@@ -305,6 +313,7 @@ LSQUnit<Impl>::resizeLQ(unsigned size)
         LQEntries = size_plus_sentinel;
     }
 
+    assert(LQEntries <= 256);
 }
 
 template<class Impl>
@@ -321,6 +330,8 @@ LSQUnit<Impl>::resizeSQ(unsigned size)
     } else {
         SQEntries = size_plus_sentinel;
     }
+
+    assert(SQEntries <= 256);
 }
 
 template <class Impl>
@@ -418,16 +429,6 @@ void
 LSQUnit<Impl>::checkSnoop(PacketPtr pkt)
 {
     int load_idx = loadHead;
-
-    if (!cacheBlockMask) {
-        assert(dcachePort);
-        Addr bs = dcachePort->peerBlockSize();
-
-        // Make sure we actually got a size
-        assert(bs != 0);
-
-        cacheBlockMask = ~(bs - 1);
-    }
 
     // Unlock the cpu-local monitor when the CPU sees a snoop to a locked
     // address. The CPU can speculatively execute a LL operation after a pending
@@ -1291,3 +1292,5 @@ LSQUnit<Impl>::dumpInsts() const
 
     cprintf("\n");
 }
+
+#endif//__CPU_O3_LSQ_UNIT_IMPL_HH__

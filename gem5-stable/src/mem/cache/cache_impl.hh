@@ -46,6 +46,9 @@
  *          Andreas Sandberg
  */
 
+#ifndef __MEM_CACHE_CACHE_IMPL_HH__
+#define __MEM_CACHE_CACHE_IMPL_HH__
+
 /**
  * @file
  * Cache definitions.
@@ -81,6 +84,16 @@ Cache<TagStore>::Cache(const Params *p)
     tags->setCache(this);
     if (prefetcher)
         prefetcher->setCache(this);
+}
+
+template<class TagStore>
+Cache<TagStore>::~Cache()
+{
+    delete [] tempBlock->data;
+    delete tempBlock;
+
+    delete cpuSidePort;
+    delete memSidePort;
 }
 
 template<class TagStore>
@@ -1889,3 +1902,5 @@ MemSidePort::MemSidePort(const std::string &_name, Cache<TagStore> *_cache,
       _queue(*_cache, *this, _label), cache(_cache)
 {
 }
+
+#endif//__MEM_CACHE_CACHE_IMPL_HH__

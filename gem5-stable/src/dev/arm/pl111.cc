@@ -55,8 +55,6 @@
 // we open up the entire namespace std
 using std::vector;
 
-using namespace AmbaDev;
-
 // initialize clcd registers
 Pl111::Pl111(const Params *p)
     : AmbaDmaDevice(p), lcdTiming0(0), lcdTiming1(0), lcdTiming2(0),
@@ -71,7 +69,7 @@ Pl111::Pl111(const Params *p)
       waterMark(0), dmaPendingNum(0), readEvent(this), fillFifoEvent(this),
       dmaDoneEventAll(maxOutstandingDma, this),
       dmaDoneEventFree(maxOutstandingDma),
-      intEvent(this)
+      intEvent(this), enableCapture(p->enable_capture)
 {
     pioSize = 0xFFFF;
 
@@ -181,7 +179,7 @@ Pl111::read(PacketPtr pkt)
         data = clcdCrsrMis;
         break;
       default:
-        if (AmbaDev::readId(pkt, AMBA_ID, pioAddr)) {
+        if (readId(pkt, AMBA_ID, pioAddr)) {
             // Hack for variable size accesses
             data = pkt->get<uint32_t>();
             break;
@@ -499,15 +497,17 @@ Pl111::dmaDone()
         if (vnc)
             vnc->setDirty();
 
-        DPRINTF(PL111, "-- write out frame buffer into bmp\n");
+        if (enableCapture) {
+            DPRINTF(PL111, "-- write out frame buffer into bmp\n");
 
-        if (!pic)
-            pic = simout.create(csprintf("%s.framebuffer.bmp", sys->name()), true);
+            if (!pic)
+                pic = simout.create(csprintf("%s.framebuffer.bmp", sys->name()), true);
 
-        assert(bmp);
-        assert(pic);
-        pic->seekp(0);
-        bmp->write(pic);
+            assert(bmp);
+            assert(pic);
+            pic->seekp(0);
+            bmp->write(pic);
+        }
 
         // schedule the next read based on when the last frame started
         // and the desired fps (i.e. maxFrameTime), we turn the

@@ -96,6 +96,28 @@ abortHandler(int sigtype)
     ccprintf(cerr, "Program aborted at cycle %d\n", curTick());
 }
 
+// Handle SIGIO
+static void
+ioHandler(int sigtype)
+{
+    async_event = true;
+    async_io = true;
+}
+
+static void
+installSignalHandler(int signal, void (*handler)(int sigtype))
+{
+    struct sigaction sa;
+
+    memset(&sa, 0, sizeof(sa));
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = handler;
+    sa.sa_flags = SA_RESTART;
+
+    if (sigaction(signal, &sa, NULL) == -1)
+        panic("Failed to setup handler for signal %i\n", signal);
+}
+
 /*
  * M5 can do several special things when various signals are sent.
  * None are mandatory.
@@ -111,16 +133,20 @@ initSignals()
     signal(SIGTRAP, SIG_IGN);
 
     // Dump intermediate stats
-    signal(SIGUSR1, dumpStatsHandler);
+    installSignalHandler(SIGUSR1, dumpStatsHandler);
 
     // Dump intermediate stats and reset them
-    signal(SIGUSR2, dumprstStatsHandler);
+    installSignalHandler(SIGUSR2, dumprstStatsHandler);
 
     // Exit cleanly on Interrupt (Ctrl-C)
-    signal(SIGINT, exitNowHandler);
+    installSignalHandler(SIGINT, exitNowHandler);
 
     // Print out cycle number on abort
-    signal(SIGABRT, abortHandler);
+    installSignalHandler(SIGABRT, abortHandler);
+
+    // Install a SIGIO handler to handle asynchronous file IO. See the
+    // PollQueue class.
+    installSignalHandler(SIGIO, ioHandler);
 }
 
 // The python library is totally messed up with respect to constness,

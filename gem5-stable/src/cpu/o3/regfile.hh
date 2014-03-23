@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2004-2005 The Regents of The University of Michigan
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,53 +43,121 @@
 #include "cpu/o3/comm.hh"
 #include "debug/IEW.hh"
 
+class UnifiedFreeList;
+
 /**
  * Simple physical register file class.
- * Right now this is specific to Alpha until we decide if/how to make things
- * generic enough to support other ISAs.
  */
-template <class Impl>
 class PhysRegFile
 {
-  protected:
+  private:
+
     typedef TheISA::IntReg IntReg;
     typedef TheISA::FloatReg FloatReg;
     typedef TheISA::FloatRegBits FloatRegBits;
+    typedef TheISA::CCReg CCReg;
 
     typedef union {
         FloatReg d;
         FloatRegBits q;
     } PhysFloatReg;
 
-    // Note that most of the definitions of the IntReg, FloatReg, etc. exist
-    // within the Impl/ISA class and not within this PhysRegFile class.
+    /** Integer register file. */
+    std::vector<IntReg> intRegFile;
 
-    // Will make these registers public for now, but they probably should
-    // be private eventually with some accessor functions.
+    /** Floating point register file. */
+    std::vector<PhysFloatReg> floatRegFile;
+
+    /** Condition-code register file. */
+    std::vector<CCReg> ccRegFile;
+
+    /**
+     * The first floating-point physical register index.  The physical
+     * register file has a single continuous index space, with the
+     * initial indices mapping to the integer registers, followed
+     * immediately by the floating-point registers.  Thus the first
+     * floating-point index is equal to the number of integer
+     * registers.
+     *
+     * Note that this internal organizational detail on how physical
+     * register file indices are ordered should *NOT* be exposed
+     * outside of this class.  Other classes can use the is*PhysReg()
+     * methods to map from a physical register index to a class
+     * without knowing the internal structure of the index map.
+     */
+    unsigned baseFloatRegIndex;
+
+    /**
+     * The first condition-code physical register index.  The
+     * condition-code registers follow the floating-point registers.
+     */
+    unsigned baseCCRegIndex;
+
+    /** Total number of physical registers. */
+    unsigned totalNumRegs;
+
   public:
-    typedef typename Impl::O3CPU O3CPU;
-
     /**
      * Constructs a physical register file with the specified amount of
      * integer and floating point registers.
      */
-    PhysRegFile(O3CPU *_cpu, unsigned _numPhysicalIntRegs,
-                unsigned _numPhysicalFloatRegs);
+    PhysRegFile(unsigned _numPhysicalIntRegs,
+                unsigned _numPhysicalFloatRegs,
+                unsigned _numPhysicalCCRegs);
 
     /**
      * Destructor to free resources
      */
-    ~PhysRegFile();
+    ~PhysRegFile() {}
 
-    //Everything below should be pretty well identical to the normal
-    //register file that exists within AlphaISA class.
-    //The duplication is unfortunate but it's better than having
-    //different ways to access certain registers.
+    /** Initialize the free list */
+    void initFreeList(UnifiedFreeList *freeList);
+
+    /** @return the number of integer physical registers. */
+    unsigned numIntPhysRegs() const { return baseFloatRegIndex; }
+
+    /** @return the number of floating-point physical registers. */
+    unsigned numFloatPhysRegs() const
+    { return baseCCRegIndex - baseFloatRegIndex; }
+
+    /** @return the number of condition-code physical registers. */
+    unsigned numCCPhysRegs() const
+    { return totalNumRegs - baseCCRegIndex; }
+
+    /** @return the total number of physical registers. */
+    unsigned totalNumPhysRegs() const { return totalNumRegs; }
+
+    /**
+     * @return true if the specified physical register index
+     * corresponds to an integer physical register.
+     */
+    bool isIntPhysReg(PhysRegIndex reg_idx) const
+    {
+        return 0 <= reg_idx && reg_idx < baseFloatRegIndex;
+    }
+
+    /**
+     * @return true if the specified physical register index
+     * corresponds to a floating-point physical register.
+     */
+    bool isFloatPhysReg(PhysRegIndex reg_idx) const
+    {
+        return (baseFloatRegIndex <= reg_idx && reg_idx < baseCCRegIndex);
+    }
+
+    /**
+     * Return true if the specified physical register index
+     * corresponds to a condition-code physical register.
+     */
+    bool isCCPhysReg(PhysRegIndex reg_idx)
+    {
+        return (baseCCRegIndex <= reg_idx && reg_idx < totalNumRegs);
+    }
 
     /** Reads an integer register. */
-    uint64_t readIntReg(PhysRegIndex reg_idx)
+    uint64_t readIntReg(PhysRegIndex reg_idx) const
     {
-        assert(reg_idx < numPhysicalIntRegs);
+        assert(isIntPhysReg(reg_idx));
 
         DPRINTF(IEW, "RegFile: Access to int register %i, has data "
                 "%#x\n", int(reg_idx), intRegFile[reg_idx]);
@@ -96,29 +165,27 @@ class PhysRegFile
     }
 
     /** Reads a floating point register (double precision). */
-    FloatReg readFloatReg(PhysRegIndex reg_idx)
+    FloatReg readFloatReg(PhysRegIndex reg_idx) const
     {
+        assert(isFloatPhysReg(reg_idx));
+
         // Remove the base Float reg dependency.
-        reg_idx = reg_idx - numPhysicalIntRegs;
-
-        assert(reg_idx < numPhysicalFloatRegs + numPhysicalIntRegs);
-
-        FloatReg floatReg = floatRegFile[reg_idx].d;
+        PhysRegIndex reg_offset = reg_idx - baseFloatRegIndex;
 
         DPRINTF(IEW, "RegFile: Access to float register %i, has "
-                "data %#x\n", int(reg_idx), floatRegFile[reg_idx].q);
+                "data %#x\n", int(reg_idx), floatRegFile[reg_offset].q);
 
-        return floatReg;
+        return floatRegFile[reg_offset].d;
     }
 
-    FloatRegBits readFloatRegBits(PhysRegIndex reg_idx)
+    FloatRegBits readFloatRegBits(PhysRegIndex reg_idx) const
     {
+        assert(isFloatPhysReg(reg_idx));
+
         // Remove the base Float reg dependency.
-        reg_idx = reg_idx - numPhysicalIntRegs;
+        PhysRegIndex reg_offset = reg_idx - baseFloatRegIndex;
 
-        assert(reg_idx < numPhysicalFloatRegs + numPhysicalIntRegs);
-
-        FloatRegBits floatRegBits = floatRegFile[reg_idx].q;
+        FloatRegBits floatRegBits = floatRegFile[reg_offset].q;
 
         DPRINTF(IEW, "RegFile: Access to float register %i as int, "
                 "has data %#x\n", int(reg_idx), (uint64_t)floatRegBits);
@@ -126,10 +193,24 @@ class PhysRegFile
         return floatRegBits;
     }
 
+    /** Reads a condition-code register. */
+    CCReg readCCReg(PhysRegIndex reg_idx)
+    {
+        assert(isCCPhysReg(reg_idx));
+
+        // Remove the base CC reg dependency.
+        PhysRegIndex reg_offset = reg_idx - baseCCRegIndex;
+
+        DPRINTF(IEW, "RegFile: Access to cc register %i, has "
+                "data %#x\n", int(reg_idx), ccRegFile[reg_offset]);
+
+        return ccRegFile[reg_offset];
+    }
+
     /** Sets an integer register to the given value. */
     void setIntReg(PhysRegIndex reg_idx, uint64_t val)
     {
-        assert(reg_idx < numPhysicalIntRegs);
+        assert(isIntPhysReg(reg_idx));
 
         DPRINTF(IEW, "RegFile: Setting int register %i to %#x\n",
                 int(reg_idx), val);
@@ -141,72 +222,47 @@ class PhysRegFile
     /** Sets a double precision floating point register to the given value. */
     void setFloatReg(PhysRegIndex reg_idx, FloatReg val)
     {
-        // Remove the base Float reg dependency.
-        reg_idx = reg_idx - numPhysicalIntRegs;
+        assert(isFloatPhysReg(reg_idx));
 
-        assert(reg_idx < numPhysicalFloatRegs);
+        // Remove the base Float reg dependency.
+        PhysRegIndex reg_offset = reg_idx - baseFloatRegIndex;
 
         DPRINTF(IEW, "RegFile: Setting float register %i to %#x\n",
                 int(reg_idx), (uint64_t)val);
 
 #if THE_ISA == ALPHA_ISA
-        if (reg_idx != TheISA::ZeroReg)
+        if (reg_offset != TheISA::ZeroReg)
 #endif
-            floatRegFile[reg_idx].d = val;
+            floatRegFile[reg_offset].d = val;
     }
 
     void setFloatRegBits(PhysRegIndex reg_idx, FloatRegBits val)
     {
-        // Remove the base Float reg dependency.
-        reg_idx = reg_idx - numPhysicalIntRegs;
+        assert(isFloatPhysReg(reg_idx));
 
-        assert(reg_idx < numPhysicalFloatRegs);
+        // Remove the base Float reg dependency.
+        PhysRegIndex reg_offset = reg_idx - baseFloatRegIndex;
 
         DPRINTF(IEW, "RegFile: Setting float register %i to %#x\n",
                 int(reg_idx), (uint64_t)val);
 
-        floatRegFile[reg_idx].q = val;
+        floatRegFile[reg_offset].q = val;
     }
 
-  public:
-    /** (signed) integer register file. */
-    IntReg *intRegFile;
+    /** Sets a condition-code register to the given value. */
+    void setCCReg(PhysRegIndex reg_idx, CCReg val)
+    {
+        assert(isCCPhysReg(reg_idx));
 
-    /** Floating point register file. */
-    PhysFloatReg *floatRegFile;
+        // Remove the base CC reg dependency.
+        PhysRegIndex reg_offset = reg_idx - baseCCRegIndex;
 
-  private:
-    int intrflag;                       // interrupt flag
+        DPRINTF(IEW, "RegFile: Setting cc register %i to %#x\n",
+                int(reg_idx), (uint64_t)val);
 
-  private:
-    /** CPU pointer. */
-    O3CPU *cpu;
-
-  public:
-    /** Number of physical integer registers. */
-    unsigned numPhysicalIntRegs;
-    /** Number of physical floating point registers. */
-    unsigned numPhysicalFloatRegs;
+        ccRegFile[reg_offset] = val;
+    }
 };
 
-template <class Impl>
-PhysRegFile<Impl>::PhysRegFile(O3CPU *_cpu, unsigned _numPhysicalIntRegs,
-                               unsigned _numPhysicalFloatRegs)
-    : cpu(_cpu), numPhysicalIntRegs(_numPhysicalIntRegs),
-      numPhysicalFloatRegs(_numPhysicalFloatRegs)
-{
-    intRegFile = new IntReg[numPhysicalIntRegs];
-    floatRegFile = new PhysFloatReg[numPhysicalFloatRegs];
 
-    memset(intRegFile, 0, sizeof(IntReg) * numPhysicalIntRegs);
-    memset(floatRegFile, 0, sizeof(PhysFloatReg) * numPhysicalFloatRegs);
-}
-
-template <class Impl>
-PhysRegFile<Impl>::~PhysRegFile()
-{
-    delete intRegFile;
-    delete floatRegFile;
-}
-
-#endif
+#endif //__CPU_O3_REGFILE_HH__

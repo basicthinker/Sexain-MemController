@@ -94,6 +94,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
                                       l2_select_num_bits = l2_bits,
                                       send_evictions = (
                                           options.cpu_type == "detailed"),
+                                      transitions_per_cycle = options.ports,
                                       ruby_system = ruby_system)
 
         cpu_seq = RubySequencer(version = i,
@@ -128,6 +129,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
         l2_cntrl = L2Cache_Controller(version = i,
                                       cntrl_id = cntrl_count,
                                       L2cache = l2_cache,
+                                      transitions_per_cycle = options.ports,
                                       ruby_system = ruby_system)
         
         exec("ruby_system.l2_cntrl%d = l2_cntrl" % i)
@@ -135,8 +137,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
 
         cntrl_count += 1
 
-    phys_mem_size = sum(map(lambda mem: mem.range.size(),
-                            system.memories.unproxy(system)))
+    phys_mem_size = sum(map(lambda r: r.size(), system.mem_ranges))
     assert(phys_mem_size % options.num_dirs == 0)
     mem_module_size = phys_mem_size / options.num_dirs
 
@@ -167,6 +168,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
                                              size = dir_size,
                                              use_map = options.use_map),
                                          memBuffer = mem_cntrl,
+                                         transitions_per_cycle = options.ports,
                                          ruby_system = ruby_system)
 
         exec("ruby_system.dir_cntrl%d = dir_cntrl" % i)
@@ -184,6 +186,7 @@ def create_system(options, system, piobus, dma_ports, ruby_system):
         dma_cntrl = DMA_Controller(version = i,
                                    cntrl_id = cntrl_count,
                                    dma_sequencer = dma_seq,
+                                   transitions_per_cycle = options.ports,
                                    ruby_system = ruby_system)
 
         exec("ruby_system.dma_cntrl%d = dma_cntrl" % i)

@@ -31,14 +31,24 @@ from m5.objects import *
 m5.util.addToPath('../configs/common')
 import FSConfig
 
-system = FSConfig.makeSparcSystem('atomic', SimpleMemory)
-system.clk_domain = SrcClockDomain(clock = '1GHz')
-system.cpu_clk_domain = SrcClockDomain(clock = '1GHz')
+system = FSConfig.makeSparcSystem('atomic')
+system.voltage_domain = VoltageDomain()
+system.clk_domain = SrcClockDomain(clock = '1GHz',
+                                   voltage_domain = system.voltage_domain)
+system.cpu_clk_domain = SrcClockDomain(clock = '1GHz',
+                                       voltage_domain = system.voltage_domain)
 cpu = AtomicSimpleCPU(cpu_id=0, clk_domain = system.cpu_clk_domain)
 system.cpu = cpu
 # create the interrupt controller
 cpu.createInterruptController()
 cpu.connectAllPorts(system.membus)
+
+# create the memory controllers and connect them, stick with
+# the physmem name to avoid bumping all the reference stats
+system.physmem = [SimpleMemory(range = r)
+                  for r in system.mem_ranges]
+for i in xrange(len(system.physmem)):
+    system.physmem[i].port = system.membus.master
 
 root = Root(full_system=True, system=system)
 

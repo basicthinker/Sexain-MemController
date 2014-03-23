@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012-2013 ARM Limited
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -65,6 +66,7 @@
 #include "cpu/o3/rename_map.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
+#include "cpu/reg_class.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/timebuf.hh"
 #include "mem/packet.hh"
@@ -91,6 +93,7 @@ class InOrderCPU : public BaseCPU
     typedef TheISA::IntReg IntReg;
     typedef TheISA::FloatReg FloatReg;
     typedef TheISA::FloatRegBits FloatRegBits;
+    typedef TheISA::CCReg CCReg;
     typedef TheISA::MiscReg MiscReg;
     typedef TheISA::RegIndex RegIndex;
 
@@ -325,15 +328,15 @@ class InOrderCPU : public BaseCPU
         FloatRegBits i[ThePipeline::MaxThreads][TheISA::NumFloatRegs];
     } floatRegs;
     TheISA::IntReg intRegs[ThePipeline::MaxThreads][TheISA::NumIntRegs];
+#ifdef ISA_HAS_CC_REGS
+    TheISA::CCReg ccRegs[ThePipeline::MaxThreads][TheISA::NumCCRegs];
+#endif
 
     /** ISA state */
     std::vector<TheISA::ISA *> isa;
 
     /** Dependency Tracker for Integer & Floating Point Regs */
     RegDepMap archRegDepMap[ThePipeline::MaxThreads];
-
-    /** Register Types Used in Dependency Tracking */
-    enum RegType { IntType, FloatType, MiscType, NumRegTypes};
 
     /** Global communication structure */
     TimeBuffer<TimeStruct> timeBuffer;
@@ -591,23 +594,17 @@ class InOrderCPU : public BaseCPU
 
     FloatRegBits readFloatRegBits(RegIndex reg_idx, ThreadID tid);
 
+    CCReg readCCReg(RegIndex reg_idx, ThreadID tid);
+
     void setIntReg(RegIndex reg_idx, uint64_t val, ThreadID tid);
 
     void setFloatReg(RegIndex reg_idx, FloatReg val, ThreadID tid);
 
     void setFloatRegBits(RegIndex reg_idx, FloatRegBits val,  ThreadID tid);
 
-    RegType inline getRegType(RegIndex reg_idx)
-    {
-        if (reg_idx < TheISA::FP_Base_DepTag)
-            return IntType;
-        else if (reg_idx < TheISA::Ctrl_Base_DepTag)
-            return FloatType;
-        else
-            return MiscType;
-    }
+    void setCCReg(RegIndex reg_idx, CCReg val, ThreadID tid);
 
-    RegIndex flattenRegIdx(RegIndex reg_idx, RegType &reg_type, ThreadID tid);
+    RegIndex flattenRegIdx(RegIndex reg_idx, RegClass &reg_type, ThreadID tid);
 
     /** Reads a miscellaneous register. */
     MiscReg readMiscRegNoEffect(int misc_reg, ThreadID tid = 0);

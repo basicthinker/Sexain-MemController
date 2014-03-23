@@ -64,6 +64,7 @@ options.l1d_assoc=2
 options.l1i_assoc=2
 options.l2_assoc=2
 options.l3_assoc=2
+options.ports=32
 
 #MAX CORES IS 8 with the fals sharing method
 nb_cores = 8
@@ -80,21 +81,28 @@ options.num_cpus = nb_cores
 system = System(cpu = cpus,
                 funcmem = SimpleMemory(in_addr_map = False),
                 physmem = SimpleMemory(null = True),
-                funcbus = NoncoherentBus(),
-                clk_domain = SrcClockDomain(clock = options.sys_clock))
+                funcbus = NoncoherentBus())
+# Dummy voltage domain for all our clock domains
+system.voltage_domain = VoltageDomain()
+system.clk_domain = SrcClockDomain(clock = '1GHz',
+                                   voltage_domain = system.voltage_domain)
 
 # Create a seperate clock domain for components that should run at
 # CPUs frequency
-system.cpu_clk_domain = SrcClockDomain(clock = '2GHz')
+system.cpu_clk_domain = SrcClockDomain(clock = '2GHz',
+                                       voltage_domain = system.voltage_domain)
 
 # All cpus are associated with cpu_clk_domain
 for cpu in cpus:
     cpu.clk_domain = system.cpu_clk_domain
 
+system.mem_ranges = AddrRange('256MB')
+
 Ruby.create_system(options, system)
 
 # Create a separate clock domain for Ruby
-system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock)
+system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock,
+                                        voltage_domain = system.voltage_domain)
 
 assert(len(cpus) == len(system.ruby._cpu_ruby_ports))
 

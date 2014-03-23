@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2012 ARM Limited
+# Copyright (c) 2012-2013 ARM Limited
 # All rights reserved
 #
 # The license below extends only to copyright in the software and shall
@@ -193,6 +193,41 @@ def from_4(cpt):
                 del mr[137]
                 cpt.set(sec, 'miscRegs', ' '.join(str(x) for x in mr))
 
+# Version 6 of the checkpoint format adds tlb to x86 checkpoints
+def from_5(cpt):
+    if cpt.get('root','isa') == 'x86':
+        for sec in cpt.sections():
+            import re
+            # Search for all ISA sections
+            if re.search('.*sys.*\.cpu.*\.dtb$', sec):
+                cpt.set(sec, '_size', '0')
+                cpt.set(sec, 'lruSeq', '0')
+
+            if re.search('.*sys.*\.cpu.*\.itb$', sec):
+                cpt.set(sec, '_size', '0')
+                cpt.set(sec, 'lruSeq', '0')
+    else:
+        print "ISA is not x86"
+
+# Version 7 of the checkpoint adds support for the IDE dmaAbort flag
+def from_6(cpt):
+    # Update IDE disk devices with dmaAborted
+    for sec in cpt.sections():
+        # curSector only exists in IDE devices, so key on that attribute
+        if cpt.has_option(sec, "curSector"):
+            cpt.set(sec, "dmaAborted", "false")
+
+# Version 8 of the checkpoint adds an ARM MISCREG
+def from_7(cpt):
+    if cpt.get('root','isa') == 'arm':
+        for sec in cpt.sections():
+            import re
+            # Search for all ISA sections
+            if re.search('.*sys.*\.cpu.*\.isa', sec):
+                mr = cpt.get(sec, 'miscRegs').split()
+                # Add dummy value for MISCREG_TEEHBR
+                mr.insert(51,0);
+                cpt.set(sec, 'miscRegs', ' '.join(str(x) for x in mr))
 
 
 migrations = []
@@ -201,6 +236,9 @@ migrations.append(from_1)
 migrations.append(from_2)
 migrations.append(from_3)
 migrations.append(from_4)
+migrations.append(from_5)
+migrations.append(from_6)
+migrations.append(from_7)
 
 verbose_print = False
 
@@ -258,7 +296,6 @@ def process_file(path, **kwargs):
     # Write the old data back
     verboseprint("\t...completed")
     cpt.write(file(path, 'w'))
-
 
 if __name__ == '__main__':
     from optparse import OptionParser

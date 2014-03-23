@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007 The Hewlett-Packard Development Company
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * The license below extends only to copyright in the software and shall
@@ -42,6 +43,7 @@
 
 #include "arch/x86/generated/max_inst_regs.hh"
 #include "arch/x86/regs/int.hh"
+#include "arch/x86/regs/ccr.hh"
 #include "arch/x86/regs/misc.hh"
 #include "arch/x86/x86_traits.hh"
 
@@ -50,35 +52,28 @@ namespace X86ISA
 using X86ISAInst::MaxInstSrcRegs;
 using X86ISAInst::MaxInstDestRegs;
 using X86ISAInst::MaxMiscDestRegs;
-const int NumMiscArchRegs = NUM_MISCREGS;
 const int NumMiscRegs = NUM_MISCREGS;
 
 const int NumIntArchRegs = NUM_INTREGS;
-const int NumIntRegs =
-    NumIntArchRegs + NumMicroIntRegs +
-    NumPseudoIntRegs + NumImplicitIntRegs;
+const int NumIntRegs = NumIntArchRegs + NumMicroIntRegs + NumImplicitIntRegs;
+const int NumCCRegs = NUM_CCREGS;
 
-//Each 128 bit xmm register is broken into two effective 64 bit registers.
+#define ISA_HAS_CC_REGS
+
+// Each 128 bit xmm register is broken into two effective 64 bit registers.
+// Add 8 for the indices that are mapped over the fp stack
 const int NumFloatRegs =
-    NumMMXRegs + 2 * NumXMMRegs + NumMicroFpRegs;
-const int NumFloatArchRegs = NumFloatRegs + 8;
+    NumMMXRegs + 2 * NumXMMRegs + NumMicroFpRegs + 8;
 
 // These enumerate all the registers for dependence tracking.
 enum DependenceTags {
-    //There are 16 microcode registers at the moment. This is an
-    //unusually large constant to make sure there isn't overflow.
-    FP_Base_DepTag = 128,
-    Ctrl_Base_DepTag =
-        FP_Base_DepTag +
-        //mmx/x87 registers
-        8 +
-        //xmm registers
-        16 * 2 +
-        //The microcode fp registers
-        8 +
-        //The indices that are mapped over the fp stack
-        8,
-    Max_DepTag = Ctrl_Base_DepTag + NumMiscRegs
+    // FP_Reg_Base must be large enough to be bigger than any integer
+    // register index which has the IntFoldBit (1 << 6) set.  To be safe
+    // we just start at (1 << 7) == 128.
+    FP_Reg_Base = 128,
+    CC_Reg_Base = FP_Reg_Base + NumFloatRegs,
+    Misc_Reg_Base = CC_Reg_Base + NumCCRegs,
+    Max_Reg_Index = Misc_Reg_Base + NumMiscRegs
 };
 
 // semantically meaningful register indices
@@ -95,6 +90,7 @@ const int FramePointerReg = INTREG_RBP;
 const int SyscallPseudoReturnReg = INTREG_RDX;
 
 typedef uint64_t IntReg;
+typedef uint64_t CCReg;
 //XXX Should this be a 128 bit structure for XMM memory ops?
 typedef uint64_t LargestRead;
 typedef uint64_t MiscReg;
@@ -107,6 +103,7 @@ typedef union
 {
     IntReg intReg;
     FloatReg fpReg;
+    CCReg ccReg;
     MiscReg ctrlReg;
 } AnyReg;
 

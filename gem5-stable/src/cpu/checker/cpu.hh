@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011 ARM Limited
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -213,14 +214,20 @@ class CheckerCPU : public BaseCPU
 
     FloatReg readFloatRegOperand(const StaticInst *si, int idx)
     {
-        int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
+        int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Reg_Base;
         return thread->readFloatReg(reg_idx);
     }
 
     FloatRegBits readFloatRegOperandBits(const StaticInst *si, int idx)
     {
-        int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Base_DepTag;
+        int reg_idx = si->srcRegIdx(idx) - TheISA::FP_Reg_Base;
         return thread->readFloatRegBits(reg_idx);
+    }
+
+    uint64_t readCCRegOperand(const StaticInst *si, int idx)
+    {
+        int reg_idx = si->srcRegIdx(idx) - TheISA::CC_Reg_Base;
+        return thread->readCCReg(reg_idx);
     }
 
     template <class T>
@@ -239,7 +246,7 @@ class CheckerCPU : public BaseCPU
 
     void setFloatRegOperand(const StaticInst *si, int idx, FloatReg val)
     {
-        int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
+        int reg_idx = si->destRegIdx(idx) - TheISA::FP_Reg_Base;
         thread->setFloatReg(reg_idx, val);
         setResult<double>(val);
     }
@@ -247,8 +254,15 @@ class CheckerCPU : public BaseCPU
     void setFloatRegOperandBits(const StaticInst *si, int idx,
                                 FloatRegBits val)
     {
-        int reg_idx = si->destRegIdx(idx) - TheISA::FP_Base_DepTag;
+        int reg_idx = si->destRegIdx(idx) - TheISA::FP_Reg_Base;
         thread->setFloatRegBits(reg_idx, val);
+        setResult<uint64_t>(val);
+    }
+
+    void setCCRegOperand(const StaticInst *si, int idx, uint64_t val)
+    {
+        int reg_idx = si->destRegIdx(idx) - TheISA::CC_Reg_Base;
+        thread->setCCReg(reg_idx, val);
         setResult<uint64_t>(val);
     }
 
@@ -294,14 +308,14 @@ class CheckerCPU : public BaseCPU
 
     MiscReg readMiscRegOperand(const StaticInst *si, int idx)
     {
-        int reg_idx = si->srcRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        int reg_idx = si->srcRegIdx(idx) - TheISA::Misc_Reg_Base;
         return thread->readMiscReg(reg_idx);
     }
 
     void setMiscRegOperand(
             const StaticInst *si, int idx, const MiscReg &val)
     {
-        int reg_idx = si->destRegIdx(idx) - TheISA::Ctrl_Base_DepTag;
+        int reg_idx = si->destRegIdx(idx) - TheISA::Misc_Reg_Base;
         return thread->setMiscReg(reg_idx, val);
     }
 

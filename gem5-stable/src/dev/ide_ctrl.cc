@@ -1,4 +1,16 @@
 /*
+ * Copyright (c) 2013 ARM Limited
+ * All rights reserved
+ *
+ * The license below extends only to copyright in the software and shall
+ * not be construed as granting a license to any other intellectual
+ * property including but not limited to intellectual property relating
+ * to a hardware implementation of the functionality of the software
+ * licensed hereunder.  You may use the software subject to the license
+ * terms below provided that you ensure that this notice is replicated
+ * unmodified and in its entirety in all distributions of the software,
+ * modified or unmodified, in source code or in binary form.
+ *
  * Copyright (c) 2004-2005 The Regents of The University of Michigan
  * All rights reserved.
  *
@@ -80,7 +92,7 @@ IdeController::Channel::~Channel()
 }
 
 IdeController::IdeController(Params *p)
-    : PciDev(p), primary(name() + ".primary", BARSize[0], BARSize[1]),
+    : PciDevice(p), primary(name() + ".primary", BARSize[0], BARSize[1]),
     secondary(name() + ".secondary", BARSize[2], BARSize[3]),
     bmiAddr(0), bmiSize(BARSize[4]),
     primaryTiming(htole(timeRegWithDecodeEn)),
@@ -111,11 +123,11 @@ IdeController::IdeController(Params *p)
 
     if ((BARAddrs[0] & ~BAR_IO_MASK) && (!legacyIO[0] || ioShift)) {
         primary.cmdAddr = BARAddrs[0];  primary.cmdSize = BARSize[0];
-        primary.ctrlAddr = BARAddrs[1]; primary.ctrlSize = BARAddrs[1];
+        primary.ctrlAddr = BARAddrs[1]; primary.ctrlSize = BARSize[1];
     }
     if ((BARAddrs[2] & ~BAR_IO_MASK) && (!legacyIO[2] || ioShift)) {
         secondary.cmdAddr = BARAddrs[2];  secondary.cmdSize = BARSize[2];
-        secondary.ctrlAddr = BARAddrs[3]; secondary.ctrlSize = BARAddrs[3];
+        secondary.ctrlAddr = BARAddrs[3]; secondary.ctrlSize = BARSize[3];
     }
 
     ioEnabled = (config.command & htole(PCI_CMD_IOSE));
@@ -132,7 +144,7 @@ void
 IdeController::intrPost()
 {
     primary.bmiRegs.status.intStatus = 1;
-    PciDev::intrPost();
+    PciDevice::intrPost();
 }
 
 void
@@ -157,7 +169,7 @@ IdeController::readConfig(PacketPtr pkt)
 {
     int offset = pkt->getAddr() & PCI_CONFIG_SIZE;
     if (offset < PCI_DEVICE_SPECIFIC) {
-        return PciDev::readConfig(pkt);
+        return PciDevice::readConfig(pkt);
     }
 
     pkt->allocate();
@@ -232,7 +244,7 @@ IdeController::writeConfig(PacketPtr pkt)
 {
     int offset = pkt->getAddr() & PCI_CONFIG_SIZE;
     if (offset < PCI_DEVICE_SPECIFIC) {
-        PciDev::writeConfig(pkt);
+        PciDevice::writeConfig(pkt);
     } else {
         switch (pkt->getSize()) {
           case sizeof(uint8_t):
@@ -414,14 +426,21 @@ IdeController::Channel::accessBMI(Addr offset,
                 newVal.active = oldVal.active;
 
                 // to reset (set 0) IDEINTS and IDEDMAE, write 1 to each
-                if (oldVal.intStatus && newVal.intStatus)
+                if ((oldVal.intStatus == 1) && (newVal.intStatus == 1)) {
                     newVal.intStatus = 0; // clear the interrupt?
-                else
-                    newVal.intStatus = oldVal.intStatus;
-                if (oldVal.dmaError && newVal.dmaError)
+                } else {
+                    // Assigning two bitunion fields to each other does not
+                    // work as intended, so we need to use this temporary variable
+                    // to get around the bug.
+                    uint8_t tmp = oldVal.intStatus;
+                    newVal.intStatus = tmp;
+                }
+                if ((oldVal.dmaError == 1) && (newVal.dmaError == 1)) {
                     newVal.dmaError = 0;
-                else
-                    newVal.dmaError = oldVal.dmaError;
+                } else {
+                    uint8_t tmp = oldVal.dmaError;
+                    newVal.dmaError = tmp;
+                }
 
                 bmiRegs.status = newVal;
             }
@@ -523,8 +542,8 @@ IdeController::write(PacketPtr pkt)
 void
 IdeController::serialize(std::ostream &os)
 {
-    // Serialize the PciDev base class
-    PciDev::serialize(os);
+    // Serialize the PciDevice base class
+    PciDevice::serialize(os);
 
     // Serialize channels
     primary.serialize("primary", os);
@@ -565,8 +584,8 @@ IdeController::Channel::serialize(const std::string &base, std::ostream &os)
 void
 IdeController::unserialize(Checkpoint *cp, const std::string &section)
 {
-    // Unserialize the PciDev base class
-    PciDev::unserialize(cp, section);
+    // Unserialize the PciDevice base class
+    PciDevice::unserialize(cp, section);
 
     // Unserialize channels
     primary.unserialize("primary", cp, section);

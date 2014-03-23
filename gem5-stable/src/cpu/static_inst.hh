@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2003-2005 The Regents of The University of Michigan
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,20 +47,14 @@
 #include "sim/fault_fwd.hh"
 
 // forward declarations
-struct AlphaSimpleImpl;
-struct OzoneImpl;
-struct SimpleImpl;
-class DynInst;
 class Packet;
 
 struct O3CPUImpl;
 template <class Impl> class BaseO3DynInst;
 typedef BaseO3DynInst<O3CPUImpl> O3DynInst;
-template <class Impl> class OzoneDynInst;
 class InOrderDynInst;
 
 class CheckerCPU;
-class FastCPU;
 class AtomicSimpleCPU;
 class TimingSimpleCPU;
 class InorderCPU;
@@ -116,6 +111,7 @@ class StaticInst : public RefCounted
 
         IsInteger,      ///< References integer regs.
         IsFloating,     ///< References FP regs.
+        IsCC,           ///< References CC regs.
 
         IsMemRef,       ///< References memory (load, store, or prefetch).
         IsLoad,         ///< Reads from memory (load or prefetch).
@@ -187,6 +183,7 @@ class StaticInst : public RefCounted
     //@{
     int8_t _numFPDestRegs;
     int8_t _numIntDestRegs;
+    int8_t _numCCDestRegs;
     //@}
 
   public:
@@ -226,6 +223,7 @@ class StaticInst : public RefCounted
 
     bool isInteger()      const { return flags[IsInteger]; }
     bool isFloating()     const { return flags[IsFloating]; }
+    bool isCC()           const { return flags[IsCC]; }
 
     bool isControl()      const { return flags[IsControl]; }
     bool isCall()         const { return flags[IsCall]; }

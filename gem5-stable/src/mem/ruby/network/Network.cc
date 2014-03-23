@@ -59,6 +59,9 @@ Network::Network(const Params *p)
         AbstractController *abs_cntrl = ext_link->params()->ext_node;
         abs_cntrl->initNetworkPtr(this);
     }
+
+    // Register a callback function for combining the statistics
+    Stats::registerDumpCallback(new StatsCallback(this));
 }
 
 void
@@ -71,9 +74,6 @@ uint32_t
 Network::MessageSizeType_to_int(MessageSizeType size_type)
 {
     switch(size_type) {
-      case MessageSizeType_Undefined:
-        panic("Can't convert Undefined MessageSizeType to integer");
-        break;
       case MessageSizeType_Control:
       case MessageSizeType_Request_Control:
       case MessageSizeType_Reissue_Control:

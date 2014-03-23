@@ -30,8 +30,6 @@ from slicc.ast.TypeAST import TypeAST
 from slicc.symbols import Func, Type, Var
 
 class InPortDeclAST(DeclAST):
-    max_port_rank = 0
-    
     def __init__(self, slicc, ident, msg_type, var_expr, pairs, statements):
         super(InPortDeclAST, self).__init__(slicc, pairs)
 
@@ -40,9 +38,6 @@ class InPortDeclAST(DeclAST):
         self.var_expr = var_expr
         self.statements = statements
         self.queue_type = TypeAST(slicc, "InPort")
-        if self.pairs.has_key("rank"):
-            InPortDeclAST.max_port_rank = max(self.pairs["rank"],
-                                              InPortDeclAST.max_port_rank)
 
     def __repr__(self):
         return "[InPortDecl: %s]" % self.ident
@@ -109,23 +104,6 @@ class InPortDeclAST(DeclAST):
 
         param_types.append(type)
 
-        # Add the doubleTrigger method - this hack supports tiggering
-        # two simulateous events
-        #
-        # The key is that the second transistion cannot fail because
-        # the first event cannot be undone therefore you must do some
-        # checks before calling double trigger to ensure that won't
-        # happen
-        func = Func(self.symtab, "doubleTrigger", self.location, void_type,
-                    param_types, [], "", pairs)
-        symtab.newSymbol(func)
-
-        # Add the continueProcessing method - this hack supports
-        # messages that don't trigger events
-        func = Func(self.symtab, "continueProcessing", self.location,
-                    void_type, [], [], "", pairs)
-        symtab.newSymbol(func)
-
         if self.statements is not None:
             rcode = self.slicc.codeFormatter()
             rcode.indent()
@@ -137,6 +115,3 @@ class InPortDeclAST(DeclAST):
 
         # Add port to state machine
         machine.addInPort(in_port)
-
-        # Include max_rank to be used by StateMachine.py
-        in_port["max_port_rank"] = InPortDeclAST.max_port_rank

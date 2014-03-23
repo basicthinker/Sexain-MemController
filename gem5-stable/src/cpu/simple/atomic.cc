@@ -175,8 +175,10 @@ AtomicSimpleCPU::drainResume()
     if (thread->status() == ThreadContext::Active) {
         schedule(tickEvent, nextCycle());
         _status = BaseSimpleCPU::Running;
+        notIdleFraction = 1;
     } else {
         _status = BaseSimpleCPU::Idle;
+        notIdleFraction = 0;
     }
 
     system->totalNumInsts = 0;
@@ -244,7 +246,7 @@ AtomicSimpleCPU::activateContext(ThreadID thread_num, Cycles delay)
     assert(_status == Idle);
     assert(!tickEvent.scheduled());
 
-    notIdleFraction++;
+    notIdleFraction = 1;
     numCycles += ticksToCycles(thread->lastActivate - thread->lastSuspend);
 
     //Make sure ticks are still on multiples of cycles
@@ -271,7 +273,7 @@ AtomicSimpleCPU::suspendContext(ThreadID thread_num)
     if (tickEvent.scheduled())
         deschedule(tickEvent);
 
-    notIdleFraction--;
+    notIdleFraction = 0;
     _status = Idle;
 }
 
@@ -287,14 +289,12 @@ AtomicSimpleCPU::readMem(Addr addr, uint8_t * data,
         traceData->setAddr(addr);
     }
 
-    //The block size of our peer.
-    unsigned blockSize = dcachePort.peerBlockSize();
     //The size of the data we're trying to read.
     int fullSize = size;
 
     //The address of the second part of this access if it needs to be split
     //across a cache line boundary.
-    Addr secondAddr = roundDown(addr + size - 1, blockSize);
+    Addr secondAddr = roundDown(addr + size - 1, cacheLineSize());
 
     if (secondAddr > addr)
         size = secondAddr - addr;
@@ -375,14 +375,12 @@ AtomicSimpleCPU::writeMem(uint8_t *data, unsigned size,
         traceData->setAddr(addr);
     }
 
-    //The block size of our peer.
-    unsigned blockSize = dcachePort.peerBlockSize();
     //The size of the data we're trying to read.
     int fullSize = size;
 
     //The address of the second part of this access if it needs to be split
     //across a cache line boundary.
-    Addr secondAddr = roundDown(addr + size - 1, blockSize);
+    Addr secondAddr = roundDown(addr + size - 1, cacheLineSize());
 
     if(secondAddr > addr)
         size = secondAddr - addr;

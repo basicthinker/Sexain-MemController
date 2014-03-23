@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013 ARM Limited
+ * Copyright (c) 2013 Cornell University
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -37,6 +38,7 @@
  * Authors: Vasileios Spiliopoulos
  *          Akash Bagdia
  *          Andreas Hansson
+ *          Christopher Torng
  */
 
 #include "debug/ClockDomain.hh"
@@ -44,8 +46,17 @@
 #include "params/DerivedClockDomain.hh"
 #include "params/SrcClockDomain.hh"
 #include "sim/clock_domain.hh"
+#include "sim/voltage_domain.hh"
+#include "sim/clocked_object.hh"
 
-SrcClockDomain::SrcClockDomain(const Params *p) : ClockDomain(p)
+double
+ClockDomain::voltage() const
+{
+    return _voltageDomain->voltage();
+}
+
+SrcClockDomain::SrcClockDomain(const Params *p) :
+    ClockDomain(p, p->voltage_domain)
 {
     clockPeriod(p->clock);
 }
@@ -55,6 +66,11 @@ SrcClockDomain::clockPeriod(Tick clock_period)
 {
     if (clock_period == 0) {
         fatal("%s has a clock period of zero\n", name());
+    }
+
+    // Align all members to the current tick
+    for (auto m = members.begin(); m != members.end(); ++m) {
+        (*m)->updateClockPeriod();
     }
 
     _clockPeriod = clock_period;
@@ -76,7 +92,7 @@ SrcClockDomainParams::create()
 }
 
 DerivedClockDomain::DerivedClockDomain(const Params *p) :
-    ClockDomain(p),
+    ClockDomain(p, p->clk_domain->voltageDomain()),
     parent(*p->clk_domain),
     clockDivider(p->clk_divider)
 {
@@ -97,6 +113,11 @@ DerivedClockDomain::DerivedClockDomain(const Params *p) :
 void
 DerivedClockDomain::updateClockPeriod()
 {
+    // Align all members to the current tick
+    for (auto m = members.begin(); m != members.end(); ++m) {
+        (*m)->updateClockPeriod();
+    }
+
     // recalculate the clock period, relying on the fact that changes
     // propagate downwards in the tree
     _clockPeriod = parent.clockPeriod() * clockDivider;

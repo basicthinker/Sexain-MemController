@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010 ARM Limited
+ * Copyright (c) 2010, 2013 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -113,6 +113,10 @@ class Pl390 : public BaseGic
     static const int INT_BITS_MAX = 32;
     static const int INT_LINES_MAX = 1020;
 
+    /** MSI-X register offset and size */
+    static const int MSIX_SR = 0x0; // MSI register devices will write to
+    static const int MSIX_SIZE = 0x4; // Size of MSI-X register space
+
     BitUnion32(SWI)
         Bitfield<3,0> sgi_id;
         Bitfield<23,16> cpu_list;
@@ -207,6 +211,10 @@ class Pl390 : public BaseGic
     /** IRQ Enable Used for debug */
     bool irqEnable;
 
+    /** MSIX Register */
+    Addr msixRegAddr;
+    uint32_t msixReg;
+
     /** software generated interrupt
      * @param data data to decode that indicates which cpus to interrupt
      */
@@ -287,6 +295,9 @@ class Pl390 : public BaseGic
      * Depending on the configuration, the gic may de-assert it's cpu line
      * @param number number of interrupt to send */
     void clearInt(uint32_t number);
+
+    /** Clear a (level-sensitive) PPI */
+    void clearPPInt(uint32_t num, uint32_t cpu);
     /** @} */
 
     /** @{ */
@@ -311,6 +322,11 @@ class Pl390 : public BaseGic
      */
     Tick readCpu(PacketPtr pkt);
 
+    /** Handle a read to the MSI-X register on the GIC
+     *  @param pkt packet to respond to
+     */
+    Tick readMsix(PacketPtr pkt);
+
     /** Handle a write to the distributor poriton of the GIC
      * @param pkt packet to respond to
      */
@@ -320,6 +336,11 @@ class Pl390 : public BaseGic
      * @param pkt packet to respond to
      */
     Tick writeCpu(PacketPtr pkt);
+
+    /** Handle a write to the MSI-X register on the GIC
+     *  @param pkt packet to process
+     */
+    Tick writeMsix(PacketPtr pkt);
 };
 
 #endif //__DEV_ARM_GIC_H__

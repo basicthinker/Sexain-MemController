@@ -93,7 +93,14 @@ else:
 # M5 memory size == Ruby memory size checks
 #
 system = System(physmem = SimpleMemory(),
-                clk_domain = SrcClockDomain(clock =  options.sys_clock))
+                mem_ranges = [AddrRange(options.mem_size)])
+
+
+# Create a top-level voltage domain and clock domain
+system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
+
+system.clk_domain = SrcClockDomain(clock = options.sys_clock,
+                                   voltage_domain = system.voltage_domain)
 
 #
 # Create the ruby random tester
@@ -105,7 +112,8 @@ system.tester = RubyDirectedTester(requests_to_complete = \
 Ruby.create_system(options, system)
 
 # Since Ruby runs at an independent frequency, create a seperate clock
-system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock)
+system.ruby.clk_domain = SrcClockDomain(clock = options.ruby_clock,
+                                        voltage_domain = system.voltage_domain)
 
 assert(options.num_cpus == len(system.ruby._cpu_ruby_ports))
 
@@ -129,6 +137,6 @@ m5.ticks.setGlobalFrequency('1ns')
 m5.instantiate()
 
 # simulate until program terminates
-exit_event = m5.simulate(options.maxtick)
+exit_event = m5.simulate(options.abs_max_tick)
 
 print 'Exiting @ tick', m5.curTick(), 'because', exit_event.getCause()

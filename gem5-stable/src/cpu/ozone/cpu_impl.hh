@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2006 The Regents of The University of Michigan
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,6 +29,9 @@
  * Authors: Kevin Lim
  *          Nathan Binkert
  */
+
+#ifndef __CPU_OZONE_CPU_IMPL_HH__
+#define __CPU_OZONE_CPU_IMPL_HH__
 
 #include "arch/alpha/osfpal.hh"
 #include "arch/isa_traits.hh" // For MachInst
@@ -282,7 +286,7 @@ OzoneCPU<Impl>::activateContext(int thread_num, int delay)
     assert(thread_num == 0);
 
     assert(_status == Idle);
-    notIdleFraction++;
+    notIdleFraction = 1;
     scheduleTickEvent(delay);
     _status = Running;
     if (thread.quiesceEvent && thread.quiesceEvent->scheduled())
@@ -300,7 +304,7 @@ OzoneCPU<Impl>::suspendContext(int thread_num)
     // @todo: Figure out how to initially set the status properly so
     // this is running.
 //    assert(_status == Running);
-    notIdleFraction--;
+    notIdleFraction = 0;
     unscheduleTickEvent();
     _status = Idle;
 }
@@ -458,7 +462,7 @@ OzoneCPU<Impl>::tick()
 
     _status = Running;
     thread.renameTable[ZeroReg]->setIntResult(0);
-    thread.renameTable[ZeroReg+TheISA::FP_Base_DepTag]->
+    thread.renameTable[ZeroReg+TheISA::FP_Reg_Base]->
         setDoubleResult(0.0);
 
     comm.advance();
@@ -727,7 +731,7 @@ OzoneCPU<Impl>::OzoneTC::copyArchRegs(ThreadContext *tc)
 
     // Then loop through the floating point registers.
     for (int i = 0; i < TheISA::NumFloatRegs; ++i) {
-        int fp_idx = i + TheISA::FP_Base_DepTag;
+        int fp_idx = i + TheISA::FP_Reg_Base;
         thread->renameTable[fp_idx]->setIntResult(tc->readFloatRegBits(i));
     }
 
@@ -756,7 +760,7 @@ template <class Impl>
 double
 OzoneCPU<Impl>::OzoneTC::readFloatReg(int reg_idx)
 {
-    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    int idx = reg_idx + TheISA::FP_Reg_Base;
     return thread->renameTable[idx]->readFloatResult();
 }
 
@@ -764,8 +768,15 @@ template <class Impl>
 uint64_t
 OzoneCPU<Impl>::OzoneTC::readFloatRegBits(int reg_idx)
 {
-    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    int idx = reg_idx + TheISA::FP_Reg_Base;
     return thread->renameTable[idx]->readIntResult();
+}
+
+template <class Impl>
+CCReg
+OzoneCPU<Impl>::OzoneTC::readCCReg(int reg_idx)
+{
+    return thread->renameTable[reg_idx]->readCCResult();
 }
 
 template <class Impl>
@@ -783,7 +794,7 @@ template <class Impl>
 void
 OzoneCPU<Impl>::OzoneTC::setFloatReg(int reg_idx, FloatReg val)
 {
-    int idx = reg_idx + TheISA::FP_Base_DepTag;
+    int idx = reg_idx + TheISA::FP_Reg_Base;
 
     thread->renameTable[idx]->setDoubleResult(val);
 
@@ -797,6 +808,17 @@ void
 OzoneCPU<Impl>::OzoneTC::setFloatRegBits(int reg_idx, FloatRegBits val)
 {
     panic("Unimplemented!");
+}
+
+template <class Impl>
+void
+OzoneCPU<Impl>::OzoneTC::setCCReg(int reg_idx, CCReg val)
+{
+    thread->renameTable[reg_idx]->setCCResult(val);
+
+    if (!thread->noSquashFromTC) {
+        cpu->squashFromTC();
+    }
 }
 
 template <class Impl>
@@ -848,6 +870,8 @@ OzoneCPU<Impl>::OzoneTC::setMiscRegNoEffect(int misc_reg, const MiscReg &val)
         cpu->squashFromTC();
     }
 }
+
+#endif//__CPU_OZONE_CPU_IMPL_HH__
 
 template <class Impl>
 void

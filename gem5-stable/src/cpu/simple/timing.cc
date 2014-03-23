@@ -109,7 +109,6 @@ TimingSimpleCPU::drain(DrainManager *drain_manager)
 
     if (_status == Idle ||
         (_status == BaseSimpleCPU::Running && isDrained())) {
-        assert(!fetchEvent.scheduled());
         DPRINTF(Drain, "No need to drain.\n");
         return 0;
     } else {
@@ -144,8 +143,10 @@ TimingSimpleCPU::drainResume()
     if (thread->status() == ThreadContext::Active) {
         schedule(fetchEvent, nextCycle());
         _status = BaseSimpleCPU::Running;
+        notIdleFraction = 1;
     } else {
         _status = BaseSimpleCPU::Idle;
+        notIdleFraction = 0;
     }
 }
 
@@ -207,7 +208,7 @@ TimingSimpleCPU::activateContext(ThreadID thread_num, Cycles delay)
 
     assert(_status == Idle);
 
-    notIdleFraction++;
+    notIdleFraction = 1;
     _status = BaseSimpleCPU::Running;
 
     // kick things off by initiating the fetch of the next instruction
@@ -231,7 +232,7 @@ TimingSimpleCPU::suspendContext(ThreadID thread_num)
     // just change status to Idle... if status != Running,
     // completeInst() will not initiate fetch of next instruction.
 
-    notIdleFraction--;
+    notIdleFraction = 0;
     _status = Idle;
 }
 
@@ -404,7 +405,7 @@ TimingSimpleCPU::readMem(Addr addr, uint8_t *data,
     const int asid = 0;
     const ThreadID tid = 0;
     const Addr pc = thread->instAddr();
-    unsigned block_size = dcachePort.peerBlockSize();
+    unsigned block_size = cacheLineSize();
     BaseTLB::Mode mode = BaseTLB::Read;
 
     if (traceData) {
@@ -473,7 +474,7 @@ TimingSimpleCPU::writeMem(uint8_t *data, unsigned size,
     const int asid = 0;
     const ThreadID tid = 0;
     const Addr pc = thread->instAddr();
-    unsigned block_size = dcachePort.peerBlockSize();
+    unsigned block_size = cacheLineSize();
     BaseTLB::Mode mode = BaseTLB::Write;
 
     if (traceData) {

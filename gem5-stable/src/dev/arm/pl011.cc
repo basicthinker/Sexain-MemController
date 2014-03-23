@@ -52,11 +52,10 @@
 #include "sim/sim_exit.hh"
 
 Pl011::Pl011(const Params *p)
-    : Uart(p), control(0x300), fbrd(0), ibrd(0), lcrh(0), ifls(0x12), imsc(0),
-      rawInt(0), maskInt(0), intNum(p->int_num), gic(p->gic),
+    : Uart(p, 0xfff), control(0x300), fbrd(0), ibrd(0), lcrh(0), ifls(0x12),
+      imsc(0), rawInt(0), maskInt(0), intNum(p->int_num), gic(p->gic),
       endOnEOT(p->end_on_eot), intDelay(p->int_delay), intEvent(this)
 {
-    pioSize = 0xfff;
 }
 
 Tick
@@ -116,7 +115,7 @@ Pl011::read(PacketPtr pkt)
         data = maskInt;
         break;
       default:
-        if (AmbaDev::readId(pkt, AMBA_ID, pioAddr)) {
+        if (readId(pkt, AMBA_ID, pioAddr)) {
             // Hack for variable size accesses
             data = pkt->get<uint32_t>();
             break;
@@ -212,9 +211,13 @@ Pl011::write(PacketPtr pkt)
       case UART_IMSC:
         imsc = data;
 
-        if (imsc.rimim || imsc.ctsmim || imsc.dcdmim || imsc.dsrmim
-             || imsc.feim || imsc.peim || imsc.beim || imsc.oeim || imsc.rsvd)
+        if (imsc.feim || imsc.peim || imsc.beim || imsc.oeim || imsc.rsvd)
             panic("Unknown interrupt enabled\n");
+
+        // rimim, ctsmim, dcdmim, dsrmim can be enabled but are ignored
+        // they are supposed to interrupt on a change of status in the line
+        // which we should never have since our terminal is happy to always
+        // receive bytes.
 
         if (imsc.txim) {
             DPRINTF(Uart, "Writing to IMSC: TX int enabled, scheduling interruptt\n");

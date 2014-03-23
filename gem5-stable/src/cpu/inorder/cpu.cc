@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012 ARM Limited
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -59,6 +60,7 @@
 #include "cpu/base.hh"
 #include "cpu/exetrace.hh"
 #include "cpu/quiesce_event.hh"
+#include "cpu/reg_class.hh"
 #include "cpu/simple_thread.hh"
 #include "cpu/thread_context.hh"
 #include "debug/Activity.hh"
@@ -359,6 +361,9 @@ InOrderCPU::InOrderCPU(Params *params)
 
         memset(intRegs[tid], 0, sizeof(intRegs[tid]));
         memset(floatRegs.i[tid], 0, sizeof(floatRegs.i[tid]));
+#ifdef ISA_HAS_CC_REGS
+        memset(ccRegs[tid], 0, sizeof(ccRegs[tid]));
+#endif
         isa[tid]->clear();
 
         // Define dummy instructions and resource requests to be used.
@@ -1255,18 +1260,24 @@ InOrderCPU::getPipeStage(int stage_num)
 
 
 RegIndex
-InOrderCPU::flattenRegIdx(RegIndex reg_idx, RegType &reg_type, ThreadID tid)
+InOrderCPU::flattenRegIdx(RegIndex reg_idx, RegClass &reg_type, ThreadID tid)
 {
-    if (reg_idx < FP_Base_DepTag) {
-        reg_type = IntType;
-        return isa[tid]->flattenIntIndex(reg_idx);
-    } else if (reg_idx < Ctrl_Base_DepTag) {
-        reg_type = FloatType;
-        reg_idx -= FP_Base_DepTag;
-        return isa[tid]->flattenFloatIndex(reg_idx);
-    } else {
-        reg_type = MiscType;
-        return reg_idx - TheISA::Ctrl_Base_DepTag;
+    RegIndex rel_idx;
+
+    reg_type = regIdxToClass(reg_idx, &rel_idx);
+
+    switch (reg_type) {
+      case IntRegClass:
+        return isa[tid]->flattenIntIndex(rel_idx);
+
+      case FloatRegClass:
+        return isa[tid]->flattenFloatIndex(rel_idx);
+
+      case MiscRegClass:
+        return rel_idx;
+
+      default:
+        panic("register %d out of range\n", reg_idx);
     }
 }
 
@@ -1295,6 +1306,19 @@ InOrderCPU::readFloatRegBits(RegIndex reg_idx, ThreadID tid)
             tid, reg_idx, floatRegs.i[tid][reg_idx], floatRegs.f[tid][reg_idx]);
 
     return floatRegs.i[tid][reg_idx];
+}
+
+CCReg
+InOrderCPU::readCCReg(RegIndex reg_idx, ThreadID tid)
+{
+#ifdef ISA_HAS_CC_REGS
+    DPRINTF(CCRegs, "[tid:%i]: Reading CC. Reg %i as %x\n",
+            tid, reg_idx, ccRegs[tid][reg_idx]);
+
+    return ccRegs[tid][reg_idx];
+#else
+    panic("readCCReg: ISA does not have CC regs\n");
+#endif
 }
 
 void
@@ -1336,6 +1360,18 @@ InOrderCPU::setFloatRegBits(RegIndex reg_idx, FloatRegBits val, ThreadID tid)
             floatRegs.f[tid][reg_idx]);
 }
 
+void
+InOrderCPU::setCCReg(RegIndex reg_idx, CCReg val, ThreadID tid)
+{
+#ifdef ISA_HAS_CC_REGS
+    DPRINTF(CCRegs, "[tid:%i]: Setting CC. Reg %i to %x\n",
+            tid, reg_idx, val);
+    ccRegs[tid][reg_idx] = val;
+#else
+    panic("readCCReg: ISA does not have CC regs\n");
+#endif
+}
+
 uint64_t
 InOrderCPU::readRegOtherThread(unsigned reg_idx, ThreadID tid)
 {
@@ -1344,18 +1380,25 @@ InOrderCPU::readRegOtherThread(unsigned reg_idx, ThreadID tid)
         tid = TheISA::getTargetThread(tcBase(tid));
     }
 
-    if (reg_idx < FP_Base_DepTag) {                   
+    RegIndex rel_idx;
+
+    switch (regIdxToClass(reg_idx, &rel_idx)) {
+      case IntRegClass:
         // Integer Register File
-        return readIntReg(reg_idx, tid);
-    } else if (reg_idx < Ctrl_Base_DepTag) {          
+        return readIntReg(rel_idx, tid);
+
+      case FloatRegClass:
         // Float Register File
-        reg_idx -= FP_Base_DepTag;
-        return readFloatRegBits(reg_idx, tid);
-    } else {
-        reg_idx -= Ctrl_Base_DepTag;
-        return readMiscReg(reg_idx, tid);  // Misc. Register File
+        return readFloatRegBits(rel_idx, tid);
+
+      case MiscRegClass:
+        return readMiscReg(rel_idx, tid);  // Misc. Register File
+
+      default:
+        panic("register %d out of range\n", reg_idx);
     }
 }
+
 void
 InOrderCPU::setRegOtherThread(unsigned reg_idx, const MiscReg &val,
                               ThreadID tid)
@@ -1365,14 +1408,24 @@ InOrderCPU::setRegOtherThread(unsigned reg_idx, const MiscReg &val,
         tid = TheISA::getTargetThread(tcBase(tid));
     }
 
-    if (reg_idx < FP_Base_DepTag) {            // Integer Register File
-        setIntReg(reg_idx, val, tid);
-    } else if (reg_idx < Ctrl_Base_DepTag) {   // Float Register File
-        reg_idx -= FP_Base_DepTag;
-        setFloatRegBits(reg_idx, val, tid);
-    } else {
-        reg_idx -= Ctrl_Base_DepTag;
-        setMiscReg(reg_idx, val, tid); // Misc. Register File
+    RegIndex rel_idx;
+
+    switch (regIdxToClass(reg_idx, &rel_idx)) {
+      case IntRegClass:
+        setIntReg(rel_idx, val, tid);
+        break;
+
+      case FloatRegClass:
+        setFloatRegBits(rel_idx, val, tid);
+        break;
+
+      case CCRegClass:
+        setCCReg(rel_idx, val, tid);
+        break;
+
+      case MiscRegClass:
+        setMiscReg(rel_idx, val, tid); // Misc. Register File
+        break;
     }
 }
 

@@ -48,6 +48,10 @@ typedef uint64_t IntReg;
 typedef uint64_t MiscReg;
 typedef float FloatReg;
 typedef uint32_t FloatRegBits;
+
+// dummy typedef since we don't have CC regs
+typedef uint8_t CCReg;
+
 typedef union
 {
     IntReg intReg;
@@ -56,13 +60,6 @@ typedef union
 } AnyReg;
 
 typedef uint16_t RegIndex;
-
-// These enumerate all the registers for dependence tracking.
-enum DependenceTags {
-    FP_Base_DepTag = 32*3+9,
-    Ctrl_Base_DepTag = FP_Base_DepTag + 64,
-    Max_DepTag = Ctrl_Base_DepTag + NumMiscRegs
-};
 
 // semantically meaningful register indices
 const int ZeroReg = 0;      // architecturally meaningful
@@ -77,8 +74,17 @@ const int SyscallPseudoReturnReg = 9;
 
 const int NumIntArchRegs = 32;
 const int NumIntRegs = (MaxGL + 1) * 8 + NWindows * 16 + NumMicroIntRegs;
+const int NumCCRegs = 0;
 
 const int TotalNumRegs = NumIntRegs + NumFloatRegs + NumMiscRegs;
+
+// These enumerate all the registers for dependence tracking.
+enum DependenceTags {
+    FP_Reg_Base = NumIntRegs,
+    CC_Reg_Base = FP_Reg_Base + NumFloatRegs,
+    Misc_Reg_Base = CC_Reg_Base + NumCCRegs, // NumCCRegs == 0
+    Max_Reg_Index = Misc_Reg_Base + NumMiscRegs,
+};
 
 } // namespace SparcISA
 

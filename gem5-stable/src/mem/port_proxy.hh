@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 ARM Limited
+ * Copyright (c) 2011-2013 ARM Limited
  * All rights reserved
  *
  * The license below extends only to copyright in the software and shall
@@ -60,7 +60,7 @@
 #define __MEM_PORT_PROXY_HH__
 
 #include "config/the_isa.hh"
-#if THE_ISA != NO_ISA
+#if THE_ISA != NULL_ISA
     #include "arch/isa_traits.hh"
 #endif
 
@@ -88,10 +88,14 @@ class PortProxy
     /** The actual physical port used by this proxy. */
     MasterPort &_port;
 
+    /** Granularity of any transactions issued through this proxy. */
+    const unsigned int _cacheLineSize;
+
     void blobHelper(Addr addr, uint8_t *p, int size, MemCmd cmd) const;
 
   public:
-    PortProxy(MasterPort &port) : _port(port) { }
+    PortProxy(MasterPort &port, unsigned int cacheLineSize) :
+        _port(port), _cacheLineSize(cacheLineSize) { }
     virtual ~PortProxy() { }
 
     /**
@@ -123,7 +127,7 @@ class PortProxy
     template <typename T>
     void write(Addr address, T data) const;
 
-#if THE_ISA != NO_ISA
+#if THE_ISA != NULL_ISA
     /**
      * Read sizeof(T) bytes from address and return as object T.
      * Performs Guest to Host endianness transform.
@@ -157,7 +161,7 @@ PortProxy::write(Addr address, T data) const
     writeBlob(address, (uint8_t*)&data, sizeof(T));
 }
 
-#if THE_ISA != NO_ISA
+#if THE_ISA != NULL_ISA
 template <typename T>
 T
 PortProxy::readGtoH(Addr address) const

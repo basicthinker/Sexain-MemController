@@ -13,6 +13,8 @@
  *
  * Copyright (c) 2002-2005 The Regents of The University of Michigan
  * Copyright (c) 2011 Regents of the University of California
+ * Copyright (c) 2013 Advanced Micro Devices, Inc.
+ * Copyright (c) 2013 Mark D. Hill and David A. Wood
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -119,7 +121,7 @@ BaseCPU::BaseCPU(Params *p, bool is_checker)
       _instMasterId(p->system->getMasterId(name() + ".inst")),
       _dataMasterId(p->system->getMasterId(name() + ".data")),
       _taskId(ContextSwitchTaskId::Unknown), _pid(Request::invldPid),
-      _switchedOut(p->switched_out),
+      _switchedOut(p->switched_out), _cacheLineSize(p->system->cacheLineSize()),
       interrupts(p->interrupts), profileEvent(NULL),
       numThreads(p->numThreads), system(p->system)
 {
@@ -569,7 +571,7 @@ void
 BaseCPU::scheduleInstStop(ThreadID tid, Counter insts, const char *cause)
 {
     const Tick now(comInstEventQueue[tid]->getCurTick());
-    Event *event(new SimLoopExitEvent(cause, 0));
+    Event *event(new LocalSimLoopExitEvent(cause, 0));
 
     comInstEventQueue[tid]->schedule(event, now + insts);
 }
@@ -578,7 +580,7 @@ void
 BaseCPU::scheduleLoadStop(ThreadID tid, Counter loads, const char *cause)
 {
     const Tick now(comLoadEventQueue[tid]->getCurTick());
-    Event *event(new SimLoopExitEvent(cause, 0));
+    Event *event(new LocalSimLoopExitEvent(cause, 0));
 
     comLoadEventQueue[tid]->schedule(event, now + loads);
 }

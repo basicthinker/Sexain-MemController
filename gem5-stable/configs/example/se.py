@@ -44,6 +44,7 @@
 
 import optparse
 import sys
+import os
 
 import m5
 from m5.defines import buildEnv
@@ -58,6 +59,7 @@ import Options
 import Ruby
 import Simulation
 import CacheConfig
+import MemConfig
 from Caches import *
 from cpu2000 import *
 
@@ -84,6 +86,7 @@ def get_processes(options):
     for wrkld in workloads:
         process = LiveProcess()
         process.executable = wrkld
+        process.cwd = os.getcwd()
 
         if len(pargs) > idx:
             process.cmd = [wrkld] + pargs[idx].split()
@@ -157,12 +160,24 @@ if options.smt and options.num_cpus > 1:
 
 np = options.num_cpus
 system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
-                physmem = MemClass(range=AddrRange(options.mem_size)),
                 mem_mode = test_mem_mode,
-                clk_domain = SrcClockDomain(clock = options.sys_clock))
+                mem_ranges = [AddrRange(options.mem_size)],
+                cache_line_size = options.cacheline_size)
+
+# Create a top-level voltage domain
+system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
+
+# Create a source clock for the system and set the clock period
+system.clk_domain = SrcClockDomain(clock =  options.sys_clock,
+                                   voltage_domain = system.voltage_domain)
+
+# Create a CPU voltage domain
+system.cpu_voltage_domain = VoltageDomain()
 
 # Create a separate clock domain for the CPUs
-system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock)
+system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
+                                       voltage_domain =
+                                       system.cpu_voltage_domain)
 
 # All cpus belong to a common cpu_clk_domain, therefore running at a common
 # frequency.
@@ -209,7 +224,8 @@ if options.ruby:
         sys.exit(1)
 
     # Set the option for physmem so that it is not allocated any space
-    system.physmem.null = True
+    system.physmem = MemClass(range=AddrRange(options.mem_size),
+                              null = True)
 
     options.use_map = True
     Ruby.create_system(options, system)
@@ -235,8 +251,8 @@ if options.ruby:
 else:
     system.membus = CoherentBus()
     system.system_port = system.membus.slave
-    system.physmem.port = system.membus.master
     CacheConfig.config_cache(options, system)
+    MemConfig.config_mem(options, system)
 
 root = Root(full_system = False, system = system)
 Simulation.run(options, root, system, FutureClass)

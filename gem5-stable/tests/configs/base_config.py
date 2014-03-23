@@ -151,11 +151,16 @@ class BaseSystem(object):
         # Create system clock domain. This provides clock value to every
         # clocked object that lies beneath it unless explicitly overwritten
         # by a different clock domain.
-        system.clk_domain = SrcClockDomain(clock = '1GHz')
+        system.voltage_domain = VoltageDomain()
+        system.clk_domain = SrcClockDomain(clock = '1GHz',
+                                           voltage_domain =
+                                           system.voltage_domain)
 
         # Create a seperate clock domain for components that should
         # run at CPUs frequency
-        system.cpu_clk_domain = SrcClockDomain(clock = '2GHz')
+        system.cpu_clk_domain = SrcClockDomain(clock = '2GHz',
+                                               voltage_domain =
+                                               system.voltage_domain)
 
     @abstractmethod
     def create_system(self):
@@ -220,6 +225,13 @@ class BaseFSSystem(BaseSystem):
 
     def init_system(self, system):
         BaseSystem.init_system(self, system)
+
+        # create the memory controllers and connect them, stick with
+        # the physmem name to avoid bumping all the reference stats
+        system.physmem = [self.mem_class(range = r)
+                          for r in system.mem_ranges]
+        for i in xrange(len(system.physmem)):
+            system.physmem[i].port = system.membus.master
 
         # create the iocache, which by default runs at the system clock
         system.iocache = IOCache(addr_ranges=system.mem_ranges)

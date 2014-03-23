@@ -44,8 +44,10 @@
 #include "sim/system.hh"
 
 PciConfigAll::PciConfigAll(const Params *p)
-    : PioDevice(p)
+    : BasicPioDevice(p, p->size)
 {
+    // the pio_addr Python parameter is ignored, and overridden by
+    // this caluclated value
     pioAddr = p->platform->calcPciConfigAddr(params()->bus,0,0);
 }
 
@@ -73,23 +75,14 @@ PciConfigAll::read(PacketPtr pkt)
         panic("invalid access size(?) for PCI configspace!\n");
     }
     pkt->makeAtomicResponse();
-    return params()->pio_latency;
+    return pioDelay;
 }
 
 Tick
 PciConfigAll::write(PacketPtr pkt)
 {
-    panic("Attempting to write to config space on non-existant device\n");
+    panic("Attempting to write to config space on non-existent device\n");
     M5_DUMMY_RETURN
-}
-
-
-AddrRangeList
-PciConfigAll::getAddrRanges() const
-{
-    AddrRangeList ranges;
-    ranges.push_back(RangeSize(pioAddr, params()->size));
-    return ranges;
 }
 
 
