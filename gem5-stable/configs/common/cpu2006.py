@@ -6,7 +6,7 @@ def error_input(input_dir):
             ' must be copied to the current working directory.'
     return (None, None, None)
 
-def make_process(bench_name, bench_root):
+def make_process(bench_name, bench_root, fingerprint):
     bench_dir = bench_root + '/' + bench_name
     test_data = bench_dir + '/data/test'
     output_dir = '/tmp'
@@ -15,13 +15,13 @@ def make_process(bench_name, bench_root):
         bzip2 = LiveProcess()
         bzip2.executable = bench_dir + '/bzip2'
         bzip2.cmd = [bzip2.executable] + [test_data + '/input/dryer.jpg', '2']
-        bzip2.output = output_dir + '/dryer.jpg.out'
+        bzip2.output = output_dir + '/dryer.jpg.out-' + fingerprint
         return (bzip2, bzip2.output, test_data + '/output/dryer.jpg.out')
     elif bench_name == '429.mcf':
         mcf = LiveProcess()
         mcf.executable = bench_dir + '/mcf'
         mcf.cmd = [mcf.executable] + [test_data + '/input/inp.in']
-        mcf.output = output_dir + '/inp.out'
+        mcf.output = output_dir + '/inp.out-' + fingerprint
         return (mcf, mcf.output, test_data + '/output/inp.out')
     elif bench_name == '453.povray':
         povray = LiveProcess()
@@ -48,13 +48,13 @@ def make_process(bench_name, bench_root):
         input_file = test_data + '/input/bombesin.hmm'
         hmmer.cmd = [hmmer.executable] + ['--fixed', '0', '--mean', '325',
                 '--num', '45000', '--sd', '200', '--seed', '0', input_file]
-        hmmer.output = output_dir + '/bombesin.out'
+        hmmer.output = output_dir + '/bombesin.out-' + fingerprint
         return (hmmer, hmmer.output, test_data + '/output/bombesin.out')
     elif bench_name == '458.sjeng':
         sjeng = LiveProcess()
         sjeng.executable = bench_dir + '/sjeng'
         sjeng.cmd = [sjeng.executable] + [test_data + '/input/test.txt']
-        sjeng.output = output_dir + '/test.out'
+        sjeng.output = output_dir + '/test.out-' + fingerprint
         return (sjeng, sjeng.output, test_data + '/output/test.out')
     elif bench_name == '459.GemsFDTD':
         GemsFDTD = LiveProcess()
@@ -69,14 +69,14 @@ def make_process(bench_name, bench_root):
         libquantum=LiveProcess()
         libquantum.executable = bench_dir + '/libquantum'
         libquantum.cmd = [libquantum.executable] + ['33', '5']
-        libquantum.output = output_dir + '/462.test.out'
+        libquantum.output = output_dir + '/462.test.out-' + fingerprint
         return (libquantum, libquantum.output, test_data + '/output/test.out')
     elif bench_name == '470.lbm':
         lbm = LiveProcess()
         lbm.executable = bench_dir + '/lbm'
         lbm.cmd = [lbm.executable] + ['20', 'reference.dat', '0', '1',
                 test_data + '/input/100_100_130_cf_a.of']
-        lbm.output = output_dir + '/lbm.out'
+        lbm.output = output_dir + '/lbm.out-' + fingerprint
         return (lbm, lbm.output, test_data + '/output/lbm.out')
     elif bench_name == '471.omnetpp':
         omnetpp = LiveProcess()
@@ -91,20 +91,20 @@ def make_process(bench_name, bench_root):
         xalancbmk.executable = bench_dir + '/Xalan'
         xalancbmk.cmd = [xalancbmk.executable, '-v'] + \
                 [test_data + '/input/test.xml', test_data + '/input/xalanc.xsl']
-        xalancbmk.output = output_dir + '/483.test.out'
+        xalancbmk.output = output_dir + '/483.test.out-' + fingerprint
         return (xalancbmk, xalancbmk.output, test_data + '/output/test.out')
     elif bench_name == '998.specrand':
         specrand_i = LiveProcess()
         specrand_i.executable = bench_dir + '/specrand'
         specrand_i.cmd = [specrand_i.executable] + ['324342', '24239']
-        specrand_i.output = output_dir + '/rand.24239.out'
+        specrand_i.output = output_dir + '/rand.24239.out-' + fingerprint
         return (specrand_i, specrand_i.output,
                 test_data + '/output/rand.24239.out')
     elif bench_name == '999.specrand':
         specrand_f = LiveProcess()
         specrand_f.executable = bench_dir + '/specrand'
         specrand_f.cmd = [specrand_f.executable] + ['324342','24239']
-        specrand_f.output = output_dir + '/rand.24239.out'
+        specrand_f.output = output_dir + '/rand.24239.out-' + fingerprint
         return (specrand_f, specrand_f.output,
                 test_data + '/output/rand.24239.out')
     else:

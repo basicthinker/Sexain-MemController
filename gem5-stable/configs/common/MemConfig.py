@@ -156,7 +156,15 @@ def config_mem(options, system):
         for i in xrange(nbr_mem_ctrls):
             # Create an instance so we can figure out the address
             # mapping and row-buffer size
-            ctrl = cls()
+            if issubclass(cls, m5.objects.AbstractMemory):
+                ctrl = cls(block_table_length=options.att_length,
+                        page_table_length=options.mc_page_table_length,
+                        block_bits=options.block_bits,
+                        page_bits=options.page_bits,
+                        dram_size=options.dram_size,
+                        is_lat_att=options.att_latency)
+            else:
+                ctrl = cls()
 
             # Only do this for DRAMs
             if issubclass(cls, m5.objects.SimpleDRAM):

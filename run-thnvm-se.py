@@ -27,7 +27,7 @@ L3_SIZE=$((3*NUM_CPUS))MB
 L3_ASSOC=24
 
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
-OUT_DIR=~/Documents/gem5out-`date +%m-%d`
+OUT_DIR=~/Documents/gem5out-`date +%m%d-%H%M%S`
 
 to_run=0
 to_test=0

@@ -44,6 +44,8 @@
 
 import optparse
 import sys
+import os
+import shutil
 import filecmp
 from difflib import unified_diff
 
@@ -60,6 +62,7 @@ import Options
 import Ruby
 import Simulation
 import CacheConfig
+import MemConfig
 from Caches import *
 from cpu2006 import *
 
@@ -86,6 +89,7 @@ def get_processes(options):
     for wrkld in workloads:
         process = LiveProcess()
         process.executable = wrkld
+        process.cwd = os.getcwd()
 
         if len(pargs) > idx:
             process.cmd = [wrkld] + pargs[idx].split()
@@ -145,11 +149,21 @@ if args:
 multiprocesses = []
 numThreads = 1
 
+def config_fingerprint(options):
+    fp = 'b' + str(options.att_length)
+    fp += '-p' + str(options.mc_page_table_length)
+    fp += '-lat' if options.att_latency else '-nor'
+    return fp
+
+fp = config_fingerprint(options)
+
 if options.check_cpu_2006:
     bench_process, bench_output, ref_output = make_process(
-            options.check_cpu_2006, options.cpu_2006_root)
-    if ref_output is None:
+            options.check_cpu_2006, options.cpu_2006_root, fp)
+    if ref_output is None or not os.path.isfile(ref_output):
         print 'SPEC CPU 2006 ' + options.check_cpu_2006 + ' has no output!'
+    elif not os.path.isfile(bench_output):
+        print 'SPEC CPU 2006 outputs check: FAILED! No output file.'
     elif filecmp.cmp(bench_output, ref_output):
         print 'SPEC CPU 2006 outputs check: OK!'
     else:
@@ -159,9 +173,12 @@ if options.check_cpu_2006:
                 bench_output, ref_output):
             sys.stderr.write(line)
     sys.exit(0)
+
 if options.cpu_2006:
     bench_process, bench_out, ref_output = make_process(
-            options.cpu_2006, options.cpu_2006_root)
+            options.cpu_2006, options.cpu_2006_root, fp)
+    if os.path.isfile(bench_out):
+        shutil.move(bench_out, bench_out + '.old')
     if bench_process is not None:
         multiprocesses = [ bench_process ]
     else:
@@ -201,18 +218,24 @@ if options.smt and options.num_cpus > 1:
 
 np = options.num_cpus
 system = System(cpu = [CPUClass(cpu_id=i) for i in xrange(np)],
-                physmem = MemClass(range=AddrRange(options.mem_size),
-                        block_table_length=options.att_length,
-                        page_table_length=options.mc_page_table_length,
-                        block_bits=options.block_bits,
-                        page_bits=options.page_bits,
-                        dram_size=options.dram_size,
-                        is_lat_att=options.att_latency),
                 mem_mode = test_mem_mode,
-                clk_domain = SrcClockDomain(clock = options.sys_clock))
+                mem_ranges = [AddrRange(options.mem_size)],
+                cache_line_size = options.cacheline_size)
+
+# Create a top-level voltage domain
+system.voltage_domain = VoltageDomain(voltage = options.sys_voltage)
+
+# Create a source clock for the system and set the clock period
+system.clk_domain = SrcClockDomain(clock =  options.sys_clock,
+                                   voltage_domain = system.voltage_domain)
+
+# Create a CPU voltage domain
+system.cpu_voltage_domain = VoltageDomain()
 
 # Create a separate clock domain for the CPUs
-system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock)
+system.cpu_clk_domain = SrcClockDomain(clock = options.cpu_clock,
+                                       voltage_domain =
+                                       system.cpu_voltage_domain)
 
 # All cpus belong to a common cpu_clk_domain, therefore running at a common
 # frequency.
@@ -259,7 +282,8 @@ if options.ruby:
         sys.exit(1)
 
     # Set the option for physmem so that it is not allocated any space
-    system.physmem.null = True
+    system.physmem = MemClass(range=AddrRange(options.mem_size),
+                              null = True)
 
     options.use_map = True
     Ruby.create_system(options, system)
@@ -285,8 +309,8 @@ if options.ruby:
 else:
     system.membus = CoherentBus()
     system.system_port = system.membus.slave
-    system.physmem.port = system.membus.master
     CacheConfig.config_cache(options, system)
+    MemConfig.config_mem(options, system)
 
 root = Root(full_system = False, system = system)
 Simulation.run(options, root, system, FutureClass)

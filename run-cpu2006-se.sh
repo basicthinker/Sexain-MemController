@@ -15,7 +15,7 @@ BENCHMARKS=(
 999.specrand
 )
 
-OUT_FILE=cpu2006-`date +%T`
+OUT_FILE=cpu2006-`date +%m%d-%H%M%S`
 
 for benchmark in ${BENCHMARKS[@]}
 do
