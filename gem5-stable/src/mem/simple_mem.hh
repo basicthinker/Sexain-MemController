@@ -182,7 +182,7 @@ class SimpleMemory : public AbstractMemory
      *
      * @return the latency seen by the current packet
      */
-    Tick getLatency() const;
+    Tick getLatency();
 
     /** @todo this is a temporary workaround until the 4-phase code is
      * committed. upstream caches needs this packet until true is returned, so

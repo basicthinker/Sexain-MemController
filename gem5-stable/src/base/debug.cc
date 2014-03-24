@@ -136,7 +136,6 @@ struct AllFlags : public Flag
 };
 
 AllFlags theAllFlags;
-Flag *const All = &theAllFlags;
 
 bool
 changeFlag(const char *s, bool value)

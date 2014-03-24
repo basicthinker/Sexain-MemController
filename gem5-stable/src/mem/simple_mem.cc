@@ -88,8 +88,17 @@ SimpleMemory::regStats()
 Tick
 SimpleMemory::recvAtomic(PacketPtr pkt)
 {
+    assert(latATT == 0);
     access(pkt);
-    return pkt->memInhibitAsserted() ? 0 : getLatency();
+
+    Tick lat = getLatency();
+    if (isLatATT) {
+        lat += latATT;
+        sumLatATT += latATT;
+    }
+    latATT = 0;
+
+    return pkt->memInhibitAsserted() ? 0 : lat;
 }
 
 void
@@ -164,7 +173,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
-    recvAtomic(pkt);
+    Tick lat = recvAtomic(pkt);
     // turn packet around to go back to requester if response expected
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
@@ -173,11 +182,10 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
         // before the packet(s) before it
-        packetQueue.push_back(DeferredPacket(pkt, curTick() + getLatency()));
+        packetQueue.push_back(DeferredPacket(pkt, curTick() + lat));
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
-        //TODO: port.schedTimingResp(pkt, curTick() + latency);
-        //TODO: totalLatency += latency;
+        totalLatency += lat;
     } else {
         pendingDelete.push_back(pkt);
     }
@@ -222,9 +230,14 @@ SimpleMemory::dequeue()
 }
 
 Tick
-SimpleMemory::getLatency() const
+SimpleMemory::getLatency()
 {
-    return latency +
+    Tick lat = latency;
+    if (isLatATT) {
+        lat += latATTLookup;
+        sumLatATT += latATTLookup;
+    }
+    return lat +
         (latency_var ? random_mt.random<Tick>(0, latency_var) : 0);
 }
 
