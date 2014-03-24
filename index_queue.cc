@@ -1,5 +1,5 @@
 // index_queue.cc
-// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
 #include "index_queue.h"
 

@@ -1,5 +1,5 @@
 // addr_trans_controller.h
-// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
 #ifndef SEXAIN_ADDR_TRANS_CONTROLLER_H_
 #define SEXAIN_ADDR_TRANS_CONTROLLER_H_

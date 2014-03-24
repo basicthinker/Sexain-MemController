@@ -68,8 +68,6 @@ if env['TARGET_ISA'] != 'null':
     Source('fs_translating_port_proxy.cc')
     Source('se_translating_port_proxy.cc')
     Source('page_table.cc')
-    Source('physical.cc')
-    Source('simple_dram.cc')
 
 DebugFlag('BaseBus')
 DebugFlag('BusAddrRanges')

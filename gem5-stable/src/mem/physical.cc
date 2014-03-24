@@ -35,7 +35,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Andreas Hansson
- *          Jinglei Ren <jinglei.ren@stanzax.org>
+ *          Jinglei Ren <jinglei@ren.systems>
  */
 
 #include <sys/mman.h>

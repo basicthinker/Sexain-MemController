@@ -37,7 +37,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # Authors: Lisa Hsu
-#          Jinglei Ren <jinglei.ren@stanzax.org>
+#          Jinglei Ren <jinglei@ren.systems>
 
 # Configure the M5 cache hierarchy config in one place
 #
@@ -66,8 +66,7 @@ def config_cache(options, system):
     if options.l3cache:
         system.l3cache = L3Cache(clk_domain=system.cpu_clk_domain,
                                  size=options.l3_size,
-                                 assoc=options.l3_assoc,
-                                 block_size=options.cacheline_size)
+                                 assoc=options.l3_assoc)
 
         system.tol3bus = CoherentBus(clk_domain = system.cpu_clk_domain,
                                      width = 32)

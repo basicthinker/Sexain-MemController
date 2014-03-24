@@ -1,5 +1,5 @@
 // shadow_tag_mapper.h
-// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
 #ifndef SEXAIN_SHADOW_TAG_MAPPER_H_
 #define SEXAIN_SHADOW_TAG_MAPPER_H_

@@ -1,5 +1,5 @@
 // addr_trans_table.cc
-// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
 #include "addr_trans_table.h"
 

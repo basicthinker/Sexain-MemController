@@ -1,5 +1,5 @@
 // addr_trans_table.h
-// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
 #ifndef SEXAIN_ADDR_TRANS_TABLE_H_
 #define SEXAIN_ADDR_TRANS_TABLE_H_

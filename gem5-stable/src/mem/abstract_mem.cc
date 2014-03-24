@@ -40,7 +40,7 @@
  * Authors: Ron Dreslinski
  *          Ali Saidi
  *          Andreas Hansson
- *          Jinglei Ren <jinglei.ren@stanzax.org>
+ *          Jinglei Ren <jinglei@ren.systems>
  */
 
 #include "arch/registers.hh"

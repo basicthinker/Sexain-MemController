@@ -39,7 +39,7 @@
  *
  * Authors: Ron Dreslinski
  *          Andreas Hansson
- *          Jinglei Ren <jinglei.ren@stanzax.org>
+ *          Jinglei Ren <jinglei@ren.systems>
  */
 
 /**

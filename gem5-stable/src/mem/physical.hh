@@ -35,7 +35,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Authors: Andreas Hansson
- *          Jinglei Ren <jinglei.ren@stanzax.org>
+ *          Jinglei Ren <jinglei@ren.systems>
  */
 
 #ifndef __PHYSICAL_MEMORY_HH__

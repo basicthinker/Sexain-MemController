@@ -1,5 +1,5 @@
 // mem_store.h
-// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
 #ifndef SEXAIN_MEM_STORE_H_
 #define SEXAIN_MEM_STORE_H_

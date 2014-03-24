@@ -1,5 +1,5 @@
 // index_queue.h
-// Copyright (c) 2014 Jinglei Ren <jinglei.ren@stanzax.org>
+// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
 #ifndef SEXAIN_INDEX_QUEUE_H_
 #define SEXAIN_INDEX_QUEUE_H_

@@ -40,7 +40,7 @@
  * Authors: Nathan Binkert
  *          Steve Reinhardt
  *          Andreas Hansson
- *          Jinglei Ren <jinglei.ren@stanzax.org>
+ *          Jinglei Ren <jinglei@ren.systems>
  */
 
 #ifndef __BASE_ADDR_RANGE_HH__
