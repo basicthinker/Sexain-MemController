@@ -163,7 +163,8 @@ if options.check_cpu_2006:
     if ref_output is None or not os.path.isfile(ref_output):
         print 'SPEC CPU 2006 ' + options.check_cpu_2006 + ' has no output!'
     elif not os.path.isfile(bench_output):
-        print 'SPEC CPU 2006 outputs check: FAILED! No output file.'
+        print 'SPEC CPU 2006 outputs check: FAILED! No output file:'
+        print bench_output
     elif filecmp.cmp(bench_output, ref_output):
         print 'SPEC CPU 2006 outputs check: OK!'
     else:

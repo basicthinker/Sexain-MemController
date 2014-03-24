@@ -57,7 +57,7 @@ while getopts "hc:o:b:t:l" opt; do
       OPTIONS+=" --att-latency"
       ;;
     t)
-      ALIAS=$OPTARG
+      COMMAND="--check-cpu-2006=$OPTARG"
       to_test=1
       ;;
     \?)
@@ -86,10 +86,10 @@ OPTIONS+=" --l3_assoc=$L3_ASSOC"
 OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
 
 if [ $to_run = 1 ]; then
-	$GEM5 -d $OUT_DIR/$ALIAS $SE_SCRIPT $OPTIONS $COMMAND
+  $GEM5 -d $OUT_DIR/$ALIAS $SE_SCRIPT $OPTIONS $COMMAND
 fi
 
 if [ $to_test = 1 ]; then
-  $GEM5 $SE_SCRIPT --cpu-2006-root=$CPU2006ROOT --check-cpu-2006=$ALIAS 1>&2
+  $GEM5 $SE_SCRIPT $OPTIONS $COMMAND 1>&2
 fi
 
