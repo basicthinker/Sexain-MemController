@@ -54,11 +54,12 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     latATTUpdate(p->lat_att_update), latBlkWriteback(p->lat_blk_writeback),
     latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
     isLatATT(p->is_lat_att), latency_var(p->latency_var),
-    bandwidth(p->bandwidth), isBusy(false),
+    bandwidth(p->bandwidth), bandwidthNVM(p->bandwidth * 10), isBusy(false),
     retryReq(false), retryResp(false),
     releaseEvent(this), dequeueEvent(this), drainManager(NULL)
 {
     latATT = 0;
+    checkNumPages = 0;
 }
 
 void
@@ -162,6 +163,14 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
         Tick duration = pkt->getSize() * bandwidth;
+
+        if (isLatATT && pkt->isWrite() &&
+                !addrController.Probe(localAddr(pkt))) {
+            duration += pageTable.block_size() * epochPages * bandwidthNVM;
+            duration += blockTable.length() * 16 * bandwidthNVM;
+            duration += pageTable.length() * 16 * bandwidthNVM;
+            addrController.NewEpoch();
+        }
 
         // only consider ourselves busy if there is any need to wait
         // to avoid extra events being scheduled for (infinitely) fast
@@ -352,6 +361,8 @@ SimpleMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
 void
 SimpleMemory::OnEpochEnd(int bits)
 {
+    checkNumPages += epochPages;
+    assert(checkNumPages == numPages.value());
     AbstractMemory::OnEpochEnd(bits);
 }
 

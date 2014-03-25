@@ -124,6 +124,8 @@ class SimpleMemory : public AbstractMemory
     Tick latATT;
     bool isLatATT;
 
+    int checkNumPages;
+
     /**
      * Fudge factor added to the latency.
      */
@@ -142,6 +144,7 @@ class SimpleMemory : public AbstractMemory
      * the regulation.
      */
     const double bandwidth;
+    const double bandwidthNVM;
 
     /**
      * Track the state of the memory as either idle or busy, no need
