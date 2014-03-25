@@ -178,7 +178,7 @@ if options.check_cpu_2006:
 if options.cpu_2006:
     bench_process, bench_out, ref_output = make_process(
             options.cpu_2006, options.cpu_2006_root, fp)
-    if os.path.isfile(bench_out):
+    if not bench_out is None and os.path.isfile(bench_out):
         shutil.move(bench_out, bench_out + '.old')
     if bench_process is not None:
         multiprocesses = [ bench_process ]

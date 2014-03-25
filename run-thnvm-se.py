@@ -11,9 +11,9 @@ CPU_CLOCK=3GHz
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
-DRAM_SIZE=0GB
-ATT_LENGTH=1024
-MC_PT_LEN=0 # secondary page table length
+DRAM_SIZE=2GB
+ATT_LENGTH=0
+MC_PT_LEN=256 # secondary page table length
 
 L1D_SIZE=32kB
 L1D_ASSOC=8
@@ -57,7 +57,7 @@ while getopts "hc:o:b:t:l" opt; do
       OPTIONS+=" --att-latency"
       ;;
     t)
-      COMMAND="--check-cpu-2006=$OPTARG"
+      ALIAS=$OPTARG
       to_test=1
       ;;
     \?)
@@ -90,6 +90,6 @@ if [ $to_run = 1 ]; then
 fi
 
 if [ $to_test = 1 ]; then
-  $GEM5 $SE_SCRIPT $OPTIONS $COMMAND 1>&2
+  $GEM5 $SE_SCRIPT $OPTIONS --check-cpu-2006=$ALIAS 1>&2
 fi
 
