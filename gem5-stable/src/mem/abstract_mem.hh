@@ -202,6 +202,9 @@ class AbstractMemory : public MemObject, public MemStore
     /** Number of shrinking writes */
     Stats::Scalar numShrinks;
 
+    /** Number of page writes in the DRAM scheme */
+    Stats::Scalar numPages;
+
     /** Pointor to the System object.
      * This is used for getting the number of masters in the system which is
      * needed when registering stats

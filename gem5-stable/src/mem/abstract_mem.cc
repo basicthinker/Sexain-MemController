@@ -193,6 +193,10 @@ AbstractMemory::regStats()
         .name(name() + ".numShrinks")
         .desc("Total number of shrinking writes");
 
+    numPages
+        .name(name() + ".numPages")
+        .desc("Total number of page writes in the DRAM scheme");
+
     bwRead = bytesRead / simSeconds;
     bwInstRead = bytesInstRead / simSeconds;
     bwWrite = bytesWritten / simSeconds;
@@ -457,35 +461,48 @@ AbstractMemory::OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits)
     int size = (1 << bits);
     if (size == pageTable.block_size()) {
         memcpy(hostAddr(mach_tag << bits), hostAddr(phy_tag << bits), size);
+        ++numPages;
     }
 }
 
 void
 AbstractMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
-    ++numDirectWrites;
+    int size = (1 << bits);
+    if (size == blockTable.block_size()) {
+        ++numDirectWrites;
+    }
 }
 
 void
 AbstractMemory::OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
-    memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), 1 << bits);
-    ++numWriteBacks;
+    int size = (1 << bits);
+    memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size);
+    if (size == blockTable.block_size()) {
+        ++numWriteBacks;
+    } else if (size == pageTable.block_size()) {
+        ++numPages;
+    }
 }
 
 void
 AbstractMemory::OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
-    ++numOverwrites;
+    if ((1 << bits) == blockTable.block_size()) {
+        ++numOverwrites;
+    }
 }
 
 void
 AbstractMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
-    ++numShrinks;
     int size = (1 << bits);
-    if (size == pageTable.block_size()) {
+    if (size == blockTable.block_size()) {
+        ++numShrinks;
+    } else if (size == pageTable.block_size()) {
         memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size);
+        ++numPages;
     }
 }
 
