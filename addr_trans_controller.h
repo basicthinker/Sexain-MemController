@@ -17,6 +17,7 @@ class AddrTransController {
 
   uint64_t LoadAddr(uint64_t phy_addr);
   uint64_t StoreAddr(uint64_t phy_addr);
+  bool Probe(uint64_t phy_addr);
   void NewEpoch();
 
   int cache_block_size() const { return block_table_.block_size(); }

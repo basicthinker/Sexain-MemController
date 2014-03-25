@@ -137,6 +137,8 @@ class AbstractMemory : public MemObject, public MemStore
 
     std::list<LockedAddr> lockedAddrList;
 
+    int epochPages;
+
     // helper function for checkLockedAddrs(): we really want to
     // inline a quick check for an empty locked addr list (hopefully
     // the common case), and do the full list search (if necessary) in
@@ -147,8 +149,6 @@ class AbstractMemory : public MemObject, public MemStore
     // clear the execution context's lock flag if a matching store is
     // performed
     void trackLoadLocked(PacketPtr pkt);
-
-    int epochPages;
 
     // Compare a store address with any locked addresses so we can
     // clear the lock flag appropriately.  Return value set to 'false'
@@ -171,6 +171,14 @@ class AbstractMemory : public MemObject, public MemStore
             return checkLockedAddrList(pkt);
         }
     }
+
+    // Convert physical address to local address
+    Addr localAddr(PacketPtr pkt) const
+    { return pkt->getAddr() - range.start(); }
+
+    // Convert local address to host memory address
+    uint8_t* hostAddr(Addr local_addr) const
+    { return pmemAddr + local_addr; }
 
     /** Number of total bytes read from this memory */
     Stats::Vector bytesRead;
@@ -215,14 +223,6 @@ class AbstractMemory : public MemObject, public MemStore
 
 
   private:
-
-    // Convert physical address to local address
-    Addr localAddr(PacketPtr pkt) const
-    { return pkt->getAddr() - range.start(); }
-
-    // Convert local address to host memory address
-    uint8_t* hostAddr(Addr local_addr) const
-    { return pmemAddr + local_addr; }
 
     // Prevent copying
     AbstractMemory(const AbstractMemory&);

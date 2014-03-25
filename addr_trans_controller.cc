@@ -69,3 +69,11 @@ uint64_t AddrTransController::StoreAddr(uint64_t phy_addr) {
   }
 }
 
+bool AddrTransController::Probe(uint64_t phy_addr) {
+  assert(phy_addr < phy_limit());
+  if (phy_addr < dram_size_) {
+    return page_table_.Probe(phy_addr);
+  } else {
+    return block_table_.Probe(phy_addr);
+  }
+}
