@@ -148,6 +148,8 @@ class AbstractMemory : public MemObject, public MemStore
     // performed
     void trackLoadLocked(PacketPtr pkt);
 
+    int epochPages;
+
     // Compare a store address with any locked addresses so we can
     // clear the lock flag appropriately.  Return value set to 'false'
     // if store operation should be suppressed (because it was a

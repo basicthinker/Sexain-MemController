@@ -66,6 +66,8 @@ AbstractMemory::AbstractMemory(const Params *p) :
 {
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
+
+    epochPages = 0;
 }
 
 void
@@ -462,6 +464,7 @@ AbstractMemory::OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits)
     if (size == pageTable.block_size()) {
         memcpy(hostAddr(mach_tag << bits), hostAddr(phy_tag << bits), size);
         ++numPages;
+        ++epochPages;
     }
 }
 
@@ -483,6 +486,7 @@ AbstractMemory::OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits)
         ++numWriteBacks;
     } else if (size == pageTable.block_size()) {
         ++numPages;
+        ++epochPages;
     }
 }
 
@@ -503,11 +507,13 @@ AbstractMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
     } else if (size == pageTable.block_size()) {
         memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size);
         ++numPages;
+        ++epochPages;
     }
 }
 
 void
 AbstractMemory::OnEpochEnd(int bits)
 {
+    epochPages = 0; // should be fetched before
     ++numEpochs;
 }
