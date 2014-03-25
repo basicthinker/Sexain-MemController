@@ -106,7 +106,9 @@ SimpleMemory::recvFunctional(PacketPtr pkt)
 {
     pkt->pushLabel(name());
 
+    assert(latATT == 0);
     functionalAccess(pkt);
+    latATT = 0;
 
     // potentially update the packets in our packet queue as well
     for (auto i = packetQueue.begin(); i != packetQueue.end(); ++i)
