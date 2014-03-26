@@ -19,6 +19,6 @@ OUT_FILE=cpu2006-`date +%m%d-%H%M%S`
 
 for benchmark in ${BENCHMARKS[@]}
 do
-  nohup ./run-thnvm-se.py -b $benchmark $* >>$OUT_FILE.log 2>>$OUT_FILE.err &
+  nohup ./run-thnvm-se.sh -b $benchmark $* >>$OUT_FILE.log 2>>$OUT_FILE.err &
 done
 
