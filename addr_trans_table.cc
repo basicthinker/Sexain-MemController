@@ -63,3 +63,16 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
   }
 }
 
+void AddrTransTable::RevokeEntry(uint64_t tag) {
+  std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(tag);
+  if (it != tag_index_.end()) {
+    ATTEntry& entry = entries_[it->second];
+    assert(entry.valid && entry.phy_tag == tag);
+    assert(!entry.dirty);
+    mem_store_.OnRevoke(entry.phy_tag, entry.mach_tag, block_bits_);
+    tag_index_.erase(it);
+    entry.valid = false;
+    mapper_.UnmapShadowTag(entry.mach_tag);
+  }
+}
+

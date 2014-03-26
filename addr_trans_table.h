@@ -34,10 +34,13 @@ class AddrTransTable : public IndexArray {
   uint64_t StoreAddr(uint64_t phy_addr);
   void NewEpoch();
 
+  void RevokeEntry(uint64_t tag);
+
   uint64_t image_floor() const;
   void set_image_floor(uint64_t addr);
 
   int block_size() const { return 1 << block_bits_; }
+  int block_bits() const { return block_bits_; }
   int length() const { return mapper_.length(); }
   int image_size() const { return block_size() * length(); }
   IndexNode& operator[](int i) { return entries_[i].queue_node; }

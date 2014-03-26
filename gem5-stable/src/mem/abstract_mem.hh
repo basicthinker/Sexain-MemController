@@ -356,6 +356,7 @@ class AbstractMemory : public MemObject, public MemStore
     virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnEpochEnd(int bits);
+    virtual void OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnNVMRead(uint64_t mach_addr) { }
     virtual void OnNVMWrite(uint64_t mach_addr) { }
     virtual void OnDRAMRead(uint64_t mach_addr) { }

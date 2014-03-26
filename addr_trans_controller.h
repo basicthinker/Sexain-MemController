@@ -44,8 +44,8 @@ inline AddrTransController::AddrTransController(
     uint64_t dram_size, uint64_t nvm_size,
     AddrTransTable& blk_tbl, AddrTransTable& pg_tbl, MemStore* mem_store):
 
-    dram_size_(dram_size), nvm_size_(nvm_size),
     block_table_(blk_tbl), page_table_(pg_tbl),
+    dram_size_(dram_size), nvm_size_(nvm_size),
     phy_limit_(nvm_size - blk_tbl.image_size() - pg_tbl.image_size()),
     mem_store_(mem_store) {
 

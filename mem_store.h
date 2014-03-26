@@ -25,6 +25,8 @@ class MemStore {
 
   // When a new epoch is to start
   virtual void OnEpochEnd(int bits) = 0;
+  // When an entry is revoked
+  virtual void OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits) = 0;
 
   virtual void OnNVMRead(uint64_t mach_addr) = 0;
   virtual void OnNVMWrite(uint64_t mach_addr) = 0;
@@ -68,6 +70,14 @@ class TraceMemStore : public MemStore {
     assert(phy_tag != mach_tag);
     std::cout << std::hex;
     std::cout << "[Info] MemStore shrinks: "
+        << phy_tag << " => " << mach_tag
+        << std::dec << " (" << bits << ')' << std::endl;
+  }
+
+  void OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits) {
+    assert(phy_tag != mach_tag);
+    std::cout << std::hex;
+    std::cout << "[Info] MemStore revokes: "
         << phy_tag << " => " << mach_tag
         << std::dec << " (" << bits << ')' << std::endl;
   }

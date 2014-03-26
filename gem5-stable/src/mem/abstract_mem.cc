@@ -512,6 +512,13 @@ AbstractMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
 }
 
 void
+AbstractMemory::OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits)
+{
+    int size = (1 << bits);
+    memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size); 
+}
+
+void
 AbstractMemory::OnEpochEnd(int bits)
 {
     epochPages = 0; // should be fetched before
