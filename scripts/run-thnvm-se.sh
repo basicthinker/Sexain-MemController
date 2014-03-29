@@ -27,7 +27,7 @@ L3_SIZE=$((3*NUM_CPUS))MB
 L3_ASSOC=24
 
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
-OUT_DIR=~/Documents/gem5out-`date +%m%d-%H%M%S`
+OUT_DIR=~/Documents/gem5out-b$ATT_LENGTH-p$MC_PT_LEN
 
 to_run=0
 to_test=0
@@ -65,6 +65,8 @@ while getopts "hc:o:b:t:l" opt; do
       ;;
   esac
 done
+
+OUT_DIR+='-'`date +%m%d`
 
 OPTIONS+=" --caches --l2cache --l3cache"
 OPTIONS+=" --cpu-type=$CPU_TYPE"
