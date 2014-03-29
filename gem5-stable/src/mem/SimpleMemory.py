@@ -54,7 +54,7 @@ class SimpleMemory(AbstractMemory):
                                       "Combined read and write bandwidth")
     lat_att_lookup = Param.Latency('1ns', "ATT lookup latency")
     lat_att_update = Param.Latency('1ns', "ATT update latency")
-    lat_blk_writeback = Param.Latency('35ns',
+    lat_blk_writeback = Param.Latency('60ns',
                                       "Latency of block writeback for ATT")
     lat_nvm_read = Param.Latency('30ns', "Additional latency for NVM read")
     lat_nvm_write = Param.Latency('470ns', "Additional latency for NVM write")

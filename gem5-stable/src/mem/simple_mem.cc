@@ -162,14 +162,20 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     if (pkt->isRead() || pkt->isWrite()) {
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
-        Tick duration = pkt->getSize() * bandwidth;
+        AddrStatus status = addrController.Probe(localAddr(pkt));
+        Tick duration = status.type ? 
+                pkt->getSize() * bandwidth : pkt->getSize() * bandwidthNVM;
 
-        if (isLatATT && pkt->isWrite() &&
-                !addrController.Probe(localAddr(pkt))) {
-            duration += pageTable.block_size() * epochPages * bandwidthNVM;
-            duration += blockTable.length() * 16 * bandwidthNVM;
-            duration += pageTable.length() * 16 * bandwidthNVM;
-            addrController.NewEpoch();
+        if (isLatATT && pkt->isWrite()) {
+            if (status.oper == EPOCH) {
+                duration += pageTable.block_size() * epochPages * bandwidthNVM;
+                duration += blockTable.length() * 16 * bandwidthNVM;
+                duration += pageTable.length() * 16 * bandwidthNVM;
+                addrController.NewEpoch();
+            } else if (!status.type && status.oper == WRBACK) {
+                assert(pkt->getSize() == blockTable.block_size());
+                duration += pkt->getSize() * bandwidthNVM;
+            }
         }
 
         // only consider ourselves busy if there is any need to wait
