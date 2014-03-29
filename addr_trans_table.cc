@@ -17,6 +17,31 @@ uint64_t AddrTransTable::LoadAddr(uint64_t phy_addr) {
   }
 }
 
+enum ATTOperation AddrTransTable::Probe(uint64_t phy_addr) {
+  assert(length() != 0);
+  uint64_t tag = Tag(phy_addr);
+  std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(tag);
+  if (it == tag_index_.end()) { // not hit
+    if (queues_[0].Empty()) return EPOCH;
+    int i = queues_[0].Front(); // clean queue
+    ATTEntry& entry = entries_[i];
+
+    if (entry.valid) {
+      return WRBACK;
+    } else {
+      return REGWR; // direct write
+    }
+  } else {
+    ATTEntry& entry = entries_[it->second];
+    assert(entry.valid && entry.phy_tag == tag);
+    if (entry.dirty) {
+      return REGWR; // overwrite
+    } else {
+      return SHRINK;
+    }
+  }
+}
+
 uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
   uint64_t phy_tag = Tag(phy_addr);
   std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);

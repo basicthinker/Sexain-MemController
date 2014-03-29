@@ -8,6 +8,11 @@
 #include "mem_store.h"
 #include "addr_trans_table.h"
 
+struct AddrStatus {
+  int type; // 0 denotes NVM, 1 denotes DRAM
+  enum ATTOperation oper;
+};
+
 class AddrTransController {
  public:
   AddrTransController(uint64_t dram_size, uint64_t nvm_size,
@@ -18,7 +23,7 @@ class AddrTransController {
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
   virtual uint64_t StoreAddr(uint64_t phy_addr);
-  virtual bool Probe(uint64_t phy_addr);
+  virtual AddrStatus Probe(uint64_t phy_addr);
   virtual void NewEpoch();
 
   int cache_block_size() const { return block_table_.block_size(); }

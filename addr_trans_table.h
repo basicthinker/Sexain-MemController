@@ -25,11 +25,18 @@ struct ATTEntry {
   }
 };
 
+enum ATTOperation {
+  EPOCH = 0,
+  SHRINK,
+  WRBACK,
+  REGWR,
+};
+
 class AddrTransTable : public IndexArray {
  public:
   AddrTransTable(int block_bits, ShadowTagMapper& mapper, MemStore& mem);
 
-  bool Probe(uint64_t phy_addr);
+  enum ATTOperation Probe(uint64_t phy_addr);
   uint64_t LoadAddr(uint64_t phy_addr);
   uint64_t StoreAddr(uint64_t phy_addr);
   void NewEpoch();
@@ -68,12 +75,6 @@ inline AddrTransTable::AddrTransTable(int block_bits,
   for (int i = 0; i < length(); ++i) {
     queues_[0].PushBack(i); // clean queue
   }
-}
-
-inline bool AddrTransTable::Probe(uint64_t phy_addr) {
-  assert(length() != 0);
-  uint64_t phy_tag = Tag(phy_addr);
-  return !queues_[0].Empty() || tag_index_.find(phy_tag) != tag_index_.end();
 }
 
 inline void AddrTransTable::NewEpoch() {

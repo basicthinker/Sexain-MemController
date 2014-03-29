@@ -21,7 +21,7 @@ uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
 uint64_t AddrTransController::StoreAddr(uint64_t phy_addr) {
   assert(phy_addr < phy_limit());
   if (phy_addr < dram_size_) {
-    if (!page_table_.Probe(phy_addr)) {
+    if (page_table_.Probe(phy_addr) == EPOCH) {
       NewEpoch();
     }
     mem_store_->OnDRAMWrite(phy_addr);
@@ -30,7 +30,7 @@ uint64_t AddrTransController::StoreAddr(uint64_t phy_addr) {
     uint64_t mach_addr = page_table_.StoreAddr(phy_addr);
     return mach_addr;
   } else {
-    if (!block_table_.Probe(phy_addr)) {
+    if (block_table_.Probe(phy_addr) == EPOCH) {
       NewEpoch();
     }
     uint64_t mach_addr = block_table_.StoreAddr(phy_addr);
@@ -39,13 +39,12 @@ uint64_t AddrTransController::StoreAddr(uint64_t phy_addr) {
   }
 }
 
-bool AddrTransController::Probe(uint64_t phy_addr) {
+AddrStatus AddrTransController::Probe(uint64_t phy_addr) {
   assert(phy_addr < phy_limit());
-  if (phy_addr < dram_size_) {
-    return page_table_.Probe(phy_addr);
-  } else {
-    return block_table_.Probe(phy_addr);
-  }
+  AddrStatus status;
+  status.type = (phy_addr < dram_size_);
+  status.oper = page_table_.Probe(phy_addr);
+  return status;
 }
 
 void AddrTransController::NewEpoch() {
