@@ -43,7 +43,8 @@ AddrStatus AddrTransController::Probe(uint64_t phy_addr) {
   assert(phy_addr < phy_limit());
   AddrStatus status;
   status.type = (phy_addr < dram_size_);
-  status.oper = page_table_.Probe(phy_addr);
+  status.oper = status.type ? 
+      page_table_.Probe(phy_addr) : block_table_.Probe(phy_addr);
   return status;
 }
 
