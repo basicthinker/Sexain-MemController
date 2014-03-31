@@ -88,7 +88,7 @@ uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
   }
 }
 
-void AddrTransTable::RevokeEntry(uint64_t tag) {
+void AddrTransTable::RevokeTag(uint64_t tag) {
   std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(tag);
   if (it != tag_index_.end()) {
     ATTEntry& entry = entries_[it->second];

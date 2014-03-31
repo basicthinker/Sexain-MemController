@@ -365,11 +365,11 @@ SimpleMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
 }
 
 void
-SimpleMemory::OnEpochEnd(int bits)
+SimpleMemory::OnEpochEnd()
 {
     checkNumPages += epochPages;
     assert(checkNumPages == numPages.value());
-    AbstractMemory::OnEpochEnd(bits);
+    AbstractMemory::OnEpochEnd();
 }
 
 void

@@ -41,7 +41,8 @@ class AddrTransTable : public IndexArray {
   uint64_t StoreAddr(uint64_t phy_addr);
   void NewEpoch();
 
-  void RevokeEntry(uint64_t tag);
+  uint64_t Tag(uint64_t addr) const { return addr >> block_bits_; }
+  void RevokeTag(uint64_t tag);
 
   uint64_t image_floor() const;
   void set_image_floor(uint64_t addr);
@@ -53,7 +54,6 @@ class AddrTransTable : public IndexArray {
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
 
  private:
-  uint64_t Tag(uint64_t addr) const { return addr >> block_bits_; }
   uint64_t Addr(uint64_t tag) const { return tag << block_bits_; }
   uint64_t Trans(uint64_t phy_addr, uint64_t mach_tag);
 
@@ -78,7 +78,6 @@ inline AddrTransTable::AddrTransTable(int block_bits,
 }
 
 inline void AddrTransTable::NewEpoch() {
-  mem_store_.OnEpochEnd(block_bits_);
   assert(IndexIntersection(queues_[0], queues_[1]).size() == 0);
   while (!queues_[1].Empty()) {
     int i = queues_[1].PopFront();

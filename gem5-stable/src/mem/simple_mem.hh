@@ -218,7 +218,8 @@ class SimpleMemory : public AbstractMemory
     virtual void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
     virtual void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnEpochEnd(int bits);
+
+    virtual void OnEpochEnd();
     virtual void OnNVMRead(uint64_t mach_addr);
     virtual void OnNVMWrite(uint64_t mach_addr);
 

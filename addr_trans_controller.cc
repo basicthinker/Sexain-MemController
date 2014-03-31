@@ -49,6 +49,7 @@ AddrStatus AddrTransController::Probe(uint64_t phy_addr) {
 }
 
 void AddrTransController::NewEpoch() {
+  mem_store_->OnEpochEnd();
   page_table_.NewEpoch();
   block_table_.NewEpoch();
 }

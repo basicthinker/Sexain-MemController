@@ -519,7 +519,7 @@ AbstractMemory::OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits)
 }
 
 void
-AbstractMemory::OnEpochEnd(int bits)
+AbstractMemory::OnEpochEnd()
 {
     epochPages = 0; // should be fetched before
     ++numEpochs;

@@ -22,12 +22,11 @@ class MemStore {
   virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits) = 0;
   // When a clean entry is hit
   virtual void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits) = 0;
-
-  // When a new epoch is to start
-  virtual void OnEpochEnd(int bits) = 0;
   // When an entry is revoked
   virtual void OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits) = 0;
 
+  // AddrTransController invokes
+  virtual void OnEpochEnd() = 0; 
   virtual void OnNVMRead(uint64_t mach_addr) = 0;
   virtual void OnNVMWrite(uint64_t mach_addr) = 0;
   virtual void OnDRAMRead(uint64_t mach_addr) = 0;
@@ -82,9 +81,8 @@ class TraceMemStore : public MemStore {
         << std::dec << " (" << bits << ')' << std::endl;
   }
 
-  void OnEpochEnd(int bits) {
-    std::cout << "[Info] MemStore meets epoch end (" << bits << ")."
-        << std::endl;
+  void OnEpochEnd() {
+    std::cout << "[Info] MemStore meets epoch end." << std::endl;
   }
 
   void OnNVMRead(uint64_t mach_addr) {
