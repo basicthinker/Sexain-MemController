@@ -54,9 +54,10 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     latATTUpdate(p->lat_att_update), latBlkWriteback(p->lat_blk_writeback),
     latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
     isLatATT(p->is_lat_att), latency_var(p->latency_var),
-    bandwidth(p->bandwidth), bandwidthNVM(p->bandwidth * 10), isBusy(false),
-    retryReq(false), retryResp(false),
-    releaseEvent(this), dequeueEvent(this), drainManager(NULL)
+    bandwidth(p->bandwidth), bandwidthNVM(p->bandwidth * 10),
+    isBusy(false), isFrozen(false), retryReq(false), retryResp(false),
+    releaseEvent(this), unfreezeEvent(this),
+    dequeueEvent(this), drainManager(NULL)
 {
     latATT = 0;
     checkNumPages = 0;
@@ -84,6 +85,9 @@ SimpleMemory::regStats()
     sumLatATT
         .name(name() + ".sumLatATT")
         .desc("Additional latency due to ATT in memory responds");
+    frozenWrites
+        .name(name() + ".frozenWrites")
+        .desc("Number of writes during COW of DRAM");
 }
 
 Tick
@@ -162,19 +166,26 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     if (pkt->isRead() || pkt->isWrite()) {
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
-        AddrStatus status = addrController.Probe(localAddr(pkt));
-        Tick duration = status.type ? 
+        Tick duration = addrController.isDRAM(localAddr(pkt)) ?
                 pkt->getSize() * bandwidth : pkt->getSize() * bandwidthNVM;
 
         if (isLatATT && pkt->isWrite()) {
-            if (status.oper == EPOCH) {
-                duration += pageTable.block_size() * epochPages * bandwidthNVM;
-                duration += blockTable.length() * 16 * bandwidthNVM;
-                duration += pageTable.length() * 16 * bandwidthNVM;
-                addrController.NewEpoch();
-            } else if (!status.type && status.oper == WRBACK) {
+            AddrStatus status = addrController.Probe(localAddr(pkt));
+            if (status.type == RETRY_REQ) {
+                retryReq = true;
+                return false;
+            } else if (status.type == NVM_ADDR && status.oper == WRBACK) {
                 assert(pkt->getSize() == blockTable.block_size());
                 duration += pkt->getSize() * bandwidthNVM;
+            } else if (status.oper == EPOCH) {
+                Tick frozenDuration = pageTable.block_size() * epochPages * bandwidthNVM;
+                frozenDuration += blockTable.length() * 16 * bandwidthNVM;
+                frozenDuration += pageTable.length() * 16 * bandwidthNVM;
+
+                schedule(unfreezeEvent, curTick() + frozenDuration);
+                isFrozen = true;
+
+                addrController.NewEpoch();
             }
         }
 
@@ -203,6 +214,9 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
         totalLatency += lat;
+
+        if (isFrozen) ++frozenWrites;
+
     } else {
         pendingDelete.push_back(pkt);
     }
@@ -219,6 +233,13 @@ SimpleMemory::release()
         retryReq = false;
         port.sendRetry();
     }
+}
+
+void
+SimpleMemory::unfreeze()
+{
+    assert(isFrozen);
+    isFrozen = false;
 }
 
 void

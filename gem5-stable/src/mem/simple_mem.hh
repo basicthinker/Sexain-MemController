@@ -153,6 +153,11 @@ class SimpleMemory : public AbstractMemory
     bool isBusy;
 
     /**
+     * Track the state of copying in the DRAM scheme
+     */
+    bool isFrozen;
+
+    /**
      * Remember if we have to retry an outstanding request that
      * arrived while we were busy.
      */
@@ -171,6 +176,13 @@ class SimpleMemory : public AbstractMemory
     void release();
 
     EventWrapper<SimpleMemory, &SimpleMemory::release> releaseEvent;
+
+    /**
+     * Unfreeze the memory after COW finishes.
+     */
+    void unfreeze();
+
+    EventWrapper<SimpleMemory, &SimpleMemory::unfreeze> unfreezeEvent;
 
     /**
      * Dequeue a packet from our internal packet queue and move it to
@@ -229,6 +241,8 @@ class SimpleMemory : public AbstractMemory
     Stats::Scalar totalLatency;
     /** Additional latency due to ATT in responding */
     Stats::Scalar sumLatATT;
+    /** Number of writes during COW of DRAM */
+    Stats::Scalar frozenWrites;
 
     Tick recvAtomic(PacketPtr pkt);
 
