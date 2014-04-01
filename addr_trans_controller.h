@@ -5,11 +5,20 @@
 #define SEXAIN_ADDR_TRANS_CONTROLLER_H_
 
 #include <cassert>
+#include <vector>
 #include "mem_store.h"
 #include "addr_trans_table.h"
 
+#define INVAL_ADDR uint64_t(-1)
+
+enum AddrType {
+  NVM_ADDR = 0,
+  DRAM_ADDR = 1,
+  RETRY_REQ = -1,
+};
+
 struct AddrStatus {
-  int type; // 0 denotes NVM, 1 denotes DRAM
+  enum AddrType type;
   enum ATTOperation oper;
 };
 
@@ -22,9 +31,13 @@ class AddrTransController {
   virtual ~AddrTransController() { }
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
-  virtual uint64_t StoreAddr(uint64_t phy_addr);
-  virtual AddrStatus Probe(uint64_t phy_addr);
+  virtual uint64_t StoreAddr(uint64_t phy_addr, bool cross = false);
+  ///
+  /// Predict the operation(s) for storing to the specified physical address
+  ///
+  virtual AddrStatus Probe(uint64_t phy_addr, bool cross = false);
   virtual void NewEpoch();
+  virtual bool isDRAM(uint64_t phy_addr) { return phy_addr < dram_size_; }
 
   int cache_block_size() const { return block_table_.block_size(); }
   uint64_t phy_limit() const { return phy_limit_; }
@@ -36,10 +49,17 @@ class AddrTransController {
   AddrTransTable& block_table_;
   AddrTransTable& page_table_; 
  private:
+  uint64_t StoreDRAMAddr(uint64_t phy_addr);
+  uint64_t StoreNVMAddr(uint64_t phy_addr, bool no_epoch = false);
   const uint64_t dram_size_;
   const uint64_t nvm_size_;
   const uint64_t phy_limit_;
   MemStore* mem_store_;
+  ///
+  /// List of DRAM physical addresses
+  /// that occupy the NVM block translation table
+  ///
+  std::vector<uint64_t> cross_list_;
 };
 
 // Space partition (low -> high):
