@@ -377,7 +377,10 @@ AbstractMemory::access(PacketPtr pkt)
         }
 
         if (overwrite_mem) {
-            host_addr = hostAddr(addrController.StoreAddr(localAddr(pkt)));
+            uint64_t local_addr = addrController.StoreAddr(localAddr(pkt),
+                    pkt->isCrossAddr());
+            assert(local_addr != INVAL_ADDR); // should be prevented by Probe()
+            host_addr = hostAddr(local_addr);
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
 
@@ -391,7 +394,8 @@ AbstractMemory::access(PacketPtr pkt)
         }
         if (pmemAddr) {
             assert(pkt->getSize() == addrController.cache_block_size());
-            uint8_t* host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
+            uint8_t* host_addr = 
+                    hostAddr(addrController.LoadAddr(localAddr(pkt)));
             memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
         }
         TRACE_PACKET(pkt->req->isInstFetch() ? "IFetch" : "Read");
@@ -403,7 +407,10 @@ AbstractMemory::access(PacketPtr pkt)
         if (writeOK(pkt)) {
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.cache_block_size());
-                uint8_t* host_addr = hostAddr(addrController.StoreAddr(localAddr(pkt)));
+                uint64_t local_addr = addrController.StoreAddr(localAddr(pkt),
+                        pkt->isCrossAddr());
+                assert(local_addr != INVAL_ADDR); // should have be prevented
+                uint8_t* host_addr = hostAddr(local_addr);
                 memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());

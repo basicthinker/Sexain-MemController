@@ -260,6 +260,8 @@ class Packet : public Printable
     /// suppress the error if this packet encounters a functional
     /// access failure.
     static const FlagsType SUPPRESS_FUNC_ERROR    = 0x00008000;
+    /// access while COW on DRAM
+    static const FlagsType CROSS_ADDR             = 0x00010000;
 
     Flags flags;
 
@@ -519,6 +521,10 @@ class Packet : public Printable
     bool isSupplyExclusive() const  { return flags.isSet(SUPPLY_EXCLUSIVE); }
     void setSuppressFuncError()     { flags.set(SUPPRESS_FUNC_ERROR); }
     bool suppressFuncError() const  { return flags.isSet(SUPPRESS_FUNC_ERROR); }
+
+    void setCrossAddr()              { flags.set(CROSS_ADDR); }
+    void clearCrossAddr()            { flags.clear(CROSS_ADDR); }
+    bool isCrossAddr()                { return flags.isSet(CROSS_ADDR); }
 
     // Network error conditions... encapsulate them as methods since
     // their encoding keeps changing (from result field to command

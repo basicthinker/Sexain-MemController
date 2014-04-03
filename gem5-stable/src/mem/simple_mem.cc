@@ -169,7 +169,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Tick duration = pkt->getSize() * bandwidth;
 
         if (isLatATT && pkt->isWrite()) {
-            AddrStatus status = addrController.Probe(localAddr(pkt));
+            AddrStatus status = addrController.Probe(localAddr(pkt), isFrozen);
             if (status.type == RETRY_REQ) {
                 retryReq = true;
                 return false;
@@ -198,6 +198,10 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         }
     }
 
+    if (isFrozen) {
+        ++frozenWrites;
+        pkt->setCrossAddr();
+    }
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
@@ -214,9 +218,6 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
         totalLatency += lat;
-
-        if (isFrozen) ++frozenWrites;
-
     } else {
         pendingDelete.push_back(pkt);
     }
