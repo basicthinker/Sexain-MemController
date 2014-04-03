@@ -54,8 +54,8 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     latATTUpdate(p->lat_att_update), latBlkWriteback(p->lat_blk_writeback),
     latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
     isLatATT(p->is_lat_att), latency_var(p->latency_var),
-    bandwidth(p->bandwidth), bandwidthNVM(p->bandwidth * 10),
-    isBusy(false), isFrozen(false), retryReq(false), retryResp(false),
+    bandwidth(p->bandwidth), isBusy(false), isFrozen(false),
+    retryReq(false), retryResp(false),
     releaseEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
 {
@@ -166,8 +166,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     if (pkt->isRead() || pkt->isWrite()) {
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
-        Tick duration = addrController.isDRAM(localAddr(pkt)) ?
-                pkt->getSize() * bandwidth : pkt->getSize() * bandwidthNVM;
+        Tick duration = pkt->getSize() * bandwidth;
 
         if (isLatATT && pkt->isWrite()) {
             AddrStatus status = addrController.Probe(localAddr(pkt));
@@ -176,11 +175,12 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
                 return false;
             } else if (status.type == NVM_ADDR && status.oper == WRBACK) {
                 assert(pkt->getSize() == blockTable.block_size());
-                duration += pkt->getSize() * bandwidthNVM;
+                duration += pkt->getSize() * bandwidth;
             } else if (status.oper == EPOCH) {
-                Tick frozenDuration = pageTable.block_size() * epochPages * bandwidthNVM;
-                frozenDuration += blockTable.length() * 16 * bandwidthNVM;
-                frozenDuration += pageTable.length() * 16 * bandwidthNVM;
+                Tick frozenDuration =
+                        pageTable.block_size() * epochPages * bandwidth;
+                frozenDuration += blockTable.length() * 16 * bandwidth;
+                frozenDuration += pageTable.length() * 16 * bandwidth;
 
                 schedule(unfreezeEvent, curTick() + frozenDuration);
                 isFrozen = true;

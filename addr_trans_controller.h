@@ -37,7 +37,6 @@ class AddrTransController {
   ///
   virtual AddrStatus Probe(uint64_t phy_addr, bool cross = false);
   virtual void NewEpoch();
-  virtual bool isDRAM(uint64_t phy_addr) { return phy_addr < dram_size_; }
 
   int cache_block_size() const { return block_table_.block_size(); }
   uint64_t phy_limit() const { return phy_limit_; }
@@ -45,9 +44,12 @@ class AddrTransController {
   uint64_t nvm_size() const { return nvm_size_; }
   MemStore* mem_store() const { return mem_store_; }
   void set_mem_store(MemStore* mem_store) { mem_store_ = mem_store; }
+
  protected:
+  virtual bool isDRAM(uint64_t phy_addr) { return phy_addr < dram_size_; }
   AddrTransTable& block_table_;
   AddrTransTable& page_table_; 
+
  private:
   uint64_t StoreDRAMAddr(uint64_t phy_addr);
   uint64_t StoreNVMAddr(uint64_t phy_addr, bool no_epoch = false);

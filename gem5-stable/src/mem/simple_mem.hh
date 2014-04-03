@@ -144,7 +144,6 @@ class SimpleMemory : public AbstractMemory
      * the regulation.
      */
     const double bandwidth;
-    const double bandwidthNVM;
 
     /**
      * Track the state of the memory as either idle or busy, no need
