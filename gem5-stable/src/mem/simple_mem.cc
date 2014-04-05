@@ -177,6 +177,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
                 assert(pkt->getSize() == blockTable.block_size());
                 duration += pkt->getSize() * bandwidth;
             } else if (status.oper == EPOCH) {
+                assert(!isFrozen);
                 Tick frozenDuration =
                         pageTable.block_size() * epochPages * bandwidth;
                 frozenDuration += blockTable.length() * 16 * bandwidth;
@@ -199,7 +200,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     }
 
     if (isFrozen) {
-        ++frozenWrites;
+        if (pkt->isWrite()) ++frozenWrites;
         pkt->setCrossAddr();
     }
     // go ahead and deal with the packet and put the response in the
@@ -241,6 +242,10 @@ SimpleMemory::unfreeze()
 {
     assert(isFrozen);
     isFrozen = false;
+    if (retryReq) {
+        retryReq = false;
+        port.sendRetry();
+    }
 }
 
 void
