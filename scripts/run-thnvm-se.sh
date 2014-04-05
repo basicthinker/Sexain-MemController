@@ -12,7 +12,7 @@ CPU_CLOCK=3GHz
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
 DRAM_SIZE=2GB
-ATT_LENGTH=0
+ATT_LENGTH=1024
 MC_PT_LEN=256 # secondary page table length
 
 L1D_SIZE=32kB
@@ -32,7 +32,7 @@ OUT_DIR=~/Documents/gem5out-b$ATT_LENGTH-p$MC_PT_LEN
 to_run=0
 to_test=0
 
-while getopts "hc:o:b:t:l" opt; do
+while getopts "hc:o:b:g:a:t:l" opt; do
   case $opt in
     h)
       $GEM5 -h
@@ -59,6 +59,12 @@ while getopts "hc:o:b:t:l" opt; do
     t)
       ALIAS=$OPTARG
       to_test=1
+      ;;
+    g)
+      GEM5OPT+=" $OPTARG"
+      ;;
+    a)
+      OPTIONS+=" $OPTARG"
       ;;
     \?)
       exit -1
@@ -88,10 +94,10 @@ OPTIONS+=" --l3_assoc=$L3_ASSOC"
 OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
 
 if [ $to_run = 1 ]; then
-  $GEM5 -d $OUT_DIR/$ALIAS $SE_SCRIPT $OPTIONS $COMMAND
+  $GEM5 -d $OUT_DIR/$ALIAS $GEM5OPT $SE_SCRIPT $OPTIONS $COMMAND
 fi
 
-if [ $to_test = 1 ]; then
+if [ $? -eq 0 ] && [ $to_test = 1 ]; then
   $GEM5 $SE_SCRIPT $OPTIONS --check-cpu-2006=$ALIAS 1>&2
 fi
 
