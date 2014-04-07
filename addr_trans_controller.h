@@ -31,11 +31,11 @@ class AddrTransController {
   virtual ~AddrTransController() { }
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
-  virtual uint64_t StoreAddr(uint64_t phy_addr, bool cross = false);
+  virtual uint64_t StoreAddr(uint64_t phy_addr, bool frozen = false);
   ///
   /// Predict the operation(s) for storing to the specified physical address
   ///
-  virtual AddrStatus Probe(uint64_t phy_addr, bool cross = false);
+  virtual AddrStatus Probe(uint64_t phy_addr, bool frozen = false);
   virtual void NewEpoch();
 
   int cache_block_size() const { return block_table_.block_size(); }
@@ -57,6 +57,10 @@ class AddrTransController {
   const uint64_t nvm_size_;
   const uint64_t phy_limit_;
   MemStore* mem_store_;
+  ///
+  /// Judge whether a DRAM physical addr is cross to NVM
+  ///
+  bool isCross(uint64_t dram_phy_addr);
   ///
   /// List of DRAM physical addresses
   /// that occupy the NVM block translation table

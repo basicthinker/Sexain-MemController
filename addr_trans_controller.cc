@@ -8,10 +8,9 @@ uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
   if (isDRAM(phy_addr)) {
     uint64_t mach_addr = block_table_.LoadAddr(phy_addr);
     if (mach_addr == phy_addr) { // not cross addr
-      mem_store_->OnDRAMRead(phy_addr);
-      // suppose the page table is pre-modified
       mach_addr = page_table_.LoadAddr(phy_addr);
     } // else suppose the version buffer is in DRAM: no additional latency
+    mem_store_->OnDRAMRead(phy_addr);
     return mach_addr;
   } else {
     uint64_t mach_addr = block_table_.LoadAddr(phy_addr);
@@ -41,35 +40,32 @@ uint64_t AddrTransController::StoreNVMAddr(uint64_t phy_addr, bool no_epoch) {
   return mach_addr;
 } 
 
-uint64_t AddrTransController::StoreAddr(uint64_t phy_addr, bool cross) {
-  assert(phy_addr < phy_limit());
-  if (isDRAM(phy_addr)) {
-    if (cross) {
-      if (block_table_.Probe(phy_addr) == EPOCH) return INVAL_ADDR;
-      cross_list_.push_back(phy_addr);
-      return StoreNVMAddr(phy_addr, true);
-    }
-    return StoreDRAMAddr(phy_addr);
-  } else {
-    assert(!cross);
-    return StoreNVMAddr(phy_addr);
-  }
+bool AddrTransController::isCross(uint64_t dram_phy_addr) {
+  assert(isDRAM(dram_phy_addr));
+  return block_table_.LoadAddr(dram_phy_addr) != dram_phy_addr; 
 }
 
-AddrStatus AddrTransController::Probe(uint64_t phy_addr, bool cross) {
+uint64_t AddrTransController::StoreAddr(uint64_t phy_addr, bool frozen) {
+  assert(phy_addr < phy_limit());
+  if (isDRAM(phy_addr)) {
+    bool cross = isCross(phy_addr);
+    if (!frozen && !cross) {
+      return StoreDRAMAddr(phy_addr);
+    }
+    if (!cross) cross_list_.push_back(phy_addr);
+  }
+  return StoreNVMAddr(phy_addr);
+}
+
+AddrStatus AddrTransController::Probe(uint64_t phy_addr, bool frozen) {
   assert(phy_addr < phy_limit());
   AddrStatus status;
   status.type = isDRAM(phy_addr) ? DRAM_ADDR : NVM_ADDR;
-  if (status.type) { // DRAM_ADDR
-    if (cross) {
-      status.oper = block_table_.Probe(phy_addr);
-      if (status.oper == EPOCH) status.type = RETRY_REQ;
-    } else {
-      status.oper = page_table_.Probe(phy_addr);
-    }
+  if (status.type == DRAM_ADDR && !frozen && !isCross(phy_addr)) {
+    status.oper = page_table_.Probe(phy_addr);
   } else {
-    assert(!cross);
     status.oper = block_table_.Probe(phy_addr);
+    if (frozen && status.oper == EPOCH) status.type = RETRY_REQ;
   }
   return status;
 }

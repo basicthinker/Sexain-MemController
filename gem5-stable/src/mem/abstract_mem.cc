@@ -522,6 +522,7 @@ void
 AbstractMemory::OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     int size = (1 << bits);
+    assert(size == blockTable.block_size());
     memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size); 
 }
 
