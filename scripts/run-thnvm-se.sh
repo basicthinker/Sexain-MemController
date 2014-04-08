@@ -62,6 +62,7 @@ while getopts "hc:o:b:g:a:t:l" opt; do
       ;;
     g)
       GEM5OPT+=" $OPTARG"
+      to_run=1
       ;;
     a)
       OPTIONS+=" $OPTARG"

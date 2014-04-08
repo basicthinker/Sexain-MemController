@@ -9,8 +9,6 @@
 #include "mem_store.h"
 #include "addr_trans_table.h"
 
-#define INVAL_ADDR uint64_t(-1)
-
 enum AddrType {
   NVM_ADDR = 0,
   DRAM_ADDR = 1,
@@ -46,13 +44,13 @@ class AddrTransController {
   void set_mem_store(MemStore* mem_store) { mem_store_ = mem_store; }
 
  protected:
-  virtual bool isDRAM(uint64_t phy_addr) { return phy_addr < dram_size_; }
+  virtual bool isDRAM(uint64_t phy_addr);
   AddrTransTable& block_table_;
   AddrTransTable& page_table_; 
 
  private:
   uint64_t StoreDRAMAddr(uint64_t phy_addr);
-  uint64_t StoreNVMAddr(uint64_t phy_addr, bool no_epoch = false);
+  uint64_t StoreNVMAddr(uint64_t phy_addr);
   const uint64_t dram_size_;
   const uint64_t nvm_size_;
   const uint64_t phy_limit_;
@@ -96,6 +94,15 @@ inline AddrTransController::AddrTransController(uint64_t phy_range,
         blk_tbl, pg_tbl, mem_store) {
 
   assert(phy_limit() == phy_range);
+}
+
+inline bool AddrTransController::isDRAM(uint64_t phy_addr) {
+  return phy_addr < dram_size_;
+}
+
+inline bool AddrTransController::isCross(uint64_t dram_phy_addr) {
+  assert(isDRAM(dram_phy_addr));
+  return block_table_.LoadAddr(dram_phy_addr) != dram_phy_addr;
 }
 
 #endif // SEXAIN_ADDR_TRANS_CONTROLLER_H_

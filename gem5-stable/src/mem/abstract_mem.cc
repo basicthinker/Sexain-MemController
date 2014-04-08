@@ -306,9 +306,10 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 #define CASE(A, T)                                                        \
   case sizeof(T):                                                         \
     DPRINTF(MemoryAccess,"%s from %s of size %i on address 0x%x data " \
-            "0x%x %c\n", A, system()->getMasterName(pkt->req->masterId()),\
+            "0x%x %c %c\n", A, system()->getMasterName(pkt->req->masterId()),\
             pkt->getSize(), pkt->getAddr(), pkt->get<T>(),                \
-            pkt->req->isUncacheable() ? 'U' : 'C');                       \
+            pkt->req->isUncacheable() ? 'U' : 'C',                        \
+            pkt->isFrozen() ? 'F' : 'N');                                 \
   break
 
 
@@ -320,10 +321,11 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
           CASE(A, uint16_t);                                            \
           CASE(A, uint8_t);                                             \
           default:                                                      \
-            DPRINTF(MemoryAccess, "%s from %s of size %i on address 0x%x %c\n",\
+            DPRINTF(MemoryAccess, "%s from %s of size %i on address 0x%x %c %c\n",\
                     A, system()->getMasterName(pkt->req->masterId()),          \
                     pkt->getSize(), pkt->getAddr(),                            \
-                    pkt->req->isUncacheable() ? 'U' : 'C');                    \
+                    pkt->req->isUncacheable() ? 'U' : 'C',                     \
+                    pkt->isFrozen() ? 'F' : 'N');                              \
             DDUMP(MemoryAccess, pkt->getPtr<uint8_t>(), pkt->getSize());       \
         }                                                                      \
     } while (0)
@@ -378,8 +380,7 @@ AbstractMemory::access(PacketPtr pkt)
 
         if (overwrite_mem) {
             uint64_t local_addr = addrController.StoreAddr(localAddr(pkt),
-                    pkt->isCrossAddr());
-            assert(local_addr != INVAL_ADDR); // should be prevented by Probe()
+                    pkt->isFrozen());
             host_addr = hostAddr(local_addr);
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
@@ -408,8 +409,7 @@ AbstractMemory::access(PacketPtr pkt)
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.cache_block_size());
                 uint64_t local_addr = addrController.StoreAddr(localAddr(pkt),
-                        pkt->isCrossAddr());
-                assert(local_addr != INVAL_ADDR); // should have be prevented
+                        pkt->isFrozen());
                 uint8_t* host_addr = hostAddr(local_addr);
                 memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",

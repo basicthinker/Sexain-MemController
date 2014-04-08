@@ -168,24 +168,25 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // the bandwidth limit
         Tick duration = pkt->getSize() * bandwidth;
 
-        if (isLatATT && pkt->isWrite()) {
+        if (pkt->isWrite()) {
             AddrStatus status = addrController.Probe(localAddr(pkt), isFrozen);
             if (status.type == RETRY_REQ) {
                 retryReq = true;
                 return false;
-            } else if (status.type == NVM_ADDR && status.oper == WRBACK) {
+            } else if (isLatATT && status.type == NVM_ADDR && status.oper == WRBACK) {
                 assert(pkt->getSize() == blockTable.block_size());
                 duration += pkt->getSize() * bandwidth;
             } else if (status.oper == EPOCH) {
                 assert(!isFrozen);
-                Tick frozenDuration =
-                        pageTable.block_size() * epochPages * bandwidth;
-                frozenDuration += blockTable.length() * 16 * bandwidth;
-                frozenDuration += pageTable.length() * 16 * bandwidth;
+                if (isLatATT) {
+                    Tick frozenDuration =
+                            pageTable.block_size() * epochPages * bandwidth;
+                    frozenDuration += blockTable.length() * 16 * bandwidth;
+                    frozenDuration += pageTable.length() * 16 * bandwidth;
 
-                schedule(unfreezeEvent, curTick() + frozenDuration);
-                isFrozen = true;
-
+                    schedule(unfreezeEvent, curTick() + frozenDuration);
+                    isFrozen = true;
+                }
                 addrController.NewEpoch();
             }
         }
@@ -201,7 +202,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
 
     if (isFrozen) {
         if (pkt->isWrite()) ++frozenWrites;
-        pkt->setCrossAddr();
+        pkt->setFrozen();
     }
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
