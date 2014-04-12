@@ -37,6 +37,8 @@ int AddrTransTable::Clean() {
     entries_[i].state = CLEAN_ENTRY;
     i = queues_[DIRTY_ENTRY].PopFront();
   }
+  assert(queues_[DIRTY_ENTRY].Empty() &&
+      GetLength(CLEAN_ENTRY) + GetLength(FREE_ENTRY) == length_);
 }
 
 void AddrTransTable::RevokeTag(uint64_t tag) {

@@ -37,6 +37,7 @@ class AddrTransTable : public IndexArray {
   void RevokeTag(uint64_t phy_tag);
 
   bool IsEmpty(ATTState state) { return queues_[state].Empty(); }
+  int GetLength(ATTState state) { return queues_[state].length(); }
 
   uint64_t Tag(uint64_t addr) { return addr >> block_bits_; }
   int block_size() const { return 1 << block_bits_; }
