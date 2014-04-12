@@ -3,88 +3,39 @@
 
 #include "addr_trans_table.h"
 
-uint64_t AddrTransTable::LoadAddr(uint64_t phy_addr) {
+uint8_t* AddrTransTable::Lookup(uint64_t phy_addr) {
   uint64_t phy_tag = Tag(phy_addr);
   std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
-    return phy_addr;
+    return NULL;
   } else {
     ATTEntry& entry = entries_[it->second];
-    assert(entry.valid && entry.phy_tag == phy_tag);
-    queues_[entry.dirty].Remove(it->second);
-    queues_[entry.dirty].PushBack(it->second);
-    return Trans(phy_addr, entry.mach_tag);
+    assert(entry.state != FREE_ENTRY && entry.phy_tag == phy_tag);
+    queues_[entry.state].Remove(it->second);
+    queues_[entry.state].PushBack(it->second);
+    return Trans(phy_addr, entry.mach_addr);
   }
 }
 
-enum ATTOperation AddrTransTable::Probe(uint64_t phy_addr) {
-  assert(length() != 0);
-  uint64_t tag = Tag(phy_addr);
-  std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(tag);
-  if (it == tag_index_.end()) { // not hit
-    if (queues_[0].Empty()) return EPOCH;
-    int i = queues_[0].Front(); // clean queue
-    ATTEntry& entry = entries_[i];
+void AddrTransTable::SetupTag(uint64_t phy_tag, uint8_t* mach_addr) {
+  assert(tag_index_.find(phy_tag) == tag_index_.end());
+  assert(!queues_[FREE_ENTRY].Empty());
+  int i = queues_[FREE_ENTRY].PopFront();
+  tag_index_[phy_tag] = i;
+  queues_[DIRTY_ENTRY].PushBack(i);
 
-    if (entry.valid) {
-      return WRBACK;
-    } else {
-      return REGWR; // direct write
-    }
-  } else {
-    ATTEntry& entry = entries_[it->second];
-    assert(entry.valid && entry.phy_tag == tag);
-    if (entry.dirty) {
-      return REGWR; // overwrite
-    } else {
-      return SHRINK;
-    }
-  }
+  entries_[i].phy_tag = phy_tag;
+  entries_[i].mach_addr = mach_addr;
+  entries_[i].state = DIRTY_ENTRY;
 }
 
-uint64_t AddrTransTable::StoreAddr(uint64_t phy_addr) {
-  uint64_t phy_tag = Tag(phy_addr);
-  std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
-  if (it == tag_index_.end()) { // not hit
-    assert(!queues_[0].Empty());
-    int i = queues_[0].PopFront(); // clean queue
-    ATTEntry& entry = entries_[i];
-
-    if (entry.valid) {
-      mem_store_.OnWriteBack(entry.phy_tag, entry.mach_tag, block_bits_);
-      tag_index_.erase(entry.phy_tag);
-      mapper_.UnmapShadowTag(entry.mach_tag);
-    }
-
-    uint64_t mach_tag = mapper_.MapShadowTag(phy_tag, i);
-    mem_store_.OnNewMapping(phy_tag, mach_tag, block_bits_);
-    if (!entry.valid) mem_store_.OnDirectWrite(phy_tag, mach_tag, block_bits_);
-
-    entries_[i].phy_tag = phy_tag;
-    entries_[i].mach_tag = mach_tag;
-    entries_[i].dirty = true;
-    entries_[i].valid = true;
-
-    queues_[1].PushBack(i); // dirty queue
-    tag_index_[phy_tag] = i;
-    return Trans(phy_addr, mach_tag);
-
-  } else { // hit
-    ATTEntry& entry = entries_[it->second];
-    assert(entry.valid && entry.phy_tag == phy_tag);
-    queues_[entry.dirty].Remove(it->second);
-    if (entry.dirty) {
-      mem_store_.OnOverwrite(entry.phy_tag, entry.mach_tag, block_bits_);
-      queues_[1].PushBack(it->second);
-      return Trans(phy_addr, entry.mach_tag);
-    } else {
-      mem_store_.OnShrink(entry.phy_tag, entry.mach_tag, block_bits_);
-      tag_index_.erase(it);
-      entry.valid = false;
-      queues_[0].PushFront(it->second);
-      mapper_.UnmapShadowTag(entry.mach_tag);
-      return phy_addr;
-    }
+int AddrTransTable::Clean() {
+  int i = queues_[DIRTY_ENTRY].PopFront();
+  while (i != -EINVAL) {
+    queues_[CLEAN_ENTRY].PushBack(i);
+    assert(entries_[i].state == DIRTY_ENTRY);
+    entries_[i].state = CLEAN_ENTRY;
+    i = queues_[DIRTY_ENTRY].PopFront();
   }
 }
 
@@ -92,12 +43,11 @@ void AddrTransTable::RevokeTag(uint64_t tag) {
   std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(tag);
   if (it != tag_index_.end()) {
     ATTEntry& entry = entries_[it->second];
-    assert(entry.valid && entry.phy_tag == tag);
-    assert(!entry.dirty);
-    mem_store_.OnRevoke(entry.phy_tag, entry.mach_tag, block_bits_);
+    assert(entry.state != FREE_ENTRY && entry.phy_tag == tag);
+    queues_[entry.state].Remove(it->second);
+    queues_[FREE_ENTRY].PushBack(it->second);
+    entry.state = FREE_ENTRY;
     tag_index_.erase(it);
-    entry.valid = false;
-    mapper_.UnmapShadowTag(entry.mach_tag);
   }
 }
 
