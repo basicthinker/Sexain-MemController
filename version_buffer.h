@@ -4,9 +4,16 @@
 #ifndef SEXAIN_VERSION_BUFFER_H_
 #define SEXAIN_VERSION_BUFFER_H_
 
+#include <vector>
 #include <set>
 #include <cstdint>
 #include <cassert>
+
+enum BufferState {
+  IN_USE_SLOT = 0,
+  BACKUP_SLOT,
+  FREE_SLOT,
+};
 
 class VersionBuffer {
  public:
@@ -14,7 +21,7 @@ class VersionBuffer {
   ~VersionBuffer();
 
   uint8_t* NewBlock();
-  void FreeBlock(uint8_t* mach_addr, bool is_in_use);
+  void FreeBlock(uint8_t* mach_addr, BufferState bs);
   void PinBlock(uint8_t* mach_addr);
 
   int block_size() const { return 1 << block_bits_; }
@@ -27,17 +34,15 @@ class VersionBuffer {
   const int block_bits_;
   const int block_mask_;
   const int length_;
-  std::set<int> in_use_;
-  std::set<int> backup_;
-  std::set<int> free_;
+  std::vector<std::set<int>> sets_;
 };
 
 inline VersionBuffer::VersionBuffer(int length, int block_bits) :
     length_(length), block_bits_(block_bits),
-    block_mask_(block_size() - 1) {
+    block_mask_(block_size() - 1), sets_(3) {
   data = new uint8_t[length_ << block_bits_];
   for (int i = 0; i < length_; ++i) {
-    free_.insert(i);
+    sets_[FREE_SLOT].insert(i);
   }
 }
 

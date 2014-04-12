@@ -4,35 +4,27 @@
 #include "version_buffer.h"
 
 uint8_t* VersionBuffer::NewBlock() {
-  assert(!free_.empty());
-  int i = *free_.begin();
-  free_.erase(free_.begin());
-  in_use_.insert(i);
+  assert(!sets_[FREE_SLOT].empty());
+  int i = *sets_[FREE_SLOT].begin();
+  sets_[FREE_SLOT].erase(sets_[FREE_SLOT].begin());
+  sets_[IN_USE_SLOT].insert(i);
   return At(i);
 }
 
-void VersionBuffer::FreeBlock(uint8_t* host_addr, bool is_in_use) {
+void VersionBuffer::FreeBlock(uint8_t* host_addr, BufferState bs) {
   int i = Index(host_addr);
-  std::set<int>::iterator it_use = in_use_.find(i);
-  std::set<int>::iterator it_backup = backup_.find(i);
-  if (is_in_use) {
-    assert(it_use != in_use_.end());
-    in_use_.erase(it_use);
-    assert(it_backup == backup_.end());
-  } else {
-    assert(it_backup != backup_.end());
-    backup_.erase(it_backup);
-    assert(it_use == in_use_.end());
-  }
-  free_.insert(i);
+  std::set<int>::iterator it = sets_[bs].find(i);
+  assert(it != sets_[bs].end());
+  sets_[bs].erase(it);
+  sets_[FREE_SLOT].insert(i);
 }
 
 void VersionBuffer::PinBlock(uint8_t* host_addr) {
   int i = Index(host_addr);
-  assert(free_.find(i) == free_.end());
-  std::set<int>::iterator it = in_use_.find(i);
-  assert(it != in_use_.end());
-  in_use_.erase(it);
-  backup_.insert(i);
+  assert(sets_[FREE_SLOT].count(i) == 0);
+  std::set<int>::iterator it = sets_[IN_USE_SLOT].find(i);
+  assert(it != sets_[IN_USE_SLOT].end());
+  sets_[IN_USE_SLOT].erase(it);
+  sets_[BACKUP_SLOT].insert(i);
 }
 
