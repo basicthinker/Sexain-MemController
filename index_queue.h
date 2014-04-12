@@ -25,9 +25,8 @@ class IndexQueue {
   void Remove(int i);
   int PopFront();
   void PushBack(int i);
-  void PushFront(int i);
-  std::set<int> Indexes() const;
-  int GetLength() const;
+
+  int length() const { return length_; }
  private:
   IndexNode& FrontNode();
   IndexNode& BackNode();
@@ -36,11 +35,13 @@ class IndexQueue {
 
   IndexNode head_;
   IndexArray& array_;
+  int length_;
 };
 
 inline IndexQueue::IndexQueue(IndexArray& arr) : array_(arr) {
   SetFront(-EINVAL);
   SetBack(-EINVAL);
+  length_ = 0;
 }
 
 inline IndexNode& IndexQueue::FrontNode() {
@@ -55,6 +56,7 @@ inline IndexNode& IndexQueue::BackNode() {
 
 inline bool IndexQueue::Empty() const {
   assert((Front() == -EINVAL) == (Back() == -EINVAL));
+  assert((length_ == 0) == (Front() == -EINVAL));
   return Front() == -EINVAL;
 }
 
@@ -63,33 +65,6 @@ inline int IndexQueue::PopFront() {
   const int front = Front();
   Remove(front);
   return front;
-}
-
-inline std::set<int> IndexQueue::Indexes() const {
-  std::set<int> indexes;
-  for (int i = Front(); i != -EINVAL; i = array_[i].second) {
-    bool ret = indexes.insert(i).second;
-    assert(ret);
-  }
-  return indexes;
-}
-
-inline int IndexQueue::GetLength() const {
-  int len = 0;
-  for (int i = Front(); i != -EINVAL; i = array_[i].second) {
-    ++len;
-  }
-  return len;
-}
-
-inline std::set<int> IndexIntersection(const IndexQueue& a,
-      const IndexQueue& b) {
-  std::set<int> ai = a.Indexes();
-  std::set<int> bi = b.Indexes();
-  std::set<int> common;
-  set_intersection(ai.begin(), ai.end(), bi.begin(), bi.end(),
-      std::inserter(common, common.begin()));
-  return common;
 }
 
 #endif // SEXAIN_INDEX_QUEUE_H_

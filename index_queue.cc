@@ -24,6 +24,8 @@ void IndexQueue::Remove(int i) {
 
   array_[i].first = -EINVAL;
   array_[i].second = -EINVAL;
+
+  --length_;
 }
 
 void IndexQueue::PushBack(int i) {
@@ -37,18 +39,7 @@ void IndexQueue::PushBack(int i) {
     BackNode().second = i;
     SetBack(i);
   }
-}
 
-void IndexQueue::PushFront(int i) {
-  if (Empty()) {
-    array_[i].first = array_[i].second = -EINVAL;
-    SetFront(i);
-    SetBack(i);
-  } else {
-    array_[i].first = -EINVAL;
-    array_[i].second = Front();
-    FrontNode().first = i;
-    SetFront(i);
-  }
+  ++length_;
 }
 
