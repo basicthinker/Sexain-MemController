@@ -17,46 +17,50 @@ enum BufferState {
 
 class VersionBuffer {
  public:
-  VersionBuffer(int length, int block_bits);
-  ~VersionBuffer();
+  VersionBuffer(uint64_t addr_base, int length, int block_bits);
 
-  uint8_t* NewBlock();
-  void FreeBlock(uint8_t* mach_addr, BufferState bs);
-  void PinBlock(uint8_t* mach_addr);
+  uint64_t NewBlock();
+  void FreeBlock(uint64_t mach_addr, BufferState bs);
+  void PinBlock(uint64_t mach_addr);
 
-  int block_size() const { return 1 << block_bits_; }
+  uint64_t addr_base() const { return addr_base_; }
   int length() const { return length_; }
+  int block_size() const { return 1 << block_bits_; }
+  ///
+  /// The total address space size that this buffer area covers in bytes
+  ///
+  uint64_t Size() const;
  private:
-  uint8_t* At(int index);
-  int Index(uint8_t* mach_addr);
+  uint64_t At(int index);
+  int Index(uint64_t mach_addr);
 
-  uint8_t* data;
+  uint64_t addr_base_;
+  const int length_;
   const int block_bits_;
   const int block_mask_;
-  const int length_;
   std::vector<std::set<int>> sets_;
 };
 
-inline VersionBuffer::VersionBuffer(int length, int block_bits) :
-    length_(length), block_bits_(block_bits),
-    block_mask_(block_size() - 1), sets_(3) {
-  data = new uint8_t[length_ << block_bits_];
+inline VersionBuffer::VersionBuffer(
+    uint64_t addr_base, int length, int block_bits) :
+    addr_base_(addr_base), length_(length),
+    block_bits_(block_bits), block_mask_(block_size() - 1), sets_(3) {
   for (int i = 0; i < length_; ++i) {
     sets_[FREE_SLOT].insert(i);
   }
 }
 
-inline VersionBuffer::~VersionBuffer() {
-  delete[] data;
+inline uint64_t VersionBuffer::Size() const {
+  return length_ << block_bits_;
 }
 
-inline uint8_t* VersionBuffer::At(int index) {
+inline uint64_t VersionBuffer::At(int index) {
   assert(index >= 0 && index < length_);
-  return data + (index << block_bits_);
+  return addr_base_ + (index << block_bits_);
 }
 
-inline int VersionBuffer::Index(uint8_t* mach_addr) {
-  int bytes = mach_addr - data;
+inline int VersionBuffer::Index(uint64_t mach_addr) {
+  int bytes = mach_addr - addr_base_;
   assert(bytes >= 0 && (bytes & block_mask_) == 0);
   int i = bytes >> block_bits_;
   assert(i < length_);

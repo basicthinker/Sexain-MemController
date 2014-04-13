@@ -3,7 +3,7 @@
 
 #include "version_buffer.h"
 
-uint8_t* VersionBuffer::NewBlock() {
+uint64_t VersionBuffer::NewBlock() {
   assert(!sets_[FREE_SLOT].empty());
   int i = *sets_[FREE_SLOT].begin();
   sets_[FREE_SLOT].erase(sets_[FREE_SLOT].begin());
@@ -11,7 +11,7 @@ uint8_t* VersionBuffer::NewBlock() {
   return At(i);
 }
 
-void VersionBuffer::FreeBlock(uint8_t* host_addr, BufferState bs) {
+void VersionBuffer::FreeBlock(uint64_t host_addr, BufferState bs) {
   int i = Index(host_addr);
   std::set<int>::iterator it = sets_[bs].find(i);
   assert(it != sets_[bs].end());
@@ -19,7 +19,7 @@ void VersionBuffer::FreeBlock(uint8_t* host_addr, BufferState bs) {
   sets_[FREE_SLOT].insert(i);
 }
 
-void VersionBuffer::PinBlock(uint8_t* host_addr) {
+void VersionBuffer::PinBlock(uint64_t host_addr) {
   int i = Index(host_addr);
   assert(sets_[FREE_SLOT].count(i) == 0);
   std::set<int>::iterator it = sets_[IN_USE_SLOT].find(i);
