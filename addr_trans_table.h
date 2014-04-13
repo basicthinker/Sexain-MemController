@@ -18,7 +18,7 @@ enum ATTState {
 
 struct ATTEntry {
   uint64_t phy_tag;
-  uint8_t* mach_addr;
+  uint64_t mach_tag;
   IndexNode queue_node;
   ATTState state;
 
@@ -31,8 +31,8 @@ class AddrTransTable : public IndexArray {
  public:
   AddrTransTable(int length, int block_bits);
 
-  uint8_t* Lookup(uint64_t phy_addr);
-  void SetupTag(uint64_t phy_tag, uint8_t* mach_addr);
+  uint64_t Lookup(uint64_t phy_addr);
+  void SetupTag(uint64_t phy_tag, uint64_t mach_tag);
   int Clean();
   void RevokeTag(uint64_t phy_tag);
 
@@ -45,8 +45,7 @@ class AddrTransTable : public IndexArray {
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
 
  private:
-  uint64_t Addr(uint64_t tag) const { return tag << block_bits_; }
-  uint8_t* Trans(uint64_t phy_addr, uint8_t* mach_addr);
+  uint64_t Trans(uint64_t phy_addr, uint64_t mach_tag);
 
   const int block_bits_;
   const uint64_t block_mask_;
@@ -64,8 +63,8 @@ inline AddrTransTable::AddrTransTable(int length, int block_bits) :
   }
 }
 
-inline uint8_t* AddrTransTable::Trans(uint64_t phy_addr, uint8_t* mach_addr) {
-  return mach_addr + (phy_addr & block_mask_);
+inline uint64_t AddrTransTable::Trans(uint64_t phy_addr, uint64_t mach_tag) {
+  return (mach_tag << block_bits_) + (phy_addr & block_mask_);
 }
 
 #endif // SEXAIN_ADDR_TRANS_TABLE_H_
