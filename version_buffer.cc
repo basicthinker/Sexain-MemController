@@ -11,16 +11,16 @@ uint64_t VersionBuffer::NewBlock() {
   return At(i);
 }
 
-void VersionBuffer::FreeBlock(uint64_t host_addr, BufferState bs) {
-  int i = Index(host_addr);
+void VersionBuffer::FreeBlock(uint64_t mach_addr, BufferState bs) {
+  int i = Index(mach_addr);
   std::set<int>::iterator it = sets_[bs].find(i);
   assert(it != sets_[bs].end());
   sets_[bs].erase(it);
   sets_[FREE_SLOT].insert(i);
 }
 
-void VersionBuffer::PinBlock(uint64_t host_addr) {
-  int i = Index(host_addr);
+void VersionBuffer::PinBlock(uint64_t mach_addr) {
+  int i = Index(mach_addr);
   assert(sets_[FREE_SLOT].count(i) == 0);
   std::set<int>::iterator it = sets_[IN_USE_SLOT].find(i);
   assert(it != sets_[IN_USE_SLOT].end());
