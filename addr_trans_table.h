@@ -33,13 +33,19 @@ class AddrTransTable : public IndexArray {
 
   uint64_t Lookup(uint64_t phy_tag, ATTState& state);
   void Setup(uint64_t phy_tag, uint64_t mach_addr);
-  int Clean();
   void Revoke(uint64_t phy_tag);
+  ///
+  /// Replace an existing clean mapping with the specified one.
+  /// @return the replaced clean mapping
+  ///
+  std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_addr);
+  int Clean();
 
   bool IsEmpty(ATTState state) { return queues_[state].Empty(); }
   int GetLength(ATTState state) { return queues_[state].length(); }
 
   uint64_t Tag(uint64_t addr) { return addr >> block_bits_; }
+  uint64_t Addr(uint64_t tag) { return tag << block_bits_; }
   uint64_t Translate(uint64_t phy_addr, uint64_t mach_addr);
 
   int length() const { return length_; }
