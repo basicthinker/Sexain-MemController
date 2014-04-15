@@ -3,8 +3,10 @@
 
 #include "addr_trans_table.h"
 
+using namespace std;
+
 uint64_t AddrTransTable::Lookup(uint64_t phy_tag, ATTState* state) {
-  std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
+  unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
     if (state) *state = FREE_ENTRY;
     return Addr(phy_tag);
@@ -32,7 +34,7 @@ void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_addr) {
 }
 
 void AddrTransTable::Revoke(uint64_t phy_tag) {
-  std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
+  unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it != tag_index_.end()) {
     ATTEntry& entry = entries_[it->second];
     assert(entry.state != FREE_ENTRY && entry.phy_tag == phy_tag);
@@ -43,12 +45,16 @@ void AddrTransTable::Revoke(uint64_t phy_tag) {
   }
 }
 
-std::pair<uint64_t, uint64_t> AddrTransTable::Replace(
+pair<uint64_t, uint64_t> AddrTransTable::Replace(
     uint64_t phy_tag, uint64_t mach_addr) {
-  int i = queues_[CLEAN_ENTRY].Front();
+  const int i = queues_[CLEAN_ENTRY].Front();
   assert(i != -EINVAL);
+  pair<uint64_t, uint64_t> replaced;
+  replaced.first = entries_[i].phy_tag;
+  replaced.second = entries_[i].mach_addr;
   Revoke(entries_[i].phy_tag);
   Setup(phy_tag, mach_addr);
+  return replaced;
 }
 
 int AddrTransTable::Clean() {
