@@ -3,68 +3,63 @@
 
 #include "addr_trans_controller.h"
 
+using namespace std;
+
 uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
   assert(phy_addr < phy_limit());
-  uint64_t mach_addr = block_table_.LoadAddr(phy_addr);
+  uint64_t phy_tag = att_.Tag(phy_addr);
+  uint64_t final_addr = att_.Translate(phy_addr, att_.Lookup(phy_tag, NULL));
   if (isDRAM(phy_addr)) {
-    if (mach_addr == phy_addr) { // not cross addr
-      mach_addr = page_table_.LoadAddr(phy_addr);
-    } // else suppose the version buffer is in DRAM: no additional latency
-    mem_store_->OnDRAMRead(phy_addr);
+    mem_store_->OnDRAMRead(final_addr, att_.block_size());
   } else {
-    mem_store_->OnNVMRead(mach_addr);
+    mem_store_->OnNVMRead(final_addr, att_.block_size());
   }
-  return mach_addr;
+  return final_addr;
 }
 
-uint64_t AddrTransController::StoreDRAMAddr(uint64_t phy_addr) {
-  // pre-modification that should happen in the end of epoch
-  uint64_t mach_addr = page_table_.StoreAddr(phy_addr);
-  mem_store_->OnDRAMWrite(phy_addr); // as in-place update
-  return mach_addr; 
+uint64_t AddrTransController::NVMStore(uint64_t phy_addr,
+    AddrTransTable* att, VersionBuffer* vb, MemStore* ms) {
+  ATTState state;
+  uint64_t phy_tag = att->Tag(phy_addr);
+  uint64_t mach_addr = att->Lookup(phy_tag, &state);
+  if (state == CLEAN_ENTRY) {
+    att->Revoke(phy_tag);
+    vb->PinBlock(mach_addr);
+    return phy_addr;
+  } else if (state == FREE_ENTRY) {
+    if (att->GetLength(DIRTY_ENTRY) == att->length())
+      return INVAL_ADDR; // indicates new epoch
+
+    mach_addr = vb->NewBlock();
+    if (!att->IsEmpty(FREE_ENTRY)) {
+      att->Setup(phy_tag, mach_addr);
+    } else {
+      pair<uint64_t, uint64_t> mapping = att->Replace(phy_tag, mach_addr);
+      ms->OnNVMMove(att->Addr(mapping.first), mapping.second,
+          att->block_size());
+      vb->PinBlock(mapping.second);
+    }
+  }
+  return att->Translate(phy_addr, mach_addr);
 }
 
-uint64_t AddrTransController::StoreNVMAddr(uint64_t phy_addr) {
-  uint64_t mach_addr = block_table_.StoreAddr(phy_addr);
-  mem_store_->OnNVMWrite(mach_addr);
-  return mach_addr;
-} 
+uint64_t AddrTransController::DRAMStore(uint64_t phy_addr, bool frozen,
+    AddrTransTable* att, VersionBuffer* vb, MemStore* ms) {
+  return phy_addr; // TODO
+}
 
 uint64_t AddrTransController::StoreAddr(uint64_t phy_addr, bool frozen) {
   assert(phy_addr < phy_limit());
   if (isDRAM(phy_addr)) {
-    bool cross = isCross(phy_addr);
-    if (!frozen && !cross) {
-      return StoreDRAMAddr(phy_addr);
-    }
-    cross_list_.push_back(phy_addr);
-  }
-  return StoreNVMAddr(phy_addr);
-}
-
-AddrStatus AddrTransController::Probe(uint64_t phy_addr, bool frozen) {
-  assert(phy_addr < phy_limit());
-  AddrStatus status;
-  status.type = isDRAM(phy_addr) ? DRAM_ADDR : NVM_ADDR;
-  if (status.type == DRAM_ADDR && !frozen && !isCross(phy_addr)) {
-    status.oper = page_table_.Probe(phy_addr);
+    return DRAMStore(phy_addr, frozen, &att_, &tmp_buffer_, mem_store_);
   } else {
-    status.oper = block_table_.Probe(phy_addr);
-    if (frozen && status.oper == EPOCH) status.type = RETRY_REQ;
+    return NVMStore(phy_addr, &att_, &att_buffer_, mem_store_);
   }
-  return status;
 }
 
 void AddrTransController::NewEpoch() {
-  mem_store_->OnEpochEnd();
-  page_table_.NewEpoch();
-  block_table_.NewEpoch();
-  for (std::vector<uint64_t>::iterator it = cross_list_.begin();
-      it != cross_list_.end(); ++it) {
-    assert(isDRAM(*it));
-    block_table_.RevokeTag(block_table_.Tag(*it));
-  }
-  cross_list_.clear();
+  att_.Clean();
+  att_buffer_.CleanBackup();
   // Migration goes after this should it exist.
 }
 

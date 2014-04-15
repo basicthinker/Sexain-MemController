@@ -6,103 +6,66 @@
 
 #include <cassert>
 #include <vector>
-#include "mem_store.h"
+#include "version_buffer.h"
 #include "addr_trans_table.h"
+#include "mem_store.h"
 
-enum AddrType {
-  NVM_ADDR = 0,
-  DRAM_ADDR = 1,
-  RETRY_REQ = -1,
-};
-
-struct AddrStatus {
-  enum AddrType type;
-  enum ATTOperation oper;
-};
+#define INVAL_ADDR UINT64_MAX
 
 class AddrTransController {
  public:
-  AddrTransController(uint64_t dram_size, uint64_t nvm_size,
-    AddrTransTable& blk_tbl, AddrTransTable& pg_tbl, MemStore* mem_store);
-  AddrTransController(uint64_t phy_range, AddrTransTable& blk_tbl,
-    AddrTransTable& pg_tbl, uint64_t dram_size, MemStore* mem_store);
+  AddrTransController(uint64_t dram_size, uint64_t phy_limit,
+      int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms);
   virtual ~AddrTransController() { }
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
-  virtual uint64_t StoreAddr(uint64_t phy_addr, bool frozen = false);
-  ///
-  /// Predict the operation(s) for storing to the specified physical address
-  ///
-  virtual AddrStatus Probe(uint64_t phy_addr, bool frozen = false);
+  virtual uint64_t StoreAddr(uint64_t phy_addr, bool frozen);
   virtual void NewEpoch();
 
-  int cache_block_size() const { return block_table_.block_size(); }
-  uint64_t phy_limit() const { return phy_limit_; }
-  uint64_t dram_size() const { return dram_size_; }
-  uint64_t nvm_size() const { return nvm_size_; }
-  MemStore* mem_store() const { return mem_store_; }
-  void set_mem_store(MemStore* mem_store) { mem_store_ = mem_store; }
+  int cache_block_size() const { return att_.block_size(); }
+  uint64_t phy_limit() const { return dram_size_ + nvm_size_; }
 
  protected:
   virtual bool isDRAM(uint64_t phy_addr);
-  AddrTransTable& block_table_;
-  AddrTransTable& page_table_; 
+  AddrTransTable att_;
+  VersionBuffer att_buffer_;
+  VersionBuffer tmp_buffer_; ///< DRAM buffer for updates during COW
+  AddrTransTable ptt_;
+  VersionBuffer ptt_buffer_;
 
  private:
-  uint64_t StoreDRAMAddr(uint64_t phy_addr);
-  uint64_t StoreNVMAddr(uint64_t phy_addr);
-  const uint64_t dram_size_;
-  const uint64_t nvm_size_;
-  const uint64_t phy_limit_;
+  static uint64_t NVMStore(uint64_t phy_addr,
+      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
+  static uint64_t DRAMStore(uint64_t phy_addr, bool frozen,
+      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
+  const uint64_t dram_size_; ///< Size of visible DRAM region
+  const uint64_t nvm_size_; ///< Size of visible NVM region
   MemStore* mem_store_;
   ///
-  /// Judge whether a DRAM physical addr is cross to NVM
-  ///
-  bool isCross(uint64_t dram_phy_addr);
-  ///
-  /// List of DRAM physical addresses
-  /// that occupy the NVM block translation table
+  /// List of DRAM physical addresses that occupy ATT
   ///
   std::vector<uint64_t> cross_list_;
 };
 
 // Space partition (low -> high):
-// DRAM direct |(DRAM size)|| NVM direct |(phy_limit)||
-// ATT buffer || DRAM backup || Page table buffer 
+// Visible DRAM || Visible NVM (phy_limit)||
+// DRAM backup || PTT buffer || Temporary buffer || ATT buffer
 inline AddrTransController::AddrTransController(
-    uint64_t dram_size, uint64_t nvm_size,
-    AddrTransTable& blk_tbl, AddrTransTable& pg_tbl, MemStore* mem_store):
-
-    block_table_(blk_tbl), page_table_(pg_tbl),
-    dram_size_(dram_size), nvm_size_(nvm_size),
-    phy_limit_(nvm_size - blk_tbl.image_size() - pg_tbl.image_size()),
-    mem_store_(mem_store) {
-
-  assert(phy_limit_ >= dram_size_);
-  block_table_.set_image_floor(phy_limit());
-  page_table_.set_image_floor(dram_size_ + nvm_size_ - pg_tbl.image_size());
-  assert(block_table_.image_floor() + block_table_.image_size() ==
-      page_table_.image_floor() - dram_size_);
-}
-
-inline AddrTransController::AddrTransController(uint64_t phy_range,
-    AddrTransTable& blk_tbl, AddrTransTable& pg_tbl, uint64_t dram_size,
-    MemStore* mem_store):
-
-    AddrTransController(dram_size,
-        phy_range + blk_tbl.image_size() + pg_tbl.image_size(),
-        blk_tbl, pg_tbl, mem_store) {
-
-  assert(phy_limit() == phy_range);
+    uint64_t dram_size, uint64_t phy_size,
+    int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
+    dram_size_(dram_size), nvm_size_(phy_size - dram_size),
+    att_(att_len, block_bits), att_buffer_(2 * att_len, block_bits),
+    tmp_buffer_(att_len, block_bits),
+    ptt_(ptt_len, page_bits), ptt_buffer_(2 * ptt_len, page_bits) {
+  assert(phy_size >= dram_size);
+  mem_store_ = ms;
+  ptt_buffer_.set_addr_base(phy_limit() + dram_size_);
+  tmp_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
+  att_buffer_.set_addr_base(tmp_buffer_.addr_base() + tmp_buffer_.Size());
 }
 
 inline bool AddrTransController::isDRAM(uint64_t phy_addr) {
   return phy_addr < dram_size_;
-}
-
-inline bool AddrTransController::isCross(uint64_t dram_phy_addr) {
-  assert(isDRAM(dram_phy_addr));
-  return block_table_.LoadAddr(dram_phy_addr) != dram_phy_addr;
 }
 
 #endif // SEXAIN_ADDR_TRANS_CONTROLLER_H_
