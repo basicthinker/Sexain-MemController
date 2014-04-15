@@ -3,17 +3,17 @@
 
 #include "addr_trans_table.h"
 
-uint64_t AddrTransTable::Lookup(uint64_t phy_tag, ATTState& state) {
+uint64_t AddrTransTable::Lookup(uint64_t phy_tag, ATTState* state) {
   std::unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
-    state = FREE_ENTRY;
+    if (state) *state = FREE_ENTRY;
     return Addr(phy_tag);
   } else {
     ATTEntry& entry = entries_[it->second];
     assert(entry.state != FREE_ENTRY && entry.phy_tag == phy_tag);
     queues_[entry.state].Remove(it->second);
     queues_[entry.state].PushBack(it->second);
-    state = entry.state;
+    if (state) *state = entry.state;
     return entry.mach_addr;
   }
 }
@@ -45,7 +45,7 @@ void AddrTransTable::Revoke(uint64_t phy_tag) {
 
 std::pair<uint64_t, uint64_t> AddrTransTable::Replace(
     uint64_t phy_tag, uint64_t mach_addr) {
-  int i = queues_[CLEAN_ENTRY].PopFront();
+  int i = queues_[CLEAN_ENTRY].Front();
   assert(i != -EINVAL);
   Revoke(entries_[i].phy_tag);
   Setup(phy_tag, mach_addr);
