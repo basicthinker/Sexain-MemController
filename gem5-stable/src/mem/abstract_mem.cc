@@ -56,17 +56,14 @@ using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
     MemObject(p), range(p->range),
-    blockMapper(p->block_table_length), pageMapper(p->page_table_length),
-    blockTable(p->block_bits, blockMapper, *this),
-    pageTable(p->page_bits, pageMapper, *this),
-    addrController(range.span(), blockTable, pageTable, p->dram_size, this),
-    pmemAddr(NULL),
-    confTableReported(p->conf_table_reported), inAddrMap(p->in_addr_map),
-    _system(NULL)
+    addrController(p->dram_size, range.span(),
+            p->block_table_length, p->block_bits,
+            p->page_table_length, p->page_bits, this),
+    pmemAddr(NULL), confTableReported(p->conf_table_reported),
+    inAddrMap(p->in_addr_map), _system(NULL)
 {
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
-
     epochPages = 0;
 }
 
@@ -185,15 +182,12 @@ AbstractMemory::regStats()
     numDirectWrites
         .name(name() + ".numDirectWrites")
         .desc("Total number of direct writes");
-    numOverwrites
-        .name(name() + ".numOverwrites")
-        .desc("Total number of overwrites");
-    numWriteBacks
-        .name(name() + ".numWritBacks")
-        .desc("Total number of write-backs");
-    numShrinks
-        .name(name() + ".numShrinks")
-        .desc("Total number of shrinking writes");
+    numShrinkWrites
+        .name(name() + ".numShrinkWrites")
+        .desc("Total number of shrink-writes");
+    numMoveWrites
+        .name(name() + ".numMoveWrites")
+        .desc("Total number of move-writes");
 
     numPages
         .name(name() + ".numPages")
@@ -379,9 +373,8 @@ AbstractMemory::access(PacketPtr pkt)
         }
 
         if (overwrite_mem) {
-            uint64_t local_addr = addrController.StoreAddr(localAddr(pkt),
-                    pkt->isFrozen());
-            host_addr = hostAddr(local_addr);
+            host_addr = hostAddr(addrController.StoreAddr(
+                    localAddr(pkt), pkt->isFrozen()));
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
 
@@ -408,9 +401,8 @@ AbstractMemory::access(PacketPtr pkt)
         if (writeOK(pkt)) {
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.cache_block_size());
-                uint64_t local_addr = addrController.StoreAddr(localAddr(pkt),
-                        pkt->isFrozen());
-                uint8_t* host_addr = hostAddr(local_addr);
+                uint8_t* host_addr = hostAddr(addrController.StoreAddr(
+                        localAddr(pkt), pkt->isFrozen()));
                 memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
@@ -465,65 +457,9 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
-AbstractMemory::OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits)
+AbstractMemory::OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size)
 {
-    int size = (1 << bits);
-    if (size == pageTable.block_size()) {
-        memcpy(hostAddr(mach_tag << bits), hostAddr(phy_tag << bits), size);
-        ++numPages;
-        ++epochPages;
-    }
-}
-
-void
-AbstractMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    int size = (1 << bits);
-    if (size == blockTable.block_size()) {
-        ++numDirectWrites;
-    }
-}
-
-void
-AbstractMemory::OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    int size = (1 << bits);
-    memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size);
-    if (size == blockTable.block_size()) {
-        ++numWriteBacks;
-    } else if (size == pageTable.block_size()) {
-        ++numPages;
-        ++epochPages;
-    }
-}
-
-void
-AbstractMemory::OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    if ((1 << bits) == blockTable.block_size()) {
-        ++numOverwrites;
-    }
-}
-
-void
-AbstractMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    int size = (1 << bits);
-    if (size == blockTable.block_size()) {
-        ++numShrinks;
-    } else if (size == pageTable.block_size()) {
-        memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size);
-        ++numPages;
-        ++epochPages;
-    }
-}
-
-void
-AbstractMemory::OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    int size = (1 << bits);
-    assert(size == blockTable.block_size());
-    memcpy(hostAddr(phy_tag << bits), hostAddr(mach_tag << bits), size); 
+    memcpy(hostAddr(mach_addr), hostAddr(phy_addr), size);
 }
 
 void

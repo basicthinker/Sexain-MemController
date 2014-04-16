@@ -54,9 +54,6 @@
 #include "params/AbstractMemory.hh"
 #include "sim/stats.hh"
 
-#include "mem/mem_store.h"
-#include "mem/shadow_tag_mapper.h"
-#include "mem/addr_trans_table.h"
 #include "mem/addr_trans_controller.h"
 
 class System;
@@ -110,18 +107,6 @@ class AbstractMemory : public MemObject, public MemStore
   protected:
     // Physical ddress range of this memory
     AddrRange range;
-
-    // Shadow tag mapper for cache blocks
-    DirectMapper blockMapper;
-
-    // Shadow tag mapper for secondary pages
-    DirectMapper pageMapper;
-
-    // Address Translation Table
-    AddrTransTable blockTable;
-
-    // Secondary page table
-    AddrTransTable pageTable;
 
     // Controller for addr translation
     AddrTransController addrController;
@@ -205,12 +190,10 @@ class AbstractMemory : public MemObject, public MemStore
     Stats::Scalar numEpochs;
     /** Number of direct writes */
     Stats::Scalar numDirectWrites;
-    /** Number of overwrites */
-    Stats::Scalar numOverwrites;
-    /** Number of write-backs */
-    Stats::Scalar numWriteBacks;
-    /** Number of shrinking writes */
-    Stats::Scalar numShrinks;
+    /** Number of shrink-writes */
+    Stats::Scalar numShrinkWrites;
+    /** Number of move-writes */
+    Stats::Scalar numMoveWrites;
 
     /** Number of page writes in the DRAM scheme */
     Stats::Scalar numPages;
@@ -257,7 +240,7 @@ class AbstractMemory : public MemObject, public MemStore
      * Get the length of backing host memory
      */
     uint64_t hostSize()
-    { return addrController.dram_size() + addrController.nvm_size(); };
+    { return addrController.Size(); };
 
     /**
      * Get the list of locked addresses to allow checkpointing.
@@ -350,18 +333,8 @@ class AbstractMemory : public MemObject, public MemStore
      */
     virtual void regStats();
 
-    virtual void OnNewMapping(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnRevoke(uint64_t phy_tag, uint64_t mach_tag, int bits);
-
+    virtual void OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size);
     virtual void OnEpochEnd();
-    virtual void OnNVMRead(uint64_t mach_addr) { }
-    virtual void OnNVMWrite(uint64_t mach_addr) { }
-    virtual void OnDRAMRead(uint64_t mach_addr) { }
-    virtual void OnDRAMWrite(uint64_t mach_addr) { }
 };
 
 #endif //__ABSTRACT_MEMORY_HH__
