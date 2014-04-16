@@ -54,9 +54,9 @@ class AddrTransTable : public IndexArray {
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
 
  private:
+  const int length_;
   const int block_bits_;
   const uint64_t block_mask_;
-  const int length_;
   std::unordered_map<uint64_t, int> tag_index_;
   std::vector<ATTEntry> entries_;
   std::vector<IndexQueue> queues_;

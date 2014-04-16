@@ -59,13 +59,16 @@ pair<uint64_t, uint64_t> AddrTransTable::Replace(
 
 int AddrTransTable::Clean() {
   int i = queues_[DIRTY_ENTRY].PopFront();
+  int count = 0;
   while (i != -EINVAL) {
     assert(entries_[i].state == DIRTY_ENTRY);
     entries_[i].state = CLEAN_ENTRY;
     queues_[CLEAN_ENTRY].PushBack(i);
+    ++count;
     i = queues_[DIRTY_ENTRY].PopFront();
   }
   assert(queues_[DIRTY_ENTRY].Empty() &&
       GetLength(CLEAN_ENTRY) + GetLength(FREE_ENTRY) == length_);
+  return count;
 }
 

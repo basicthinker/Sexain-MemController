@@ -27,6 +27,7 @@ class AddrTransController {
   virtual ATTState Probe(uint64_t phy_addr, bool frozen);
   virtual void NewEpoch();
 
+  uint64_t Size() const;
   int cache_block_size() const { return att_.block_size(); }
   uint64_t phy_limit() const { return dram_size_ + nvm_size_; }
 
@@ -62,15 +63,19 @@ class AddrTransController {
 inline AddrTransController::AddrTransController(
     uint64_t dram_size, uint64_t phy_size,
     int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
-    dram_size_(dram_size), nvm_size_(phy_size - dram_size),
     att_(att_len, block_bits), att_buffer_(2 * att_len, block_bits),
     tmp_buffer_(att_len, block_bits),
-    ptt_(ptt_len, page_bits), ptt_buffer_(2 * ptt_len, page_bits) {
+    ptt_(ptt_len, page_bits), ptt_buffer_(2 * ptt_len, page_bits),
+    dram_size_(dram_size), nvm_size_(phy_size - dram_size) {
   assert(phy_size >= dram_size);
   mem_store_ = ms;
   ptt_buffer_.set_addr_base(phy_limit() + dram_size_);
   tmp_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
   att_buffer_.set_addr_base(tmp_buffer_.addr_base() + tmp_buffer_.Size());
+}
+
+inline uint64_t AddrTransController::Size() const {
+  return att_buffer_.addr_base() + att_buffer_.Size();
 }
 
 inline bool AddrTransController::isDRAM(uint64_t phy_addr) {

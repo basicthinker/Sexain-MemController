@@ -10,16 +10,16 @@
 
 class MemStore {
  public:
-  virtual void OnATTOperate() = 0;
-  virtual void OnBufferOperate() = 0;
+  virtual void OnATTOperate() { }
+  virtual void OnBufferOperate() { }
 
-  virtual void OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size) = 0;
-  virtual void OnEpochEnd() = 0;
+  virtual void OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size) { }
+  virtual void OnEpochEnd() { }
 
-  virtual void OnNVMRead(uint64_t mach_addr, int size) = 0;
-  virtual void OnNVMWrite(uint64_t mach_addr, int size) = 0;
-  virtual void OnDRAMRead(uint64_t mach_addr, int size) = 0;
-  virtual void OnDRAMWrite(uint64_t mach_addr, int size) = 0;
+  virtual void OnNVMRead(uint64_t mach_addr, int size) { }
+  virtual void OnNVMWrite(uint64_t mach_addr, int size) { }
+  virtual void OnDRAMRead(uint64_t mach_addr, int size) { }
+  virtual void OnDRAMWrite(uint64_t mach_addr, int size) { }
 };
 
 class TraceMemStore : public MemStore {

@@ -43,9 +43,9 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr,
 
 bool AddrTransController::ProbeNVMStore(uint64_t phy_addr,
     AddrTransTable* att, VersionBuffer* vb, MemStore* ms) {
-  EntryState state;
   uint64_t phy_tag = att->Tag(phy_addr);
-  uint64_t mach_addr = att->Lookup(phy_tag, &state);
+  EntryState state;
+  att->Lookup(phy_tag, &state);
   return state != FREE_ENTRY || att->GetLength(DIRTY_ENTRY) != att->length();
 }
 
@@ -73,7 +73,7 @@ ATTState AddrTransController::Probe(uint64_t phy_addr, bool frozen) {
   if (isDRAM(phy_addr)) {
     bool avail = ProbeDRAMStore(phy_addr, frozen,
         &att_, &tmp_buffer_, mem_store_);
-    return AVAIL; // TODO
+    return avail ? AVAIL : EPOCH; // TODO
   } else {
     bool avail = ProbeNVMStore(phy_addr, &att_, &att_buffer_, mem_store_);
     return avail ? AVAIL : EPOCH;

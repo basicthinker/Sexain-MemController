@@ -6,8 +6,11 @@
 
 #include <vector>
 #include <set>
+#include <limits>
 #include <cstdint>
 #include <cassert>
+
+#define INVAL_ADDR std::numeric_limits<uint64_t>::max()
 
 enum BufferState {
   IN_USE_SLOT = 0,
@@ -49,7 +52,7 @@ inline VersionBuffer::VersionBuffer(int length, int block_bits) :
   for (int i = 0; i < length_; ++i) {
     sets_[FREE_SLOT].insert(i);
   }
-  addr_base_ = UINT64_MAX;
+  addr_base_ = INVAL_ADDR;
 }
 
 inline uint64_t VersionBuffer::Size() const {
@@ -57,7 +60,7 @@ inline uint64_t VersionBuffer::Size() const {
 }
 
 inline uint64_t VersionBuffer::At(int index) {
-  assert(addr_base_ != UINT64_MAX && index >= 0 && index < length_);
+  assert(addr_base_ != INVAL_ADDR && index >= 0 && index < length_);
   return addr_base_ + (index << block_bits_);
 }
 
