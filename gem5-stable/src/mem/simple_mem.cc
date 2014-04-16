@@ -50,8 +50,7 @@ using namespace std;
 SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     AbstractMemory(p),
     port(name() + ".port", *this), latency(p->latency),
-    latATTLookup(p->lat_att_lookup),
-    latATTUpdate(p->lat_att_update), latBlkWriteback(p->lat_blk_writeback),
+    latATTOperate(p->lat_att_operate), latBufferOperate(p->lat_buffer_operate),
     latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
     isLatATT(p->is_lat_att), latency_var(p->latency_var),
     bandwidth(p->bandwidth), isBusy(false), isFrozen(false),
@@ -169,24 +168,12 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Tick duration = pkt->getSize() * bandwidth;
 
         if (pkt->isWrite()) {
-            AddrStatus status = addrController.Probe(localAddr(pkt), isFrozen);
-            if (status.type == RETRY_REQ) {
+            ATTState state = addrController.Probe(localAddr(pkt), isFrozen);
+            if (state == RETRY) {
                 retryReq = true;
                 return false;
-            } else if (isLatATT && status.type == NVM_ADDR && status.oper == WRBACK) {
-                assert(pkt->getSize() == blockTable.block_size());
-                duration += pkt->getSize() * bandwidth;
-            } else if (status.oper == EPOCH) {
+            } else if (state == EPOCH) {
                 assert(!isFrozen);
-                if (isLatATT) {
-                    Tick frozenDuration =
-                            pageTable.block_size() * epochPages * bandwidth;
-                    frozenDuration += blockTable.length() * 16 * bandwidth;
-                    frozenDuration += pageTable.length() * 16 * bandwidth;
-
-                    schedule(unfreezeEvent, curTick() + frozenDuration);
-                    isFrozen = true;
-                }
                 addrController.NewEpoch();
             }
         }
@@ -204,6 +191,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         if (pkt->isWrite()) ++frozenWrites;
         pkt->setFrozen();
     }
+
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
@@ -277,12 +265,7 @@ SimpleMemory::dequeue()
 Tick
 SimpleMemory::getLatency()
 {
-    Tick lat = latency;
-    if (isLatATT) {
-        lat += latATTLookup;
-        sumLatATT += latATTLookup;
-    }
-    return lat +
+    return latency +
         (latency_var ? random_mt.random<Tick>(0, latency_var) : 0);
 }
 
@@ -365,24 +348,12 @@ SimpleMemoryParams::create()
     return new SimpleMemory(this);
 }
 
+/*
 void
 SimpleMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
 {
     AbstractMemory::OnDirectWrite(phy_tag, mach_tag, bits);
     latATT += latATTUpdate;
-}
-
-void
-SimpleMemory::OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    AbstractMemory::OnWriteBack(phy_tag, mach_tag, bits);
-    latATT += latBlkWriteback;
-}
-
-void
-SimpleMemory::OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    AbstractMemory::OnOverwrite(phy_tag, mach_tag, bits);
 }
 
 void
@@ -409,3 +380,4 @@ void
 SimpleMemory::OnNVMWrite(uint64_t mach_addr) {
     latATT += latNVMWrite;
 }
+*/

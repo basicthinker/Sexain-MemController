@@ -459,7 +459,7 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 void
 AbstractMemory::OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size)
 {
-    memcpy(hostAddr(mach_addr), hostAddr(phy_addr), size);
+    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
 }
 
 void

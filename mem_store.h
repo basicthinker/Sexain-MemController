@@ -13,7 +13,7 @@ class MemStore {
   virtual void OnATTOperate() { }
   virtual void OnBufferOperate() { }
 
-  virtual void OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size) { }
+  virtual void OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size) = 0;
   virtual void OnEpochEnd() { }
 
   virtual void OnNVMRead(uint64_t mach_addr, int size) { }

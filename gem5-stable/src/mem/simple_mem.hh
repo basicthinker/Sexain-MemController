@@ -115,9 +115,8 @@ class SimpleMemory : public AbstractMemory
      */
     const Tick latency;
 
-    const Tick latATTLookup;
-    const Tick latATTUpdate;
-    const Tick latBlkWriteback;
+    const Tick latATTOperate;
+    const Tick latBufferOperate;
     const Tick latNVMRead;
     const Tick latNVMWrite;
 
@@ -224,15 +223,6 @@ class SimpleMemory : public AbstractMemory
      * Register Statistics
      */
     virtual void regStats();
-
-    virtual void OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnWriteBack(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnOverwrite(uint64_t phy_tag, uint64_t mach_tag, int bits);
-    virtual void OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits);
-
-    virtual void OnEpochEnd();
-    virtual void OnNVMRead(uint64_t mach_addr);
-    virtual void OnNVMWrite(uint64_t mach_addr);
 
   protected:
 
