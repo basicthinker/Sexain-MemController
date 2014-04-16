@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include "index_queue.h"
 
-enum ATTState {
+enum EntryState {
   DIRTY_ENTRY = 0,
   CLEAN_ENTRY,
   FREE_ENTRY,
@@ -20,7 +20,7 @@ struct ATTEntry {
   uint64_t phy_tag;
   uint64_t mach_addr;
   IndexNode queue_node;
-  ATTState state;
+  EntryState state;
 
   ATTEntry() : state(FREE_ENTRY) {
     queue_node.first = queue_node.second = -EINVAL;
@@ -31,7 +31,7 @@ class AddrTransTable : public IndexArray {
  public:
   AddrTransTable(int length, int block_bits);
 
-  uint64_t Lookup(uint64_t phy_tag, ATTState* state);
+  uint64_t Lookup(uint64_t phy_tag, EntryState* state);
   void Setup(uint64_t phy_tag, uint64_t mach_addr);
   void Revoke(uint64_t phy_tag);
   ///
@@ -41,8 +41,8 @@ class AddrTransTable : public IndexArray {
   std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_addr);
   int Clean();
 
-  bool IsEmpty(ATTState state) { return queues_[state].Empty(); }
-  int GetLength(ATTState state) { return queues_[state].length(); }
+  bool IsEmpty(EntryState state) { return queues_[state].Empty(); }
+  int GetLength(EntryState state) { return queues_[state].length(); }
 
   uint64_t Tag(uint64_t addr) { return addr >> block_bits_; }
   uint64_t Addr(uint64_t tag) { return tag << block_bits_; }

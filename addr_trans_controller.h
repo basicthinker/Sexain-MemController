@@ -10,7 +10,11 @@
 #include "addr_trans_table.h"
 #include "mem_store.h"
 
-#define INVAL_ADDR UINT64_MAX
+enum ATTState {
+  RETRY,
+  EPOCH,
+  AVAIL,
+};
 
 class AddrTransController {
  public:
@@ -20,6 +24,7 @@ class AddrTransController {
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
   virtual uint64_t StoreAddr(uint64_t phy_addr, bool frozen);
+  virtual ATTState Probe(uint64_t phy_addr, bool frozen);
   virtual void NewEpoch();
 
   int cache_block_size() const { return att_.block_size(); }
@@ -36,7 +41,11 @@ class AddrTransController {
  private:
   static uint64_t NVMStore(uint64_t phy_addr,
       AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
+  static bool ProbeNVMStore(uint64_t phy_addr,
+      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
   static uint64_t DRAMStore(uint64_t phy_addr, bool frozen,
+      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
+  static bool ProbeDRAMStore(uint64_t phy_addr, bool frozen,
       AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
   const uint64_t dram_size_; ///< Size of visible DRAM region
   const uint64_t nvm_size_; ///< Size of visible NVM region

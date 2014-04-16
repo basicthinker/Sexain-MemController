@@ -5,7 +5,7 @@
 
 using namespace std;
 
-uint64_t AddrTransTable::Lookup(uint64_t phy_tag, ATTState* state) {
+uint64_t AddrTransTable::Lookup(uint64_t phy_tag, EntryState* state) {
   unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
     if (state) *state = FREE_ENTRY;

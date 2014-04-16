@@ -19,7 +19,7 @@ uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
 
 uint64_t AddrTransController::NVMStore(uint64_t phy_addr,
     AddrTransTable* att, VersionBuffer* vb, MemStore* ms) {
-  ATTState state;
+  EntryState state;
   uint64_t phy_tag = att->Tag(phy_addr);
   uint64_t mach_addr = att->Lookup(phy_tag, &state);
   if (state == CLEAN_ENTRY) {
@@ -27,9 +27,7 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr,
     vb->PinBlock(mach_addr);
     return phy_addr;
   } else if (state == FREE_ENTRY) {
-    if (att->GetLength(DIRTY_ENTRY) == att->length())
-      return INVAL_ADDR; // indicates new epoch
-
+    assert(att->GetLength(DIRTY_ENTRY) < att->length());
     mach_addr = vb->NewBlock();
     if (!att->IsEmpty(FREE_ENTRY)) {
       att->Setup(phy_tag, mach_addr);
@@ -43,17 +41,42 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr,
   return att->Translate(phy_addr, mach_addr);
 }
 
+bool AddrTransController::ProbeNVMStore(uint64_t phy_addr,
+    AddrTransTable* att, VersionBuffer* vb, MemStore* ms) {
+  EntryState state;
+  uint64_t phy_tag = att->Tag(phy_addr);
+  uint64_t mach_addr = att->Lookup(phy_tag, &state);
+  return state != FREE_ENTRY || att->GetLength(DIRTY_ENTRY) != att->length();
+}
+
 uint64_t AddrTransController::DRAMStore(uint64_t phy_addr, bool frozen,
     AddrTransTable* att, VersionBuffer* vb, MemStore* ms) {
   return phy_addr; // TODO
 }
 
+bool AddrTransController::ProbeDRAMStore(uint64_t phy_addr, bool frozen,
+    AddrTransTable* att, VersionBuffer* vb, MemStore* ms) {
+  return true; // TODO
+}
+ 
 uint64_t AddrTransController::StoreAddr(uint64_t phy_addr, bool frozen) {
   assert(phy_addr < phy_limit());
   if (isDRAM(phy_addr)) {
     return DRAMStore(phy_addr, frozen, &att_, &tmp_buffer_, mem_store_);
   } else {
     return NVMStore(phy_addr, &att_, &att_buffer_, mem_store_);
+  }
+}
+
+ATTState AddrTransController::Probe(uint64_t phy_addr, bool frozen) {
+  assert(phy_addr < phy_limit());
+  if (isDRAM(phy_addr)) {
+    bool avail = ProbeDRAMStore(phy_addr, frozen,
+        &att_, &tmp_buffer_, mem_store_);
+    return AVAIL; // TODO
+  } else {
+    bool avail = ProbeNVMStore(phy_addr, &att_, &att_buffer_, mem_store_);
+    return avail ? AVAIL : EPOCH;
   }
 }
 
