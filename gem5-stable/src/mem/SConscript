@@ -61,6 +61,7 @@ Source('simple_mem.cc')
 Source('physical.cc')
 Source('simple_dram.cc')
 Source('index_queue.cc')
+Source('version_buffer.cc')
 Source('addr_trans_table.cc')
 Source('addr_trans_controller.cc')
 
