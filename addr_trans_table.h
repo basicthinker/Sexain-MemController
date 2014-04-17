@@ -21,9 +21,13 @@ struct ATTEntry {
   uint64_t mach_addr;
   IndexNode queue_node;
   EntryState state;
+  uint32_t flag;
 
   ATTEntry() : state(FREE_ENTRY) {
+    phy_tag = mach_addr = -1;
     queue_node.first = queue_node.second = -EINVAL;
+    state = FREE_ENTRY;
+    flag = 0;
   }
 };
 
@@ -32,14 +36,15 @@ class AddrTransTable : public IndexArray {
   AddrTransTable(int length, int block_bits);
 
   uint64_t Lookup(uint64_t phy_tag, EntryState* state);
-  void Setup(uint64_t phy_tag, uint64_t mach_addr);
+  void Setup(uint64_t phy_tag, uint64_t mach_addr, uint32_t flag = 0);
   void Revoke(uint64_t phy_tag);
   ///
   /// Replace an existing clean mapping with the specified one.
   /// @return the replaced clean mapping
   ///
   std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_addr);
-  int Clean();
+  int CleanDirtied();
+  int RemoveFlagged(uint32_t flag);
 
   bool IsEmpty(EntryState state) { return queues_[state].Empty(); }
   int GetLength(EntryState state) { return queues_[state].length(); }
@@ -54,6 +59,8 @@ class AddrTransTable : public IndexArray {
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
 
  private:
+  void RevokeEntry(int index);
+
   const int length_;
   const int block_bits_;
   const uint64_t block_mask_;

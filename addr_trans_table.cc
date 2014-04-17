@@ -20,7 +20,8 @@ uint64_t AddrTransTable::Lookup(uint64_t phy_tag, EntryState* state) {
   }
 }
 
-void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_addr) {
+void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_addr,
+    uint32_t flag) {
   assert(tag_index_.count(phy_tag) == 0);
   assert(!queues_[FREE_ENTRY].Empty());
 
@@ -29,19 +30,26 @@ void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_addr) {
   entries_[i].state = DIRTY_ENTRY;
   entries_[i].phy_tag = phy_tag;
   entries_[i].mach_addr = mach_addr;
+  entries_[i].flag = flag;
 
   tag_index_[phy_tag] = i;
+}
+
+void AddrTransTable::RevokeEntry(int index) {
+  ATTEntry& entry = entries_[index];
+  assert(entry.state != FREE_ENTRY);
+  tag_index_.erase(entry.phy_tag); 
+  queues_[entry.state].Remove(index);
+
+  entry = ATTEntry();
+  queues_[FREE_ENTRY].PushBack(index);
 }
 
 void AddrTransTable::Revoke(uint64_t phy_tag) {
   unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it != tag_index_.end()) {
-    ATTEntry& entry = entries_[it->second];
-    assert(entry.state != FREE_ENTRY && entry.phy_tag == phy_tag);
-    queues_[entry.state].Remove(it->second);
-    queues_[FREE_ENTRY].PushBack(it->second);
-    entry.state = FREE_ENTRY;
-    tag_index_.erase(it);
+    assert(entries_[it->second].phy_tag == phy_tag);
+    RevokeEntry(it->second);
   }
 }
 
@@ -57,7 +65,7 @@ pair<uint64_t, uint64_t> AddrTransTable::Replace(
   return replaced;
 }
 
-int AddrTransTable::Clean() {
+int AddrTransTable::CleanDirtied() {
   int i = queues_[DIRTY_ENTRY].PopFront();
   int count = 0;
   while (i != -EINVAL) {
@@ -69,6 +77,18 @@ int AddrTransTable::Clean() {
   }
   assert(queues_[DIRTY_ENTRY].Empty() &&
       GetLength(CLEAN_ENTRY) + GetLength(FREE_ENTRY) == length_);
+  return count;
+}
+
+int AddrTransTable::RemoveFlagged(uint32_t flag) {
+  assert(flag != 0);
+  int count = 0;
+  for (int i = 0; i < length_; ++i) {
+    if (entries_[i].flag == flag) {
+      RevokeEntry(i); // cannot be free entry
+      ++count;
+    }
+  }
   return count;
 }
 
