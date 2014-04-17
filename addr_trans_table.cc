@@ -80,15 +80,16 @@ int AddrTransTable::CleanDirtied() {
   return count;
 }
 
-int AddrTransTable::RemoveFlagged(uint32_t flag) {
+vector<pair<uint64_t, uint64_t>> AddrTransTable::RemoveFlagged(uint32_t flag) {
   assert(flag != 0);
-  int count = 0;
+  vector<pair<uint64_t, uint64_t>> removed;
   for (int i = 0; i < length_; ++i) {
     if (entries_[i].flag == flag) {
+      removed.push_back(make_pair(
+          Addr(entries_[i].phy_tag), entries_[i].mach_addr));
       RevokeEntry(i); // cannot be free entry
-      ++count;
     }
   }
-  return count;
+  return removed;
 }
 

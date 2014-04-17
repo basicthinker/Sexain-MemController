@@ -44,7 +44,7 @@ class AddrTransTable : public IndexArray {
   ///
   std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_addr);
   int CleanDirtied();
-  int RemoveFlagged(uint32_t flag);
+  std::vector<std::pair<uint64_t, uint64_t>> RemoveFlagged(uint32_t flag);
 
   bool IsEmpty(EntryState state) { return queues_[state].Empty(); }
   int GetLength(EntryState state) { return queues_[state].length(); }
