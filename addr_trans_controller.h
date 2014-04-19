@@ -34,8 +34,8 @@ class AddrTransController {
  protected:
   virtual bool isDRAM(uint64_t phy_addr);
   AddrTransTable att_;
-  VersionBuffer att_buffer_;
-  VersionBuffer tmp_buffer_; ///< DRAM buffer for updates during COW
+  VersionBuffer nvm_buffer_;
+  VersionBuffer dram_buffer_;
   AddrTransTable ptt_;
   VersionBuffer ptt_buffer_;
 
@@ -63,19 +63,19 @@ class AddrTransController {
 inline AddrTransController::AddrTransController(
     uint64_t dram_size, uint64_t phy_size,
     int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
-    att_(att_len, block_bits), att_buffer_(2 * att_len, block_bits),
-    tmp_buffer_(att_len, block_bits),
+    att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
+    dram_buffer_(att_len, block_bits),
     ptt_(ptt_len, page_bits), ptt_buffer_(2 * ptt_len, page_bits),
     dram_size_(dram_size), nvm_size_(phy_size - dram_size) {
   assert(phy_size >= dram_size);
   mem_store_ = ms;
   ptt_buffer_.set_addr_base(phy_limit() + dram_size_);
-  tmp_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
-  att_buffer_.set_addr_base(tmp_buffer_.addr_base() + tmp_buffer_.Size());
+  dram_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
+  nvm_buffer_.set_addr_base(dram_buffer_.addr_base() + dram_buffer_.Size());
 }
 
 inline uint64_t AddrTransController::Size() const {
-  return att_buffer_.addr_base() + att_buffer_.Size();
+  return nvm_buffer_.addr_base() + nvm_buffer_.Size();
 }
 
 inline bool AddrTransController::isDRAM(uint64_t phy_addr) {

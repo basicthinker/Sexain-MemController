@@ -62,9 +62,9 @@ bool AddrTransController::ProbeDRAMStore(uint64_t phy_addr, bool frozen,
 uint64_t AddrTransController::StoreAddr(uint64_t phy_addr, bool frozen) {
   assert(phy_addr < phy_limit());
   if (isDRAM(phy_addr)) {
-    return DRAMStore(phy_addr, frozen, &att_, &tmp_buffer_, mem_store_);
+    return DRAMStore(phy_addr, frozen, &att_, &dram_buffer_, mem_store_);
   } else {
-    return NVMStore(phy_addr, &att_, &att_buffer_, mem_store_);
+    return NVMStore(phy_addr, &att_, &nvm_buffer_, mem_store_);
   }
 }
 
@@ -72,17 +72,17 @@ ATTState AddrTransController::Probe(uint64_t phy_addr, bool frozen) {
   assert(phy_addr < phy_limit());
   if (isDRAM(phy_addr)) {
     bool avail = ProbeDRAMStore(phy_addr, frozen,
-        &att_, &tmp_buffer_, mem_store_);
+        &att_, &dram_buffer_, mem_store_);
     return avail ? AVAIL : EPOCH; // TODO
   } else {
-    bool avail = ProbeNVMStore(phy_addr, &att_, &att_buffer_, mem_store_);
+    bool avail = ProbeNVMStore(phy_addr, &att_, &nvm_buffer_, mem_store_);
     return avail ? AVAIL : EPOCH;
   }
 }
 
 void AddrTransController::NewEpoch() {
   att_.Clean();
-  att_buffer_.CleanBackup();
+  nvm_buffer_.CleanBackup();
   // Migration goes after this should it exist.
 }
 
