@@ -5,43 +5,41 @@
 
 using namespace std;
 
-uint64_t AddrTransTable::Lookup(uint64_t phy_tag, EntryState* state) {
+uint64_t AddrTransTable::Lookup(uint64_t phy_tag, int* index) {
   unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
-    if (state) *state = FREE_ENTRY;
+    if (index) *index = -EINVAL;
     return Addr(phy_tag);
   } else {
     ATTEntry& entry = entries_[it->second];
     assert(entry.state != FREE_ENTRY && entry.phy_tag == phy_tag);
     queues_[entry.state].Remove(it->second);
     queues_[entry.state].PushBack(it->second);
-    if (state) *state = entry.state;
+    if (index) *index = it->second;
     return entry.mach_addr;
   }
 }
 
 void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_addr,
-    uint32_t flag) {
+    EntryState state, uint32_t flag_mask) {
   assert(tag_index_.count(phy_tag) == 0);
   assert(!queues_[FREE_ENTRY].Empty());
 
   int i = queues_[FREE_ENTRY].PopFront();
-  queues_[DIRTY_ENTRY].PushBack(i);
-  entries_[i].state = DIRTY_ENTRY;
+  queues_[state].PushBack(i);
+  entries_[i].state = state;
   entries_[i].phy_tag = phy_tag;
   entries_[i].mach_addr = mach_addr;
-  entries_[i].flag = flag;
+  entries_[i].Set(flag_mask);
 
   tag_index_[phy_tag] = i;
 }
 
-void AddrTransTable::RevokeEntry(int index) {
+void AddrTransTable::FreeEntry(int index) {
   ATTEntry& entry = entries_[index];
   assert(entry.state != FREE_ENTRY);
   tag_index_.erase(entry.phy_tag); 
   queues_[entry.state].Remove(index);
-
-  entry = ATTEntry();
   queues_[FREE_ENTRY].PushBack(index);
 }
 
@@ -49,25 +47,36 @@ void AddrTransTable::Revoke(uint64_t phy_tag) {
   unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it != tag_index_.end()) {
     assert(entries_[it->second].phy_tag == phy_tag);
-    RevokeEntry(it->second);
+    FreeEntry(it->second);
   }
 }
 
-pair<uint64_t, uint64_t> AddrTransTable::Replace(
-    uint64_t phy_tag, uint64_t mach_addr) {
+pair<uint64_t, uint64_t> AddrTransTable::Replace(uint64_t phy_tag,
+    uint64_t mach_addr, EntryState state, uint32_t flag_mask) {
   const int i = queues_[CLEAN_ENTRY].Front();
   assert(i != -EINVAL);
+  assert(entries_[i].flag == 0);
   pair<uint64_t, uint64_t> replaced;
   replaced.first = entries_[i].phy_tag;
   replaced.second = entries_[i].mach_addr;
   Revoke(entries_[i].phy_tag);
-  Setup(phy_tag, mach_addr);
+  Setup(phy_tag, mach_addr, state, flag_mask);
   return replaced;
 }
 
-int AddrTransTable::CleanDirtied() {
-  int i = queues_[DIRTY_ENTRY].PopFront();
+void AddrTransTable::Reset(int index, uint64_t mach_addr,
+    EntryState state, uint32_t flag_mask) {
+  ATTEntry& entry = entries_[index];
+  entry.mach_addr = mach_addr;
+  queues_[entry.state].Remove(index);
+  queues_[state].PushBack(index);
+  entry.state = state;
+  entry.Set(ATTEntry::MACH_RESET | flag_mask);
+}
+
+int AddrTransTable::CleanDirtyQueue() {
   int count = 0;
+  int i = queues_[DIRTY_ENTRY].PopFront();
   while (i != -EINVAL) {
     assert(entries_[i].state == DIRTY_ENTRY);
     entries_[i].state = CLEAN_ENTRY;
@@ -80,16 +89,23 @@ int AddrTransTable::CleanDirtied() {
   return count;
 }
 
-vector<pair<uint64_t, uint64_t>> AddrTransTable::RemoveFlagged(uint32_t flag) {
-  assert(flag != 0);
-  vector<pair<uint64_t, uint64_t>> removed;
-  for (int i = 0; i < length_; ++i) {
-    if (entries_[i].flag == flag) {
-      removed.push_back(make_pair(
-          Addr(entries_[i].phy_tag), entries_[i].mach_addr));
-      RevokeEntry(i); // cannot be free entry
-    }
+int AddrTransTable::FreeQueue(EntryState state) {
+  int count = 0;
+  int i = queues_[state].Front();
+  while (i != -EINVAL) {
+    FreeEntry(i);
+    ++count;
+    i = queues_[state].Front();
   }
-  return removed;
+  return count;
+}
+
+void AddrTransTable::VisitQueue(EntryState state, EntryVisitor* visitor) {
+  int i = queues_[state].Front();
+  while (i != -EINVAL) {
+    visitor->Visit(entries_[i]);
+    i = entries_[i].queue_node.second;
+    assert(entries_[i].state == state);
+  }
 }
 
