@@ -30,7 +30,7 @@ struct ATTEntry {
     flag = 0;
   }
 
-  bool Test(uint32_t mask) { return flag & mask; }
+  bool Test(uint32_t mask) const { return flag & mask; }
   void Set(uint32_t mask) { flag |= mask; }
   void Clear(uint32_t mask) { flag &= ~mask; }
 

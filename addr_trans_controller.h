@@ -10,12 +10,6 @@
 #include "addr_trans_table.h"
 #include "mem_store.h"
 
-enum ATTState {
-  RETRY,
-  EPOCH,
-  AVAIL,
-};
-
 class AddrTransController {
  public:
   AddrTransController(uint64_t dram_size, uint64_t phy_limit,
@@ -24,7 +18,7 @@ class AddrTransController {
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
   virtual uint64_t StoreAddr(uint64_t phy_addr, bool frozen);
-  virtual ATTState Probe(uint64_t phy_addr, bool frozen);
+  virtual bool Probe(uint64_t phy_addr, bool frozen);
   virtual void NewEpoch();
 
   uint64_t Size() const;
@@ -44,10 +38,12 @@ class AddrTransController {
       AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
   static bool ProbeNVMStore(uint64_t phy_addr,
       AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
-  static uint64_t DRAMStore(uint64_t phy_addr, bool frozen,
-      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
-  static bool ProbeDRAMStore(uint64_t phy_addr, bool frozen,
-      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
+
+  uint64_t DRAMStore(uint64_t phy_addr, bool frozen);
+  bool ProbeDRAMStore(uint64_t phy_addr, bool frozen);
+
+  void RevokeTempEntry(int index);
+
   const uint64_t dram_size_; ///< Size of visible DRAM region
   const uint64_t nvm_size_; ///< Size of visible NVM region
   MemStore* mem_store_;
@@ -55,6 +51,14 @@ class AddrTransController {
   /// List of DRAM physical addresses that occupy ATT
   ///
   std::vector<uint64_t> cross_list_;
+  
+  class TempEntryRevoker : public QueueVisitor {
+   public:
+    TempEntryRevoker(AddrTransController* atc) : atc_(atc) { }
+    void Visit(int i) { atc_->RevokeTempEntry(i); }
+   private:
+    AddrTransController* atc_;
+  };
 };
 
 // Space partition (low -> high):
