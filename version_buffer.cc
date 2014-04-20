@@ -30,7 +30,7 @@ void VersionBuffer::PinBlock(uint64_t mach_addr) {
   sets_[BACKUP_SLOT].insert(i);
 }
 
-void VersionBuffer::CleanBackup() {
+void VersionBuffer::FreeBackup() {
   for(set<int>::iterator it = sets_[BACKUP_SLOT].begin();
       it != sets_[BACKUP_SLOT].end(); ++it) {
     sets_[FREE_SLOT].insert(*it);
