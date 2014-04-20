@@ -38,11 +38,6 @@ struct ATTEntry {
   static const uint32_t PHY_DRAM = 0x00000002;
 };
 
-class EntryVisitor {
- public:
-  virtual void Visit(ATTEntry& entry) = 0;
-};
-
 class AddrTransTable : public IndexArray {
  public:
   AddrTransTable(int length, int block_bits);
@@ -60,7 +55,7 @@ class AddrTransTable : public IndexArray {
   void Reset(int index, uint64_t mach_addr,
       EntryState state, uint32_t flag_mask = 0);
   void FreeEntry(int index);
-  void VisitQueue(EntryState state, EntryVisitor* visitor);
+  void VisitQueue(EntryState state, QueueVisitor* visitor);
   int CleanDirtyQueue();
   int FreeQueue(EntryState state);
 
@@ -97,6 +92,11 @@ inline AddrTransTable::AddrTransTable(int length, int block_bits) :
 inline const ATTEntry& AddrTransTable::At(int i) {
   assert(i >= 0 && i < length_);
   return entries_[i];
+}
+
+inline void AddrTransTable::VisitQueue(EntryState state,
+    QueueVisitor* visitor) {
+  queues_[state].Accept(visitor);
 }
  
 inline uint64_t AddrTransTable::Translate(

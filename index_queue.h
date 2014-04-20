@@ -16,6 +16,11 @@ class IndexArray {
   virtual IndexNode& operator[](int i) = 0;
 };
 
+class QueueVisitor {
+ public:
+  virtual void Visit(int i) = 0;
+};
+
 class IndexQueue {
  public:
   IndexQueue(IndexArray& arr);
@@ -26,6 +31,7 @@ class IndexQueue {
   int PopFront();
   void PushBack(int i);
 
+  void Accept(QueueVisitor* visitor);
   int length() const { return length_; }
  private:
   IndexNode& FrontNode();

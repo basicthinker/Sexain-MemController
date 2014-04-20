@@ -43,3 +43,11 @@ void IndexQueue::PushBack(int i) {
   ++length_;
 }
 
+void IndexQueue::Accept(QueueVisitor* visitor) {
+  int i = Front();
+  while (i != -EINVAL) {
+    visitor->Visit(i);
+    i = array_[i].second;
+  }
+}
+

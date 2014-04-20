@@ -100,12 +100,3 @@ int AddrTransTable::FreeQueue(EntryState state) {
   return count;
 }
 
-void AddrTransTable::VisitQueue(EntryState state, EntryVisitor* visitor) {
-  int i = queues_[state].Front();
-  while (i != -EINVAL) {
-    visitor->Visit(entries_[i]);
-    i = entries_[i].queue_node.second;
-    assert(entries_[i].state == state);
-  }
-}
-
