@@ -17,13 +17,16 @@ class AddrTransController {
   virtual ~AddrTransController() { }
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
-  virtual uint64_t StoreAddr(uint64_t phy_addr, bool frozen);
-  virtual bool Probe(uint64_t phy_addr, bool frozen);
-  virtual void NewEpoch();
+  virtual uint64_t StoreAddr(uint64_t phy_addr);
+  virtual bool Probe(uint64_t phy_addr);
+
+  virtual void BeginEpochEnding();
+  virtual void FinishEpochEnding();
 
   uint64_t Size() const;
   int cache_block_size() const { return att_.block_size(); }
   uint64_t phy_limit() const { return dram_size_ + nvm_size_; }
+  bool in_ending() const { return in_ending_; }
 
  protected:
   virtual bool isDRAM(uint64_t phy_addr);
@@ -39,18 +42,15 @@ class AddrTransController {
   static bool ProbeNVMStore(uint64_t phy_addr,
       AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
 
-  uint64_t DRAMStore(uint64_t phy_addr, bool frozen);
-  bool ProbeDRAMStore(uint64_t phy_addr, bool frozen);
+  uint64_t DRAMStore(uint64_t phy_addr);
+  bool ProbeDRAMStore(uint64_t phy_addr);
 
   void RevokeTempEntry(int index);
 
   const uint64_t dram_size_; ///< Size of visible DRAM region
   const uint64_t nvm_size_; ///< Size of visible NVM region
   MemStore* mem_store_;
-  ///
-  /// List of DRAM physical addresses that occupy ATT
-  ///
-  std::vector<uint64_t> cross_list_;
+  bool in_ending_;
   
   class TempEntryRevoker : public QueueVisitor {
    public:
@@ -73,6 +73,7 @@ inline AddrTransController::AddrTransController(
     dram_size_(dram_size), nvm_size_(phy_size - dram_size) {
   assert(phy_size >= dram_size);
   mem_store_ = ms;
+  in_ending_ = false;
   ptt_buffer_.set_addr_base(phy_limit() + dram_size_);
   dram_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
   nvm_buffer_.set_addr_base(dram_buffer_.addr_base() + dram_buffer_.Size());
