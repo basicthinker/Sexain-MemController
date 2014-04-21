@@ -151,11 +151,6 @@ class SimpleMemory : public AbstractMemory
     bool isBusy;
 
     /**
-     * Track the state of copying in the DRAM scheme
-     */
-    bool isFrozen;
-
-    /**
      * Remember if we have to retry an outstanding request that
      * arrived while we were busy.
      */

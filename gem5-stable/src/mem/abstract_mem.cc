@@ -302,8 +302,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
     DPRINTF(MemoryAccess,"%s from %s of size %i on address 0x%x data " \
             "0x%x %c %c\n", A, system()->getMasterName(pkt->req->masterId()),\
             pkt->getSize(), pkt->getAddr(), pkt->get<T>(),                \
-            pkt->req->isUncacheable() ? 'U' : 'C',                        \
-            pkt->isFrozen() ? 'F' : 'N');                                 \
+            pkt->req->isUncacheable() ? 'U' : 'C');                       \
   break
 
 
@@ -318,8 +317,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
             DPRINTF(MemoryAccess, "%s from %s of size %i on address 0x%x %c %c\n",\
                     A, system()->getMasterName(pkt->req->masterId()),          \
                     pkt->getSize(), pkt->getAddr(),                            \
-                    pkt->req->isUncacheable() ? 'U' : 'C',                     \
-                    pkt->isFrozen() ? 'F' : 'N');                              \
+                    pkt->req->isUncacheable() ? 'U' : 'C');                    \
             DDUMP(MemoryAccess, pkt->getPtr<uint8_t>(), pkt->getSize());       \
         }                                                                      \
     } while (0)
@@ -373,8 +371,7 @@ AbstractMemory::access(PacketPtr pkt)
         }
 
         if (overwrite_mem) {
-            host_addr = hostAddr(addrController.StoreAddr(
-                    localAddr(pkt), pkt->isFrozen()));
+            host_addr = hostAddr(addrController.StoreAddr(localAddr(pkt)));
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
 
@@ -401,8 +398,8 @@ AbstractMemory::access(PacketPtr pkt)
         if (writeOK(pkt)) {
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.cache_block_size());
-                uint8_t* host_addr = hostAddr(addrController.StoreAddr(
-                        localAddr(pkt), pkt->isFrozen()));
+                uint8_t* host_addr = hostAddr(
+                        addrController.StoreAddr(localAddr(pkt)));
                 memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
@@ -457,7 +454,29 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
-AbstractMemory::OnNVMMove(uint64_t phy_addr, uint64_t mach_addr, int size)
+AbstractMemory::NVMMove(uint64_t phy_addr, uint64_t mach_addr, int size)
+{
+    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
+}
+
+void
+AbstractMemory::NVMSwap(uint64_t phy_addr, uint64_t mach_addr, int size)
+{
+    char* data = new char[size];
+    memcpy(data, hostAddr(phy_addr), size);
+    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
+    memcpy(hostAddr(mach_addr), data, size);
+    delete[] data;
+}
+
+void
+AbstractMemory::DRAMMove(uint64_t phy_addr, uint64_t mach_addr, int size)
+{
+    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
+}
+
+void
+AbstractMemory::WriteBack(uint64_t phy_addr, uint64_t mach_addr, int size)
 {
     memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
 }

@@ -53,7 +53,7 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     latATTOperate(p->lat_att_operate), latBufferOperate(p->lat_buffer_operate),
     latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
     isLatATT(p->is_lat_att), latency_var(p->latency_var),
-    bandwidth(p->bandwidth), isBusy(false), isFrozen(false),
+    bandwidth(p->bandwidth), isBusy(false),
     retryReq(false), retryResp(false),
     releaseEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
@@ -168,14 +168,16 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Tick duration = pkt->getSize() * bandwidth;
 
         if (pkt->isWrite()) {
-            ATTState state = addrController.Probe(localAddr(pkt), isFrozen);
-            if (state == RETRY) {
+            bool available = addrController.Probe(localAddr(pkt));
+            if (!available && addrController.in_ending()) {
                 retryReq = true;
                 return false;
-            } else if (state == EPOCH) {
-                assert(!isFrozen);
-                addrController.NewEpoch();
+            } else if (!available && !addrController.in_ending()) {
+                addrController.BeginEpochEnding();
+                Tick ending_duration = 256 * 4 * 1024 * bandwidth; // TODO
+                schedule(unfreezeEvent, curTick() + ending_duration);
             }
+            ++frozenWrites;
         }
 
         // only consider ourselves busy if there is any need to wait
@@ -185,11 +187,6 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
             schedule(releaseEvent, curTick() + duration);
             isBusy = true;
         }
-    }
-
-    if (isFrozen) {
-        if (pkt->isWrite()) ++frozenWrites;
-        pkt->setFrozen();
     }
 
     // go ahead and deal with the packet and put the response in the
@@ -229,8 +226,7 @@ SimpleMemory::release()
 void
 SimpleMemory::unfreeze()
 {
-    assert(isFrozen);
-    isFrozen = false;
+    addrController.FinishEpochEnding();
     if (retryReq) {
         retryReq = false;
         port.sendRetry();
