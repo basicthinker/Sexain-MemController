@@ -60,6 +60,8 @@ class AddrTransTable : public IndexArray {
   int FreeQueue(EntryState state);
 
   const ATTEntry& At(int i);
+  bool Contains(uint64_t phy_addr);
+  bool IsFull(); ///< Whether there is none of free or clean entries
   bool IsEmpty(EntryState state) { return queues_[state].Empty(); }
   int GetLength(EntryState state) { return queues_[state].length(); }
 
@@ -92,6 +94,14 @@ inline AddrTransTable::AddrTransTable(int length, int block_bits) :
 inline const ATTEntry& AddrTransTable::At(int i) {
   assert(i >= 0 && i < length_);
   return entries_[i];
+}
+
+inline bool AddrTransTable::Contains(uint64_t phy_addr) {
+  return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
+}
+
+inline bool AddrTransTable::IsFull() {
+  return GetLength(DIRTY_ENTRY) + GetLength(TEMP_ENTRY) == length();
 }
 
 inline void AddrTransTable::VisitQueue(EntryState state,
