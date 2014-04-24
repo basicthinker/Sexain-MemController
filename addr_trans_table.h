@@ -19,13 +19,13 @@ enum EntryState {
 
 struct ATTEntry {
   uint64_t phy_tag;
-  uint64_t mach_addr;
+  uint64_t mach_base;
   IndexNode queue_node;
   EntryState state;
   uint32_t flag;
 
   ATTEntry() : state(FREE_ENTRY) {
-    phy_tag = mach_addr = -1;
+    phy_tag = mach_base = -1;
     queue_node.first = queue_node.second = -EINVAL;
     flag = 0;
   }
@@ -43,16 +43,16 @@ class AddrTransTable : public IndexArray {
   AddrTransTable(int length, int block_bits);
 
   uint64_t Lookup(uint64_t phy_tag, int* index);
-  void Setup(uint64_t phy_tag, uint64_t mach_addr,
+  void Setup(uint64_t phy_tag, uint64_t mach_base,
       EntryState state, uint32_t flag_mask = 0);
   void Revoke(uint64_t phy_tag);
   ///
   /// Replace an existing clean mapping with the specified one.
   /// @return the replaced clean mapping
   ///
-  std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_addr,
+  std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_base,
       EntryState state, uint32_t flag_mask = 0);
-  void Reset(int index, uint64_t mach_addr,
+  void Reset(int index, uint64_t mach_base,
       EntryState state, uint32_t flag_mask = 0);
   void FreeEntry(int index);
   void VisitQueue(EntryState state, QueueVisitor* visitor);
@@ -67,7 +67,7 @@ class AddrTransTable : public IndexArray {
 
   uint64_t Tag(uint64_t addr) { return addr >> block_bits_; }
   uint64_t Addr(uint64_t tag) { return tag << block_bits_; }
-  uint64_t Translate(uint64_t phy_addr, uint64_t mach_addr);
+  uint64_t Translate(uint64_t phy_addr, uint64_t mach_base);
 
   int length() const { return length_; }
   int block_size() const { return 1 << block_bits_; }
@@ -110,8 +110,8 @@ inline void AddrTransTable::VisitQueue(EntryState state,
 }
  
 inline uint64_t AddrTransTable::Translate(
-    uint64_t phy_addr, uint64_t mach_addr) {
-  return mach_addr + (phy_addr & block_mask_);
+    uint64_t phy_addr, uint64_t mach_base) {
+  return mach_base + (phy_addr & block_mask_);
 }
 
 #endif // SEXAIN_ADDR_TRANS_TABLE_H_
