@@ -3,6 +3,7 @@
 
 #include "index_queue.h"
 
+using namespace std;
 void IndexQueue::Remove(int i) {
   assert(i >= 0);
   const int prev = array_[i].first;
@@ -45,9 +46,11 @@ void IndexQueue::PushBack(int i) {
 
 void IndexQueue::Accept(QueueVisitor* visitor) {
   int i = Front();
+  int tmp;
   while (i != -EINVAL) {
+    tmp = array_[i].second;
     visitor->Visit(i);
-    i = array_[i].second;
+    i = tmp;
   }
 }
 
