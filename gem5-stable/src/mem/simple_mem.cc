@@ -168,16 +168,17 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Tick duration = pkt->getSize() * bandwidth;
 
         if (pkt->isWrite()) {
-            bool available = addrController.Probe(localAddr(pkt));
-            if (!available && addrController.in_ending()) {
+            ATTControl atc = addrController.Probe(localAddr(pkt));
+            if (atc == ATC_RETRY) {
                 retryReq = true;
                 return false;
-            } else if (!available && !addrController.in_ending()) {
+            } else if (atc == ATC_EPOCH) {
                 addrController.BeginEpochEnding();
                 Tick ending_duration = 256 * 4 * 1024 * bandwidth; // TODO
                 schedule(unfreezeEvent, curTick() + ending_duration);
+            } else {
+                assert(atc == ATC_ACCEPT);
             }
-            ++frozenWrites;
         }
 
         // only consider ourselves busy if there is any need to wait
