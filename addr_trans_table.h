@@ -34,6 +34,7 @@ struct ATTEntry {
   void Set(uint32_t mask) { flag |= mask; }
   void Clear(uint32_t mask) { flag &= ~mask; }
 
+  static const uint32_t NON_TEMP = 0x00000000;
   static const uint32_t MACH_RESET = 0x00000001;
   static const uint32_t PHY_DRAM = 0x00000002;
 };
@@ -44,16 +45,16 @@ class AddrTransTable : public IndexArray {
 
   uint64_t Lookup(uint64_t phy_tag, int* index);
   void Setup(uint64_t phy_tag, uint64_t mach_base,
-      EntryState state, uint32_t flag_mask = 0);
+      EntryState state, uint32_t flag_mask);
   void Revoke(uint64_t phy_tag);
   ///
   /// Replace an existing clean mapping with the specified one.
   /// @return the replaced clean mapping
   ///
   std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_base,
-      EntryState state, uint32_t flag_mask = 0);
+      EntryState state, uint32_t flag_mask);
   void Reset(int index, uint64_t mach_base,
-      EntryState state, uint32_t flag_mask = 0);
+      EntryState state, uint32_t flag_mask);
   void FreeEntry(int index);
   void VisitQueue(EntryState state, QueueVisitor* visitor);
   int CleanDirtyQueue();

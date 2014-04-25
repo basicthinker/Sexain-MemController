@@ -30,6 +30,7 @@ void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_base,
   entries_[i].state = state;
   entries_[i].phy_tag = phy_tag;
   entries_[i].mach_base = mach_base;
+  assert((flag_mask != ATTEntry::NON_TEMP) == (state == TEMP_ENTRY));
   entries_[i].Set(flag_mask);
 
   tag_index_[phy_tag] = i;
@@ -84,8 +85,7 @@ int AddrTransTable::CleanDirtyQueue() {
     ++count;
     i = queues_[DIRTY_ENTRY].PopFront();
   }
-  assert(queues_[DIRTY_ENTRY].Empty() &&
-      GetLength(CLEAN_ENTRY) + GetLength(FREE_ENTRY) == length_);
+  assert(queues_[DIRTY_ENTRY].Empty());
   return count;
 }
 
