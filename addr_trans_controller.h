@@ -10,6 +10,12 @@
 #include "addr_trans_table.h"
 #include "mem_store.h"
 
+enum ATTControl {
+  ATC_ACCEPT,
+  ATC_EPOCH,
+  ATC_RETRY,
+};
+
 class AddrTransController {
  public:
   AddrTransController(uint64_t dram_size, uint64_t phy_limit,
@@ -18,7 +24,7 @@ class AddrTransController {
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
   virtual uint64_t StoreAddr(uint64_t phy_addr);
-  virtual bool Probe(uint64_t phy_addr);
+  virtual ATTControl Probe(uint64_t phy_addr);
 
   virtual void BeginEpochEnding();
   virtual void FinishEpochEnding();
@@ -39,11 +45,8 @@ class AddrTransController {
  private:
   static uint64_t NVMStore(uint64_t phy_addr,
       AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
-  static bool ProbeNVMStore(uint64_t phy_addr,
-      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
-
   uint64_t DRAMStore(uint64_t phy_addr);
-  bool ProbeDRAMStore(uint64_t phy_addr);
+  void PseudoPageStore(uint64_t phy_addr);
 
   void RevokeTempEntry(int index);
 
@@ -51,6 +54,8 @@ class AddrTransController {
   const uint64_t nvm_size_; ///< Size of visible NVM region
   MemStore* mem_store_;
   bool in_ending_;
+
+  int num_page_move_; ///< Move of NVM pages
   
   class TempEntryRevoker : public QueueVisitor {
    public:
@@ -71,9 +76,12 @@ inline AddrTransController::AddrTransController(
     dram_buffer_(att_len, block_bits),
     ptt_(ptt_len, page_bits), ptt_buffer_(2 * ptt_len, page_bits),
     dram_size_(dram_size), nvm_size_(phy_size - dram_size) {
+
   assert(phy_size >= dram_size);
   mem_store_ = ms;
   in_ending_ = false;
+  num_page_move_ = 0;
+
   ptt_buffer_.set_addr_base(phy_limit() + dram_size_);
   dram_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
   nvm_buffer_.set_addr_base(dram_buffer_.addr_base() + dram_buffer_.Size());
