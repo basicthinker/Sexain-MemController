@@ -60,15 +60,16 @@ class AddrTransTable : public IndexArray {
   int CleanDirtyQueue();
   int FreeQueue(EntryState state);
 
-  const ATTEntry& At(int i);
-  bool Contains(uint64_t phy_addr);
-  bool IsFull(); ///< Whether there is none of free or clean entries
-  bool IsEmpty(EntryState state) { return queues_[state].Empty(); }
-  int GetLength(EntryState state) { return queues_[state].length(); }
+  const ATTEntry& At(int i) const;
+  bool Contains(uint64_t phy_addr) const;
+  bool IsFull() const; ///< Whether there is none of free or clean entries
+  bool IsEmpty(EntryState state) const { return queues_[state].Empty(); }
+  int GetLength(EntryState state) const { return queues_[state].length(); }
+  int GetFront(EntryState state) const { return queues_[state].Front(); }
 
-  uint64_t Tag(uint64_t addr) { return addr >> block_bits_; }
-  uint64_t Addr(uint64_t tag) { return tag << block_bits_; }
-  uint64_t Translate(uint64_t phy_addr, uint64_t mach_base);
+  uint64_t Tag(uint64_t addr) const { return addr >> block_bits_; }
+  uint64_t Addr(uint64_t tag) const { return tag << block_bits_; }
+  uint64_t Translate(uint64_t phy_addr, uint64_t mach_base) const;
 
   int length() const { return length_; }
   int block_size() const { return 1 << block_bits_; }
@@ -92,16 +93,16 @@ inline AddrTransTable::AddrTransTable(int length, int block_bits) :
   }
 }
 
-inline const ATTEntry& AddrTransTable::At(int i) {
+inline const ATTEntry& AddrTransTable::At(int i) const {
   assert(i >= 0 && i < length_);
   return entries_[i];
 }
 
-inline bool AddrTransTable::Contains(uint64_t phy_addr) {
+inline bool AddrTransTable::Contains(uint64_t phy_addr) const {
   return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
 }
 
-inline bool AddrTransTable::IsFull() {
+inline bool AddrTransTable::IsFull() const {
   return GetLength(DIRTY_ENTRY) + GetLength(TEMP_ENTRY) == length();
 }
 
@@ -111,7 +112,7 @@ inline void AddrTransTable::VisitQueue(EntryState state,
 }
  
 inline uint64_t AddrTransTable::Translate(
-    uint64_t phy_addr, uint64_t mach_base) {
+    uint64_t phy_addr, uint64_t mach_base) const {
   return mach_base + (phy_addr & block_mask_);
 }
 

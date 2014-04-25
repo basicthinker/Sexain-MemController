@@ -60,7 +60,7 @@ pair<uint64_t, uint64_t> AddrTransTable::Replace(uint64_t phy_tag,
   pair<uint64_t, uint64_t> replaced;
   replaced.first = entries_[i].phy_tag;
   replaced.second = entries_[i].mach_base;
-  Revoke(entries_[i].phy_tag);
+  FreeEntry(i);
   Setup(phy_tag, mach_base, state, flag_mask);
   return replaced;
 }
