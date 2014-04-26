@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
+#include <initializer_list>
 #include "index_queue.h"
 
 enum EntryState {
@@ -62,9 +63,9 @@ class AddrTransTable : public IndexArray {
 
   const ATTEntry& At(int i) const;
   bool Contains(uint64_t phy_addr) const;
-  bool IsFull() const; ///< Whether there is none of free or clean entries
   bool IsEmpty(EntryState state) const { return queues_[state].Empty(); }
   int GetLength(EntryState state) const { return queues_[state].length(); }
+  int GetLength(std::initializer_list<EntryState> states) const;
   int GetFront(EntryState state) const { return queues_[state].Front(); }
 
   uint64_t Tag(uint64_t addr) const { return addr >> block_bits_; }
@@ -102,8 +103,14 @@ inline bool AddrTransTable::Contains(uint64_t phy_addr) const {
   return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
 }
 
-inline bool AddrTransTable::IsFull() const {
-  return GetLength(DIRTY_ENTRY) + GetLength(TEMP_ENTRY) == length();
+inline int AddrTransTable::GetLength(
+    std::initializer_list<EntryState> states) const {
+  int len = 0;
+  for (std::initializer_list<EntryState>::iterator it = states.begin();
+      it != states.end(); ++it) {
+    len += GetLength(*it);
+  }
+  return len;
 }
 
 inline void AddrTransTable::VisitQueue(EntryState state,
