@@ -43,12 +43,11 @@ class AddrTransController {
   VersionBuffer ptt_buffer_;
 
  private:
-  static uint64_t NVMStore(uint64_t phy_addr,
-      AddrTransTable* att, VersionBuffer* vb, MemStore* ms);
+  uint64_t NVMStore(uint64_t phy_addr);
   uint64_t DRAMStore(uint64_t phy_addr);
   void PseudoPageStore(uint64_t phy_addr);
 
-  void RevokeTempEntry(int index);
+  uint64_t RevokeTempEntry(int index);
 
   const uint64_t dram_size_; ///< Size of visible DRAM region
   const uint64_t nvm_size_; ///< Size of visible NVM region
