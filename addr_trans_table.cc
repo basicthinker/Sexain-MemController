@@ -12,7 +12,7 @@ uint64_t AddrTransTable::Lookup(uint64_t phy_tag, int* index) {
     return Addr(phy_tag);
   } else {
     ATTEntry& entry = entries_[it->second];
-    assert(entry.state != FREE_ENTRY && entry.phy_tag == phy_tag);
+    assert(entry.state != ATTEntry::FREE && entry.phy_tag == phy_tag);
     queues_[entry.state].Remove(it->second);
     queues_[entry.state].PushBack(it->second);
     if (index) *index = it->second;
@@ -21,27 +21,27 @@ uint64_t AddrTransTable::Lookup(uint64_t phy_tag, int* index) {
 }
 
 void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_base,
-    EntryState state, uint32_t flag_mask) {
+    ATTEntry::State state, uint32_t flag) {
   assert(tag_index_.count(phy_tag) == 0);
-  assert(!queues_[FREE_ENTRY].Empty());
+  assert(!queues_[ATTEntry::FREE].Empty());
 
-  int i = queues_[FREE_ENTRY].PopFront();
+  int i = queues_[ATTEntry::FREE].PopFront();
   queues_[state].PushBack(i);
   entries_[i].state = state;
   entries_[i].phy_tag = phy_tag;
   entries_[i].mach_base = mach_base;
-  assert((flag_mask != ATTEntry::NON_TEMP) == (state == TEMP_ENTRY));
-  entries_[i].Set(flag_mask);
+  assert((flag != ATTEntry::NON_TEMP) == (state == ATTEntry::TEMP));
+  entries_[i].flag = flag;
 
   tag_index_[phy_tag] = i;
 }
 
 void AddrTransTable::FreeEntry(int index) {
   ATTEntry& entry = entries_[index];
-  assert(entry.state != FREE_ENTRY);
+  assert(entry.state != ATTEntry::FREE);
   tag_index_.erase(entry.phy_tag); 
   queues_[entry.state].Remove(index);
-  queues_[FREE_ENTRY].PushBack(index);
+  queues_[ATTEntry::FREE].PushBack(index);
 }
 
 void AddrTransTable::Revoke(uint64_t phy_tag) {
@@ -53,43 +53,44 @@ void AddrTransTable::Revoke(uint64_t phy_tag) {
 }
 
 pair<uint64_t, uint64_t> AddrTransTable::Replace(uint64_t phy_tag,
-    uint64_t mach_base, EntryState state, uint32_t flag_mask) {
-  const int i = queues_[CLEAN_ENTRY].Front();
+    uint64_t mach_base, ATTEntry::State state, uint32_t flag) {
+  const int i = queues_[ATTEntry::CLEAN].Front();
   assert(i != -EINVAL);
   assert(entries_[i].flag == 0);
   pair<uint64_t, uint64_t> replaced;
   replaced.first = entries_[i].phy_tag;
   replaced.second = entries_[i].mach_base;
   FreeEntry(i);
-  Setup(phy_tag, mach_base, state, flag_mask);
+  Setup(phy_tag, mach_base, state, flag);
   return replaced;
 }
 
 void AddrTransTable::Reset(int index, uint64_t mach_base,
-    EntryState state, uint32_t flag_mask) {
+    ATTEntry::State state, uint32_t flag_mask) {
   ATTEntry& entry = entries_[index];
   entry.mach_base = mach_base;
   queues_[entry.state].Remove(index);
   queues_[state].PushBack(index);
   entry.state = state;
+  assert(entry.flag != ATTEntry::NON_TEMP);
   entry.Set(ATTEntry::MACH_RESET | flag_mask);
 }
 
 int AddrTransTable::CleanDirtyQueue() {
   int count = 0;
-  int i = queues_[DIRTY_ENTRY].PopFront();
+  int i = queues_[ATTEntry::DIRTY].PopFront();
   while (i != -EINVAL) {
-    assert(entries_[i].state == DIRTY_ENTRY);
-    entries_[i].state = CLEAN_ENTRY;
-    queues_[CLEAN_ENTRY].PushBack(i);
+    assert(entries_[i].state == ATTEntry::DIRTY);
+    entries_[i].state = ATTEntry::CLEAN;
+    queues_[ATTEntry::CLEAN].PushBack(i);
     ++count;
-    i = queues_[DIRTY_ENTRY].PopFront();
+    i = queues_[ATTEntry::DIRTY].PopFront();
   }
-  assert(queues_[DIRTY_ENTRY].Empty());
+  assert(queues_[ATTEntry::DIRTY].Empty());
   return count;
 }
 
-int AddrTransTable::FreeQueue(EntryState state) {
+int AddrTransTable::FreeQueue(ATTEntry::State state) {
   int count = 0;
   int i = queues_[state].Front();
   while (i != -EINVAL) {

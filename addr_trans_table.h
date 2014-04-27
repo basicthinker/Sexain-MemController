@@ -11,21 +11,29 @@
 #include <initializer_list>
 #include "index_queue.h"
 
-enum EntryState {
-  DIRTY_ENTRY = 0,
-  TEMP_ENTRY,
-  CLEAN_ENTRY,
-  FREE_ENTRY, // always placed the last
-};
 
 struct ATTEntry {
+  enum State {
+    DIRTY = 0,
+    TEMP,
+    CLEAN,
+    FREE, // always placed the last
+  };
+
+  enum TempType {
+    REG_TEMP = 0x00000000,
+    MACH_RESET = 0x00000001,
+    PHY_DRAM = 0x00000002,
+    NON_TEMP = 0xfffffff0,
+  };
+
   uint64_t phy_tag;
   uint64_t mach_base;
   IndexNode queue_node;
-  EntryState state;
+  State state;
   uint32_t flag;
 
-  ATTEntry() : state(FREE_ENTRY) {
+  ATTEntry() : state(FREE) {
     phy_tag = mach_base = -1;
     queue_node.first = queue_node.second = -EINVAL;
     flag = 0;
@@ -34,10 +42,6 @@ struct ATTEntry {
   bool Test(uint32_t mask) const { return flag & mask; }
   void Set(uint32_t mask) { flag |= mask; }
   void Clear(uint32_t mask) { flag &= ~mask; }
-
-  static const uint32_t NON_TEMP = 0x00000000;
-  static const uint32_t MACH_RESET = 0x00000001;
-  static const uint32_t PHY_DRAM = 0x00000002;
 };
 
 class AddrTransTable : public IndexArray {
@@ -46,27 +50,27 @@ class AddrTransTable : public IndexArray {
 
   uint64_t Lookup(uint64_t phy_tag, int* index);
   void Setup(uint64_t phy_tag, uint64_t mach_base,
-      EntryState state, uint32_t flag_mask);
+      ATTEntry::State state, uint32_t flag = ATTEntry::NON_TEMP);
   void Revoke(uint64_t phy_tag);
   ///
   /// Replace an existing clean mapping with the specified one.
   /// @return the replaced clean mapping
   ///
   std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_base,
-      EntryState state, uint32_t flag_mask);
+      ATTEntry::State state, uint32_t flag = ATTEntry::NON_TEMP);
   void Reset(int index, uint64_t mach_base,
-      EntryState state, uint32_t flag_mask);
+      ATTEntry::State state, uint32_t flag_mask = ATTEntry::NON_TEMP);
   void FreeEntry(int index);
-  void VisitQueue(EntryState state, QueueVisitor* visitor);
+  void VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
   int CleanDirtyQueue();
-  int FreeQueue(EntryState state);
+  int FreeQueue(ATTEntry::State state);
 
   const ATTEntry& At(int i) const;
   bool Contains(uint64_t phy_addr) const;
-  bool IsEmpty(EntryState state) const { return queues_[state].Empty(); }
-  int GetLength(EntryState state) const { return queues_[state].length(); }
-  int GetLength(std::initializer_list<EntryState> states) const;
-  int GetFront(EntryState state) const { return queues_[state].Front(); }
+  bool IsEmpty(ATTEntry::State state) const { return queues_[state].Empty(); }
+  int GetLength(ATTEntry::State state) const { return queues_[state].length(); }
+  int GetLength(std::initializer_list<ATTEntry::State> states) const;
+  int GetFront(ATTEntry::State state) const { return queues_[state].Front(); }
 
   uint64_t Tag(uint64_t addr) const { return addr >> block_bits_; }
   uint64_t Addr(uint64_t tag) const { return tag << block_bits_; }
@@ -88,9 +92,9 @@ class AddrTransTable : public IndexArray {
 
 inline AddrTransTable::AddrTransTable(int length, int block_bits) :
     length_(length), block_bits_(block_bits), block_mask_(block_size() - 1),
-    entries_(length_), queues_((int)FREE_ENTRY + 1, *this) {
+    entries_(length_), queues_((int)ATTEntry::FREE + 1, *this) {
   for (int i = 0; i < length_; ++i) {
-    queues_[FREE_ENTRY].PushBack(i);
+    queues_[ATTEntry::FREE].PushBack(i);
   }
 }
 
@@ -104,16 +108,16 @@ inline bool AddrTransTable::Contains(uint64_t phy_addr) const {
 }
 
 inline int AddrTransTable::GetLength(
-    std::initializer_list<EntryState> states) const {
+    std::initializer_list<ATTEntry::State> states) const {
   int len = 0;
-  for (std::initializer_list<EntryState>::iterator it = states.begin();
+  for (std::initializer_list<ATTEntry::State>::iterator it = states.begin();
       it != states.end(); ++it) {
     len += GetLength(*it);
   }
   return len;
 }
 
-inline void AddrTransTable::VisitQueue(EntryState state,
+inline void AddrTransTable::VisitQueue(ATTEntry::State state,
     QueueVisitor* visitor) {
   queues_[state].Accept(visitor);
 }
