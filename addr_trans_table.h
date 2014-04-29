@@ -20,28 +20,22 @@ struct ATTEntry {
     FREE, // always placed the last
   };
 
-  enum TempType {
-    REG_TEMP = 0x00000000,
-    MACH_RESET = 0x00000001,
-    PHY_DRAM = 0x00000002,
-    NON_TEMP = 0xfffffff0,
+  enum SubState {
+    NONE = 0,
+    CROSS,
+    REGULAR,
   };
 
   uint64_t phy_tag;
   uint64_t mach_base;
   IndexNode queue_node;
   State state;
-  uint32_t flag;
+  SubState sub;
 
-  ATTEntry() : state(FREE) {
-    phy_tag = mach_base = -1;
-    queue_node.first = queue_node.second = -EINVAL;
-    flag = 0;
-  }
-
-  bool Test(uint32_t mask) const { return flag & mask; }
-  void Set(uint32_t mask) { flag |= mask; }
-  void Clear(uint32_t mask) { flag &= ~mask; }
+  bool IsPlaceholder() const { return state == DIRTY && sub == CROSS; }
+  bool IsRegularDirty() const { return state == DIRTY && sub == REGULAR; }
+  bool IsReset() const { return state == TEMP && sub == CROSS; }
+  bool IsRegularTemp() const { return state == TEMP && sub == REGULAR; }
 };
 
 class AddrTransTable : public IndexArray {
@@ -50,16 +44,16 @@ class AddrTransTable : public IndexArray {
 
   uint64_t Lookup(uint64_t phy_tag, int* index);
   void Setup(uint64_t phy_tag, uint64_t mach_base,
-      ATTEntry::State state, uint32_t flag = ATTEntry::NON_TEMP);
+      ATTEntry::State state, ATTEntry::SubState sub);
   void Revoke(uint64_t phy_tag);
   ///
   /// Replace an existing clean mapping with the specified one.
   /// @return the replaced clean mapping
   ///
   std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_base,
-      ATTEntry::State state, uint32_t flag = ATTEntry::NON_TEMP);
+      ATTEntry::State state, ATTEntry::SubState sub);
   void Reset(int index, uint64_t mach_base,
-      ATTEntry::State state, uint32_t flag_mask = ATTEntry::NON_TEMP);
+      ATTEntry::State state, ATTEntry::SubState sub);
   void FreeEntry(int index);
   void VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
   int CleanDirtyQueue();
