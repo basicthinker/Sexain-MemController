@@ -41,6 +41,17 @@ void AddrTransTable::FreeEntry(int index) {
   tag_index_.erase(entry.phy_tag); 
   queues_[entry.state].Remove(index);
   queues_[ATTEntry::FREE].PushBack(index);
+  entry.state = ATTEntry::FREE;
+  entry.sub = ATTEntry::NONE;
+}
+
+void AddrTransTable::CleanEntry(int index) {
+  ATTEntry& entry = entries_[index];
+  assert(entry.state == ATTEntry::DIRTY);
+  queues_[ATTEntry::DIRTY].Remove(index);
+  queues_[ATTEntry::CLEAN].PushBack(index);
+  entries_[index].state = ATTEntry::CLEAN;
+  entries_[index].sub = ATTEntry::NONE;
 }
 
 void AddrTransTable::Revoke(uint64_t phy_tag) {
@@ -72,30 +83,5 @@ void AddrTransTable::Reset(int index, uint64_t mach_base,
   queues_[state].PushBack(index);
   entry.state = state;
   entry.sub = sub;
-}
-
-int AddrTransTable::CleanDirtyQueue() {
-  int count = 0;
-  int i = queues_[ATTEntry::DIRTY].PopFront();
-  while (i != -EINVAL) {
-    assert(entries_[i].state == ATTEntry::DIRTY);
-    entries_[i].state = ATTEntry::CLEAN;
-    queues_[ATTEntry::CLEAN].PushBack(i);
-    ++count;
-    i = queues_[ATTEntry::DIRTY].PopFront();
-  }
-  assert(queues_[ATTEntry::DIRTY].Empty());
-  return count;
-}
-
-int AddrTransTable::FreeQueue(ATTEntry::State state) {
-  int count = 0;
-  int i = queues_[state].Front();
-  while (i != -EINVAL) {
-    FreeEntry(i);
-    ++count;
-    i = queues_[state].Front();
-  }
-  return count;
 }
 

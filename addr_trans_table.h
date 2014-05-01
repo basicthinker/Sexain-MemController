@@ -11,7 +11,6 @@
 #include <initializer_list>
 #include "index_queue.h"
 
-
 struct ATTEntry {
   enum State {
     DIRTY = 0,
@@ -55,9 +54,8 @@ class AddrTransTable : public IndexArray {
   void Reset(int index, uint64_t mach_base,
       ATTEntry::State state, ATTEntry::SubState sub);
   void FreeEntry(int index);
+  void CleanEntry(int index); ///< Only applicable to dirty entries
   void VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
-  int CleanDirtyQueue();
-  int FreeQueue(ATTEntry::State state);
 
   const ATTEntry& At(int i) const;
   bool Contains(uint64_t phy_addr) const;
