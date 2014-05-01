@@ -47,7 +47,7 @@ class AddrTransController {
   uint64_t DRAMStore(uint64_t phy_addr);
   void PseudoPageStore(uint64_t phy_addr);
 
-  uint64_t RevokeTempEntry(int index);
+  uint64_t RevokeEntry(int index, bool discard_data);
 
   const uint64_t dram_size_; ///< Size of visible DRAM region
   const uint64_t nvm_size_; ///< Size of visible NVM region
@@ -58,10 +58,26 @@ class AddrTransController {
   
   class TempEntryRevoker : public QueueVisitor {
    public:
-    TempEntryRevoker(AddrTransController* atc) : atc_(atc) { }
-    void Visit(int i) { atc_->RevokeTempEntry(i); }
+    TempEntryRevoker(AddrTransController& atc) : atc_(atc) { }
+    void Visit(int i) { atc_.RevokeEntry(i, false); }
    private:
-    AddrTransController* atc_;
+    AddrTransController& atc_;
+  };
+
+  class DirtyEntryRevoker : public QueueVisitor {
+   public:
+    DirtyEntryRevoker(AddrTransController& atc) : atc_(atc) { }
+    void Visit(int i);
+   private:
+    AddrTransController& atc_;
+  };
+
+  class DirtyEntryCleaner : public QueueVisitor {
+   public:
+    DirtyEntryCleaner(AddrTransTable& att) : att_(att) { }
+    void Visit(int i);
+   private:
+    AddrTransTable& att_;
   };
 };
 
@@ -92,6 +108,18 @@ inline uint64_t AddrTransController::Size() const {
 
 inline bool AddrTransController::isDRAM(uint64_t phy_addr) {
   return phy_addr < dram_size_;
+}
+
+inline void AddrTransController::DirtyEntryRevoker::Visit(int i) {
+  if (atc_.att_.At(i).IsPlaceholder()) {
+    atc_.RevokeEntry(i, false);
+  }
+}
+
+inline void AddrTransController::DirtyEntryCleaner::Visit(int i) {
+  if (att_.At(i).IsRegularDirty()) {
+    att_.CleanEntry(i);
+  }
 }
 
 #endif // SEXAIN_ADDR_TRANS_CONTROLLER_H_

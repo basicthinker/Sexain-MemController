@@ -5,8 +5,6 @@
 
 using namespace std;
 
-#define FLAG_CROSS (0x1)
-
 uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
   assert(phy_addr < phy_limit());
   uint64_t phy_tag = att_.Tag(phy_addr);
@@ -22,66 +20,90 @@ uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
 uint64_t AddrTransController::NVMStore(uint64_t phy_addr) {
   const uint64_t phy_tag = att_.Tag(phy_addr);
   int index;
-  const uint64_t mach_base = att_.Lookup(phy_tag, &index);
+  att_.Lookup(phy_tag, &index);
   if (!in_ending()) {
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
-      if (entry.state == TEMP_ENTRY) {
-        return att_.Translate(phy_addr, RevokeTempEntry(index));
-      } else if (entry.state == DIRTY_ENTRY) {
-        return att_.Translate(phy_addr, mach_base);
+      if (entry.IsPlaceholder() || entry.IsReset()) {
+        return att_.Translate(phy_addr, RevokeEntry(index, true));
+      } else if (entry.IsRegularDirty()) {
+        return att_.Translate(phy_addr, entry.mach_base);
       } else {
-        assert(entry.state == CLEAN_ENTRY);
+        assert(entry.state == ATTEntry::CLEAN);
+        nvm_buffer_.PinBlock(entry.mach_base);
         att_.FreeEntry(index);
-        nvm_buffer_.PinBlock(mach_base);
         return phy_addr;
       }
-    } else {
-      assert(att_.GetLength(DIRTY_ENTRY) < att_.length());
-      const uint64_t new_base = nvm_buffer_.NewBlock();
-      if (!att_.IsEmpty(FREE_ENTRY)) {
-        att_.Setup(phy_tag, new_base, DIRTY_ENTRY, ATTEntry::NON_TEMP);
-      } else if (!att_.IsEmpty(TEMP_ENTRY)) {
-        int tmp_i = att_.GetFront(TEMP_ENTRY);
-        RevokeTempEntry(tmp_i);
-        att_.Setup(phy_tag, new_base, DIRTY_ENTRY, ATTEntry::NON_TEMP);
+    } else { // not found
+      assert(att_.GetLength(ATTEntry::DIRTY) < att_.length());
+      const uint64_t mach_base = nvm_buffer_.NewBlock();
+      if (!att_.IsEmpty(ATTEntry::FREE)) {
+        att_.Setup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
+      } else if (!att_.IsEmpty(ATTEntry::TEMP)) {
+        int temp_i = att_.GetFront(ATTEntry::TEMP);
+        RevokeEntry(temp_i, false);
+        att_.Setup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
       } else {
         pair<uint64_t, uint64_t> replaced = att_.Replace(
-            phy_tag, new_base, DIRTY_ENTRY, ATTEntry::NON_TEMP);
+            phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
         mem_store_->NVMMove(att_.Addr(replaced.first), replaced.second,
             att_.block_size());
         nvm_buffer_.PinBlock(replaced.second);
       }
-      return att_.Translate(phy_addr, new_base);
+      return att_.Translate(phy_addr, mach_base);
     }
   } else { // in ending
-    return -EINVAL;
+    if (index != -EINVAL) { // found
+      const ATTEntry& entry = att_.At(index);
+      if (entry.IsRegularDirty() || entry.state == ATTEntry::TEMP) {
+        return att_.Translate(phy_addr, entry.mach_base);
+      } else {
+        const uint64_t mach_base = dram_buffer_.NewBlock();
+        nvm_buffer_.PinBlock(entry.mach_base);
+        att_.Reset(index, mach_base, ATTEntry::TEMP, ATTEntry::CROSS);
+        return att_.Translate(phy_addr, mach_base);
+      }
+    } else { // not found
+      assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
+      if (!att_.IsEmpty(ATTEntry::FREE)) {
+        const uint64_t mach_base = nvm_buffer_.NewBlock();
+        att_.Setup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
+        return att_.Translate(phy_addr, mach_base);
+      } else {
+        const uint64_t mach_base = dram_buffer_.NewBlock();
+        pair<uint64_t, uint64_t> replaced = att_.Replace(
+            phy_addr, mach_base, ATTEntry::DIRTY, ATTEntry::CROSS);
+        mem_store_->NVMSwap(att_.Addr(replaced.first), replaced.second,
+            att_.block_size());
+        // suppose the NV-ATT has the replaced marked as swapped
+        nvm_buffer_.PinBlock(replaced.second);
+        return att_.Translate(phy_addr, mach_base);
+      }
+    }
   }
 }
 
 uint64_t AddrTransController::DRAMStore(uint64_t phy_addr) {
   int index;
   uint64_t phy_tag = att_.Tag(phy_addr);
-  uint64_t mach_base = att_.Lookup(phy_tag, &index);
-  if (index != -EINVAL) { // mapping exists
-    if (in_ending()) return att_.Translate(phy_addr, mach_base);
+  att_.Lookup(phy_tag, &index);
+  if (index != -EINVAL) { // found
+    const ATTEntry& entry = att_.At(index);
+    if (in_ending()) return att_.Translate(phy_addr, entry.mach_base);
     else {
-      assert(att_.At(index).state == TEMP_ENTRY);
-      att_.FreeEntry(index);
-      dram_buffer_.FreeBlock(mach_base, IN_USE_SLOT);
-      return phy_addr;
+      assert(entry.IsRegularTemp());
+      return att_.Translate(phy_addr, RevokeEntry(index, true));
     }
   } else if (!in_ending()) {
     return phy_addr;
   } else { // in ending
-    assert(att_.GetLength(DIRTY_ENTRY) + att_.GetLength(TEMP_ENTRY)
-        < att_.length());
-    mach_base = dram_buffer_.NewBlock();
-    if (!att_.IsEmpty(FREE_ENTRY)) {
-      att_.Setup(phy_tag, mach_base, TEMP_ENTRY, ATTEntry::PHY_DRAM);
+    assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
+    const uint64_t mach_base = dram_buffer_.NewBlock();
+    if (!att_.IsEmpty(ATTEntry::FREE)) {
+      att_.Setup(phy_tag, mach_base, ATTEntry::TEMP, ATTEntry::REGULAR);
     } else {
       pair<uint64_t, uint64_t> mapping = att_.Replace(
-          phy_tag, mach_base, TEMP_ENTRY, ATTEntry::PHY_DRAM);
+          phy_tag, mach_base, ATTEntry::TEMP, ATTEntry::REGULAR);
       mem_store_->NVMSwap(att_.Addr(mapping.first), mapping.second,
           att_.block_size());
       nvm_buffer_.PinBlock(mapping.second);
@@ -96,19 +118,19 @@ void AddrTransController::PseudoPageStore(uint64_t phy_addr) {
   uint64_t phy_tag = ptt_.Tag(phy_addr);
   uint64_t mach_base = ptt_.Lookup(phy_tag, &index);
   if (index != -EINVAL) {
-    if (ptt_.At(index).state != DIRTY_ENTRY) {
-      assert(ptt_.At(index).state == CLEAN_ENTRY);
+    if (ptt_.At(index).state != ATTEntry::DIRTY) {
+      assert(ptt_.At(index).state == ATTEntry::CLEAN);
       ptt_.FreeEntry(index);
       ptt_buffer_.PinBlock(mach_base);
     }
   } else {
-    assert(ptt_.GetLength(DIRTY_ENTRY) < ptt_.length());
+    assert(ptt_.GetLength(ATTEntry::DIRTY) < ptt_.length());
     mach_base = ptt_buffer_.NewBlock();
-    if (!ptt_.IsEmpty(FREE_ENTRY)) {
-      ptt_.Setup(phy_tag, mach_base, DIRTY_ENTRY, ATTEntry::NON_TEMP);
+    if (!ptt_.IsEmpty(ATTEntry::FREE)) {
+      ptt_.Setup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
     } else {
       pair<uint64_t, uint64_t> mapping =
-          ptt_.Replace(phy_tag, mach_base, DIRTY_ENTRY, ATTEntry::NON_TEMP);
+          ptt_.Replace(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
       ++num_page_move_;
       ptt_buffer_.PinBlock(mapping.second);
     }
@@ -127,13 +149,23 @@ uint64_t AddrTransController::StoreAddr(uint64_t phy_addr) {
 
 ATTControl AddrTransController::Probe(uint64_t phy_addr) {
   if (isDRAM(phy_addr)) {
-    bool ptt_avail = ptt_.Contains(phy_addr) || !ptt_.IsFull();
+    bool ptt_avail = ptt_.Contains(phy_addr) ||
+        ptt_.GetLength(ATTEntry::DIRTY) < ptt_.length();
     if (in_ending()) {
-      bool att_avail = att_.Contains(phy_addr) || !att_.IsFull();
+      bool att_avail = att_.Contains(phy_addr) ||
+          att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length();
       if (!att_avail || !ptt_avail) {
         return ATC_RETRY;
       }
     } else if (!ptt_avail) {
+      return ATC_EPOCH;
+    }
+  } else { // NVM
+    if (in_ending() && !att_.Contains(phy_addr) &&
+        att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) == att_.length()) {
+      return ATC_RETRY;
+    } else if (!in_ending() && !att_.Contains(phy_addr) &&
+        att_.GetLength(ATTEntry::DIRTY) == att_.length()) {
       return ATC_EPOCH;
     }
   }
@@ -142,13 +174,24 @@ ATTControl AddrTransController::Probe(uint64_t phy_addr) {
 
 void AddrTransController::BeginEpochEnding() {
   assert(!in_ending());
-  TempEntryRevoker revoker(this);
-  att_.VisitQueue(TEMP_ENTRY, &revoker);
-  assert(att_.IsEmpty(TEMP_ENTRY)); 
-  att_.CleanDirtyQueue(); // suppose it is written back to NVM
+  TempEntryRevoker temp_revoker(*this);
+  att_.VisitQueue(ATTEntry::TEMP, &temp_revoker);
+  assert(att_.IsEmpty(ATTEntry::TEMP)); 
+
+  DirtyEntryRevoker dirty_revoker(*this);
+  att_.VisitQueue(ATTEntry::DIRTY, &dirty_revoker);
+  // suppose regular dirty entries are written back to NVM
+  DirtyEntryCleaner att_cleaner(att_);
+  att_.VisitQueue(ATTEntry::DIRTY, &att_cleaner);
+  assert(att_.IsEmpty(ATTEntry::DIRTY));
+
   in_ending_ = true;
 
-  ptt_.CleanDirtyQueue(); // begin to deal with the next epoch
+  // begin to deal with the next epoch
+  DirtyEntryCleaner ptt_cleaner(ptt_);
+  ptt_.VisitQueue(ATTEntry::DIRTY, &ptt_cleaner);
+  assert(ptt_.IsEmpty(ATTEntry::DIRTY));
+
   ptt_buffer_.FreeBackup(); // without non-stall property 
   num_page_move_ = 0;
 }
@@ -159,27 +202,33 @@ void AddrTransController::FinishEpochEnding() {
   in_ending_ = false;
 }
 
-uint64_t AddrTransController::RevokeTempEntry(int index) {
+uint64_t AddrTransController::RevokeEntry(int index, bool discard_data) {
+  assert(!in_ending());
   const ATTEntry& entry = att_.At(index);
-  assert(entry.state == TEMP_ENTRY);
   uint64_t phy_base = att_.Addr(entry.phy_tag);
-  if (entry.Test(ATTEntry::PHY_DRAM)) {
-    assert(isDRAM(phy_base));
-    mem_store_->DRAMMove(phy_base, entry.mach_base, att_.block_size());
-    dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
-    att_.FreeEntry(index);
-    return phy_base;
-  } else if (entry.Test(ATTEntry::MACH_RESET)) {
-    mem_store_->WriteBack(phy_base, entry.mach_base, att_.block_size());
-    dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
-    att_.FreeEntry(index);
-    return phy_base;
-  } else {
+  if (entry.IsPlaceholder()) {
     uint64_t mach_base = nvm_buffer_.NewBlock();
-    mem_store_->WriteBack(mach_base, entry.mach_base, att_.block_size());
+    if (!discard_data) {
+      mem_store_->WriteBack(mach_base, entry.mach_base, att_.block_size());
+    }
     dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
-    att_.Reset(index, mach_base, DIRTY_ENTRY, ATTEntry::NON_TEMP);
+    att_.Reset(index, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
     return mach_base;
-  }
+  } else if (entry.IsReset()) {
+    if (!discard_data) {
+      mem_store_->WriteBack(phy_base, entry.mach_base, att_.block_size());
+    }
+    dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
+    att_.FreeEntry(index);
+    return phy_base;
+  } else if (entry.IsRegularTemp()) {
+    assert(isDRAM(phy_base));
+    if (!discard_data) {
+      mem_store_->DRAMMove(phy_base, entry.mach_base, att_.block_size());
+    }
+    dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
+    att_.FreeEntry(index);
+    return phy_base;
+  } else assert(false);
 }
 
