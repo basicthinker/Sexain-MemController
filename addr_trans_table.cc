@@ -62,19 +62,6 @@ void AddrTransTable::Revoke(uint64_t phy_tag) {
   }
 }
 
-pair<uint64_t, uint64_t> AddrTransTable::Replace(uint64_t phy_tag,
-    uint64_t mach_base, ATTEntry::State state, ATTEntry::SubState sub) {
-  const int i = queues_[ATTEntry::CLEAN].Front();
-  assert(i != -EINVAL);
-  assert(entries_[i].sub == ATTEntry::NONE);
-  pair<uint64_t, uint64_t> replaced;
-  replaced.first = entries_[i].phy_tag;
-  replaced.second = entries_[i].mach_base;
-  FreeEntry(i);
-  Setup(phy_tag, mach_base, state, sub);
-  return replaced;
-}
-
 void AddrTransTable::Reset(int index, uint64_t mach_base,
     ATTEntry::State state, ATTEntry::SubState sub) {
   ATTEntry& entry = entries_[index];

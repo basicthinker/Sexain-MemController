@@ -45,12 +45,6 @@ class AddrTransTable : public IndexArray {
   void Setup(uint64_t phy_tag, uint64_t mach_base,
       ATTEntry::State state, ATTEntry::SubState sub);
   void Revoke(uint64_t phy_tag);
-  ///
-  /// Replace an existing clean mapping with the specified one.
-  /// @return the replaced clean mapping
-  ///
-  std::pair<uint64_t, uint64_t> Replace(uint64_t phy_tag, uint64_t mach_base,
-      ATTEntry::State state, ATTEntry::SubState sub);
   void Reset(int index, uint64_t mach_base,
       ATTEntry::State state, ATTEntry::SubState sub);
   void FreeEntry(int index);
