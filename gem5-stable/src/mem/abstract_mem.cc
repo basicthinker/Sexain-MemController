@@ -371,7 +371,8 @@ AbstractMemory::access(PacketPtr pkt)
         }
 
         if (overwrite_mem) {
-            host_addr = hostAddr(addrController.StoreAddr(localAddr(pkt)));
+            host_addr = hostAddr(
+                    addrController.StoreAddr(localAddr(pkt), pkt->getSize()));
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
 
@@ -398,8 +399,8 @@ AbstractMemory::access(PacketPtr pkt)
         if (writeOK(pkt)) {
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.cache_block_size());
-                uint8_t* host_addr = hostAddr(
-                        addrController.StoreAddr(localAddr(pkt)));
+                uint8_t* host_addr = hostAddr(addrController.StoreAddr(
+                        localAddr(pkt), pkt->getSize()));
                 memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
@@ -454,31 +455,19 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
-AbstractMemory::NVMMove(uint64_t phy_addr, uint64_t mach_addr, int size)
+AbstractMemory::Move(uint64_t phy_addr, uint64_t mach_addr, int size)
 {
     memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
 }
 
 void
-AbstractMemory::NVMSwap(uint64_t phy_addr, uint64_t mach_addr, int size)
+AbstractMemory::Swap(uint64_t phy_addr, uint64_t mach_addr, int size)
 {
     char* data = new char[size];
     memcpy(data, hostAddr(phy_addr), size);
     memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
     memcpy(hostAddr(mach_addr), data, size);
     delete[] data;
-}
-
-void
-AbstractMemory::DRAMMove(uint64_t phy_addr, uint64_t mach_addr, int size)
-{
-    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
-}
-
-void
-AbstractMemory::WriteBack(uint64_t phy_addr, uint64_t mach_addr, int size)
-{
-    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
 }
 
 void

@@ -333,10 +333,8 @@ class AbstractMemory : public MemObject, public MemStore
      */
     virtual void regStats();
 
-    virtual void NVMMove(uint64_t phy_addr, uint64_t mach_addr, int size);
-    virtual void NVMSwap(uint64_t phy_addr, uint64_t mach_addr, int size);
-    virtual void DRAMMove(uint64_t phy_addr, uint64_t mach_addr, int size);
-    virtual void WriteBack(uint64_t phy_addr, uint64_t mach_addr, int size);
+    virtual void Move(uint64_t phy_addr, uint64_t mach_addr, int size);
+    virtual void Swap(uint64_t phy_addr, uint64_t mach_addr, int size);
     virtual void OnEpochEnd();
 };
 
