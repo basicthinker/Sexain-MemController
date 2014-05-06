@@ -23,7 +23,7 @@ class AddrTransController {
   virtual ~AddrTransController() { }
 
   virtual uint64_t LoadAddr(uint64_t phy_addr);
-  virtual uint64_t StoreAddr(uint64_t phy_addr);
+  virtual uint64_t StoreAddr(uint64_t phy_addr, int size);
   virtual ATTControl Probe(uint64_t phy_addr);
 
   virtual void BeginEpochEnding();
@@ -43,11 +43,15 @@ class AddrTransController {
   VersionBuffer ptt_buffer_;
 
  private:
-  uint64_t NVMStore(uint64_t phy_addr);
-  uint64_t DRAMStore(uint64_t phy_addr);
-  void PseudoPageStore(uint64_t phy_addr);
+  bool CheckValid(uint64_t phy_addr, int size);
+  void ATTSetup(uint64_t phy_tag, uint64_t mach_base, int size,
+      ATTEntry::State state, ATTEntry::SubState sub); 
+  void ATTShrink(int index, bool move_data = true);
+  uint64_t ATTRevoke(int index, bool move_data = true);
 
-  uint64_t RevokeEntry(int index, bool discard_data);
+  uint64_t NVMStore(uint64_t phy_addr, int size);
+  uint64_t DRAMStore(uint64_t phy_addr, int size);
+  void PseudoPageStore(uint64_t phy_addr);
 
   const uint64_t dram_size_; ///< Size of visible DRAM region
   const uint64_t nvm_size_; ///< Size of visible NVM region
@@ -59,7 +63,7 @@ class AddrTransController {
   class TempEntryRevoker : public QueueVisitor {
    public:
     TempEntryRevoker(AddrTransController& atc) : atc_(atc) { }
-    void Visit(int i) { atc_.RevokeEntry(i, false); }
+    void Visit(int i) { atc_.ATTRevoke(i, true); }
    private:
     AddrTransController& atc_;
   };
@@ -110,9 +114,13 @@ inline bool AddrTransController::isDRAM(uint64_t phy_addr) {
   return phy_addr < dram_size_;
 }
 
+inline bool AddrTransController::CheckValid(uint64_t phy_addr, int size) {
+  return att_.Tag(phy_addr) == att_.Tag(phy_addr + size - 1);
+}
+
 inline void AddrTransController::DirtyEntryRevoker::Visit(int i) {
   if (atc_.att_.At(i).IsPlaceholder()) {
-    atc_.RevokeEntry(i, false);
+    atc_.ATTRevoke(i, true);
   }
 }
 

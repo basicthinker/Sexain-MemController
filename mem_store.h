@@ -10,10 +10,8 @@
 
 class MemStore {
  public:
-  virtual void NVMMove(uint64_t phy_addr, uint64_t mach_addr, int size) = 0;
-  virtual void NVMSwap(uint64_t phy_addr, uint64_t mach_addr, int size) = 0;
-  virtual void DRAMMove(uint64_t phy_addr, uint64_t mach_addr, int size) = 0;
-  virtual void WriteBack(uint64_t phy_addr, uint64_t mach_addr, int size) = 0;
+  virtual void Move(uint64_t destination, uint64_t source, int size) = 0;
+  virtual void Swap(uint64_t phy_addr, uint64_t mach_addr, int size) = 0;
  
   virtual void OnATTOperate() { }
   virtual void OnBufferOperate() { }
@@ -27,30 +25,16 @@ class MemStore {
 };
 
 class TraceMemStore : public MemStore {
-  void NVMMove(uint64_t phy_addr, uint64_t mach_addr, int size) {
+  void Move(uint64_t destination, uint64_t source, int size) {
     std::cout << std::hex;
-    std::cout << "[Info] NVM moves from " << mach_addr << " to " << phy_addr
+    std::cout << "[Info] Mem moves from " << source << " to " << destination
         << std::endl;
     std::cout << std::dec;
   }
 
-  void NVMSwap(uint64_t phy_addr, uint64_t mach_addr, int size) {
+  void Swap(uint64_t phy_addr, uint64_t mach_addr, int size) {
     std::cout << std::hex;
     std::cout << "[Info] NVM swaps " << mach_addr << " and " << phy_addr
-        << std::endl;
-    std::cout << std::dec;
-  }
-
-  void DRAMMove(uint64_t phy_addr, uint64_t mach_addr, int size) {
-    std::cout << std::hex;
-    std::cout << "[Info] DRAM moves from " << mach_addr << " to " << phy_addr
-        << std::endl;
-    std::cout << std::dec;
-  }
-
-  void WriteBack(uint64_t phy_addr, uint64_t mach_addr, int size) {
-    std::cout << std::hex;
-    std::cout << "[Info] Write back from " << mach_addr << " to " << phy_addr
         << std::endl;
     std::cout << std::dec;
   }
