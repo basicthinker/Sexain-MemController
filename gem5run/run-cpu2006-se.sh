@@ -1,0 +1,1 @@
+../scripts/run-cpu2006-se.sh

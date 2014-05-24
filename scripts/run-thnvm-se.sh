@@ -28,6 +28,7 @@ L3_ASSOC=24
 
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
 OUT_DIR=~/Documents/gem5out-b$ATT_LENGTH-p$MC_PT_LEN
+BUILD_NAME=build_base_none.0000
 
 to_run=0
 to_test=0
@@ -93,6 +94,7 @@ OPTIONS+=" --l2_assoc=$L2_ASSOC"
 OPTIONS+=" --l3_size=$L3_SIZE"
 OPTIONS+=" --l3_assoc=$L3_ASSOC"
 OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
+OPTIONS+=" --cpu-2006-build-name=$BUILD_NAME"
 
 if [ $to_run = 1 ]; then
   $GEM5 -d $OUT_DIR/$ALIAS $GEM5OPT $SE_SCRIPT $OPTIONS $COMMAND

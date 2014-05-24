@@ -136,6 +136,8 @@ parser.add_option("--check-cpu-2006", default="", type="string",
         help="The CPU 2006 benchmark whose output to be checked.")
 parser.add_option("--cpu-2006-root", default="", type="string",
         help="The CPU 2006 root dir that contains benchmark subdirs.")
+parser.add_option("--cpu-2006-build-name", default="", type="string",
+        help="The dir that contains the runnable in benchmark's build dir.")
 
 if '--ruby' in sys.argv:
     Ruby.define_options(parser)
@@ -176,8 +178,8 @@ if options.check_cpu_2006:
     sys.exit(0)
 
 if options.cpu_2006:
-    bench_process, bench_out, ref_output = make_process(
-            options.cpu_2006, options.cpu_2006_root, fp)
+    bench_process, bench_out, ref_output = make_process(options.cpu_2006,
+            options.cpu_2006_root, options.cpu_2006_build_name, fp)
     if not bench_out is None and os.path.isfile(bench_out):
         shutil.move(bench_out, bench_out + '.old')
     if bench_process is not None:
