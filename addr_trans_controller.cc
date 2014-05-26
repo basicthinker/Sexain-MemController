@@ -8,7 +8,7 @@ using namespace std;
 uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
   assert(phy_addr < phy_limit());
   uint64_t phy_tag = att_.Tag(phy_addr);
-  uint64_t mach_addr = att_.Translate(phy_addr, att_.Lookup(phy_tag, NULL));
+  uint64_t mach_addr = att_.Translate(phy_addr, att_.Lookup(phy_tag).second);
   if (isDRAM(phy_addr)) {
     mem_store_->OnDRAMRead(mach_addr, att_.block_size());
   } else {
@@ -19,8 +19,7 @@ uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
 
 uint64_t AddrTransController::NVMStore(uint64_t phy_addr, int size) {
   const uint64_t phy_tag = att_.Tag(phy_addr);
-  int index;
-  att_.Lookup(phy_tag, &index);
+  int index = att_.Lookup(phy_tag).first;
   if (!in_ending()) {
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
@@ -85,9 +84,8 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr, int size) {
 }
 
 uint64_t AddrTransController::DRAMStore(uint64_t phy_addr, int size) {
-  int index;
   uint64_t phy_tag = att_.Tag(phy_addr);
-  att_.Lookup(phy_tag, &index);
+  int index = att_.Lookup(phy_tag).first;
   if (index != -EINVAL) { // found
     const ATTEntry& entry = att_.At(index);
     if (in_ending()) return att_.Translate(phy_addr, entry.mach_base);
@@ -116,9 +114,10 @@ uint64_t AddrTransController::DRAMStore(uint64_t phy_addr, int size) {
 }
 
 void AddrTransController::PseudoPageStore(uint64_t phy_addr) {
-  int index = -EINVAL;
   uint64_t phy_tag = ptt_.Tag(phy_addr);
-  uint64_t mach_base = ptt_.Lookup(phy_tag, &index);
+  pair<int, uint64_t> target = ptt_.Lookup(phy_tag);
+  int index = target.first;
+  uint64_t mach_base = target.second;
   if (index != -EINVAL) {
     if (ptt_.At(index).state != ATTEntry::DIRTY) {
       assert(ptt_.At(index).state == ATTEntry::CLEAN);

@@ -5,18 +5,18 @@
 
 using namespace std;
 
-uint64_t AddrTransTable::Lookup(uint64_t phy_tag, int* index) {
+pair<int, uint64_t> AddrTransTable::Lookup(uint64_t phy_tag) {
   unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
-    if (index) *index = -EINVAL;
-    return Addr(phy_tag);
+    return make_pair(-EINVAL, Addr(phy_tag));
   } else {
     ATTEntry& entry = entries_[it->second];
     assert(entry.state != ATTEntry::FREE && entry.phy_tag == phy_tag);
+    // LRU
     queues_[entry.state].Remove(it->second);
     queues_[entry.state].PushBack(it->second);
-    if (index) *index = it->second;
-    return entry.mach_base;
+
+    return make_pair(it->second, entry.mach_base);
   }
 }
 

@@ -41,7 +41,7 @@ class AddrTransTable : public IndexArray {
  public:
   AddrTransTable(int length, int block_bits);
 
-  uint64_t Lookup(uint64_t phy_tag, int* index);
+  std::pair<int, uint64_t> Lookup(uint64_t phy_tag);
   void Setup(uint64_t phy_tag, uint64_t mach_base,
       ATTEntry::State state, ATTEntry::SubState sub);
   void Revoke(uint64_t phy_tag);
