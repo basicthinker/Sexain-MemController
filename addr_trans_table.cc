@@ -42,16 +42,15 @@ void AddrTransTable::FreeEntry(int index) {
   queues_[entry.state].Remove(index);
   queues_[ATTEntry::FREE].PushBack(index);
   entry.state = ATTEntry::FREE;
-  entry.sub = ATTEntry::NONE;
+  entry.sub = ATTEntry::REGULAR;
 }
 
 void AddrTransTable::CleanEntry(int index) {
   ATTEntry& entry = entries_[index];
-  assert(entry.state == ATTEntry::DIRTY);
+  assert(entry.state == ATTEntry::DIRTY && entry.sub == ATTEntry::REGULAR);
   queues_[ATTEntry::DIRTY].Remove(index);
   queues_[ATTEntry::CLEAN].PushBack(index);
   entries_[index].state = ATTEntry::CLEAN;
-  entries_[index].sub = ATTEntry::NONE;
 }
 
 void AddrTransTable::Revoke(Tag phy_tag) {

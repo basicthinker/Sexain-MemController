@@ -23,9 +23,8 @@ struct ATTEntry {
   };
 
   enum SubState {
-    NONE = 0,
+    REGULAR = 0,
     CROSS,
-    REGULAR,
   };
 
   Tag phy_tag;
@@ -34,9 +33,9 @@ struct ATTEntry {
   State state;
   SubState sub;
 
-  bool IsPlaceholder() const { return state == DIRTY && sub == CROSS; }
+  bool IsCrossDirty() const { return state == DIRTY && sub == CROSS; }
   bool IsRegularDirty() const { return state == DIRTY && sub == REGULAR; }
-  bool IsReset() const { return state == TEMP && sub == CROSS; }
+  bool IsCrossTemp() const { return state == TEMP && sub == CROSS; }
   bool IsRegularTemp() const { return state == TEMP && sub == REGULAR; }
 };
 

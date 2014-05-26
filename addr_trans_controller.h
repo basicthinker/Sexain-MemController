@@ -119,13 +119,13 @@ inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
 }
 
 inline void AddrTransController::DirtyEntryRevoker::Visit(int i) {
-  if (atc_.att_.At(i).IsPlaceholder()) {
+  if (atc_.att_.At(i).IsCrossDirty()) {
     atc_.ATTRevoke(i, true);
   }
 }
 
 inline void AddrTransController::DirtyEntryCleaner::Visit(int i) {
-  if (att_.At(i).IsRegularDirty()) {
+  if (att_.At(i).sub == ATTEntry::REGULAR) {
     att_.CleanEntry(i);
   }
 }
