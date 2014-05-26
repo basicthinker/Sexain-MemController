@@ -23,14 +23,17 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
   if (!in_ending()) {
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
-      if (entry.IsCrossDirty() || entry.IsCrossTemp()) {
-        Addr mach_base = ATTRevoke(index, size < att_.block_size());
+      if (entry.IsCrossDirty()) {
+        Addr mach_base = ATTRegularizeDirty(index, size < att_.block_size());
         return att_.Translate(phy_addr, mach_base);
+      } else if (entry.IsCrossTemp()) {
+        ATTRevokeTemp(index, size < att_.block_size());
+        return att_.ToAddr(entry.phy_tag);
       } else if (entry.state == ATTEntry::DIRTY) {
         return att_.Translate(phy_addr, entry.mach_base);
       } else {
         nvm_buffer_.PinBlock(entry.mach_base);
-        ATTShrink(index, size < att_.block_size());
+        ATTShrinkClean(index, size < att_.block_size());
         return phy_addr;
       }
     } else { // not found
@@ -39,11 +42,11 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
       if (att_.IsEmpty(ATTEntry::FREE)) {
         if (!att_.IsEmpty(ATTEntry::TEMP)) {
           int ti = att_.GetFront(ATTEntry::TEMP);
-          ATTRevoke(ti);
+          ATTRevokeTemp(ti);
         } else {
           int ci = att_.GetFront(ATTEntry::CLEAN);
           nvm_buffer_.PinBlock(att_.At(ci).mach_base);
-          ATTShrink(ci);
+          ATTShrinkClean(ci);
         }
       }
       ATTSetup(phy_tag, mach_base, size, ATTEntry::DIRTY, ATTEntry::REGULAR);
@@ -73,7 +76,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
         nvm_buffer_.PinBlock(entry.mach_base);
         mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base,
             att_.block_size());
-        ATTShrink(ci, false);
+        ATTShrinkClean(ci, false);
         // suppose the NV-ATT has the replaced marked as swapped
         ATTSetup(phy_addr, mach_base, att_.block_size(),
             ATTEntry::DIRTY, ATTEntry::CROSS);
@@ -91,7 +94,8 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
     if (in_ending()) return att_.Translate(phy_addr, entry.mach_base);
     else {
       assert(entry.IsRegularTemp());
-      return att_.Translate(phy_addr, ATTRevoke(index, false));
+      ATTRevokeTemp(index, false);
+      return phy_addr;
     }
   } else if (!in_ending()) {
     return phy_addr;
@@ -105,7 +109,7 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
       const ATTEntry& entry = att_.At(ci);
       mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base, size);
       nvm_buffer_.PinBlock(entry.mach_base);
-      ATTShrink(ci, false);
+      ATTShrinkClean(ci, false);
       ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
       // suppose the mapping is marked in NV-ATT
     }
@@ -115,29 +119,29 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
 
 void AddrTransController::PseudoPageStore(Addr phy_addr) {
   Tag phy_tag = ptt_.ToTag(phy_addr);
-  pair<int, Addr> target = ptt_.Lookup(phy_tag);
-  int index = target.first;
-  Addr mach_base = target.second;
-  if (index != -EINVAL) {
-    if (ptt_.At(index).state != ATTEntry::DIRTY) {
-      assert(ptt_.At(index).state == ATTEntry::CLEAN);
-      ptt_.FreeEntry(index);
-      ptt_buffer_.PinBlock(mach_base);
+  const pair<int, Addr> target = ptt_.Lookup(phy_tag);
+  if (target.first != -EINVAL) {
+    const ATTEntry &entry = ptt_.At(target.first);
+    if (entry.state != ATTEntry::DIRTY) {
+      assert(entry.state == ATTEntry::CLEAN);
+      ptt_.FreeEntry(target.first);
+      ptt_buffer_.PinBlock(target.second);
     }
   } else {
     assert(ptt_.GetLength(ATTEntry::DIRTY) < ptt_.length());
-    mach_base = ptt_buffer_.NewBlock();
+    Addr mach_base = ptt_buffer_.NewBlock();
     if (!ptt_.IsEmpty(ATTEntry::FREE)) {
       ptt_.Setup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
     } else {
       int ci = ptt_.GetFront(ATTEntry::CLEAN);
       const ATTEntry& entry = ptt_.At(ci);
-      mem_store_->Move(ptt_.ToAddr(entry.phy_tag), entry.mach_base,
-          ptt_.block_size());
+
+      ++num_page_move_;
       ptt_buffer_.PinBlock(entry.mach_base);
+
+      // PTT overwrites
       ptt_.FreeEntry(ci);
       ptt_.Setup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
-      ++num_page_move_;
     }
   }
 }
@@ -215,7 +219,7 @@ void AddrTransController::ATTSetup(Tag phy_tag, Addr mach_base, int size,
   att_.Setup(phy_tag, mach_base, state, sub);
 }
 
-void AddrTransController::ATTShrink(int index, bool move_data) {
+void AddrTransController::ATTShrinkClean(int index, bool move_data) {
   const ATTEntry& entry = att_.At(index);
   assert(entry.state == ATTEntry::CLEAN);
   if (move_data) {
@@ -225,33 +229,27 @@ void AddrTransController::ATTShrink(int index, bool move_data) {
   att_.FreeEntry(index);
 }
 
-Addr AddrTransController::ATTRevoke(int index, bool move_data) {
+Addr AddrTransController::ATTRegularizeDirty(int index, bool move_data) {
   assert(!in_ending());
   const ATTEntry& entry = att_.At(index);
-  Addr phy_base = att_.ToAddr(entry.phy_tag);
-  if (entry.IsCrossDirty()) {
-    Addr mach_base = nvm_buffer_.NewBlock();
-    if (move_data) {
-      mem_store_->Move(mach_base, entry.mach_base, att_.block_size());
-    }
-    dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
-    att_.Reset(index, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
-    return mach_base;
-  } else if (entry.IsCrossTemp()) {
-    if (move_data) {
-      mem_store_->Move(phy_base, entry.mach_base, att_.block_size());
-    }
-    dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
-    att_.FreeEntry(index);
-    return phy_base;
-  } else if (entry.IsRegularTemp()) {
-    assert(isDRAM(phy_base));
-    if (move_data) {
-      mem_store_->Move(phy_base, entry.mach_base, att_.block_size());
-    }
-    dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
-    att_.FreeEntry(index);
-    return phy_base;
-  } else assert(false);
+  assert(entry.sub == ATTEntry::CROSS);
+
+  Addr mach_base = nvm_buffer_.NewBlock();
+  if (move_data) {
+    mem_store_->Move(mach_base, entry.mach_base, att_.block_size());
+  }
+  dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
+  att_.Reset(index, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR);
+  return mach_base;
+}
+
+void AddrTransController::ATTRevokeTemp(int index, bool move_data) {
+  assert(!in_ending());
+  const ATTEntry& entry = att_.At(index);
+  if (move_data) {
+    mem_store_->Move(att_.ToAddr(entry.phy_tag), entry.mach_base, att_.block_size());
+  }
+  dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
+  att_.FreeEntry(index);
 }
 

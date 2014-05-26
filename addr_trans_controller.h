@@ -46,8 +46,9 @@ class AddrTransController {
   bool CheckValid(Addr phy_addr, int size);
   void ATTSetup(Tag phy_tag, Addr mach_base, int size,
       ATTEntry::State state, ATTEntry::SubState sub); 
-  void ATTShrink(int index, bool move_data = true);
-  Addr ATTRevoke(int index, bool move_data = true);
+  void ATTShrinkClean(int index, bool move_data = true);
+  Addr ATTRegularizeDirty(int index, bool move_data = true);
+  void ATTRevokeTemp(int index, bool move_data = true);
 
   Addr NVMStore(Addr phy_addr, int size);
   Addr DRAMStore(Addr phy_addr, int size);
@@ -63,7 +64,7 @@ class AddrTransController {
   class TempEntryRevoker : public QueueVisitor {
    public:
     TempEntryRevoker(AddrTransController& atc) : atc_(atc) { }
-    void Visit(int i) { atc_.ATTRevoke(i, true); }
+    void Visit(int i) { atc_.ATTRevokeTemp(i, true); }
    private:
     AddrTransController& atc_;
   };
@@ -120,7 +121,7 @@ inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
 
 inline void AddrTransController::DirtyEntryRevoker::Visit(int i) {
   if (atc_.att_.At(i).IsCrossDirty()) {
-    atc_.ATTRevoke(i, true);
+    atc_.ATTRegularizeDirty(i, true);
   }
 }
 
