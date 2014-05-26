@@ -5,8 +5,8 @@
 
 using namespace std;
 
-pair<int, uint64_t> AddrTransTable::Lookup(uint64_t phy_tag) {
-  unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
+pair<int, Addr> AddrTransTable::Lookup(Tag phy_tag) {
+  unordered_map<Tag, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
     return make_pair(-EINVAL, Addr(phy_tag));
   } else {
@@ -20,7 +20,7 @@ pair<int, uint64_t> AddrTransTable::Lookup(uint64_t phy_tag) {
   }
 }
 
-void AddrTransTable::Setup(uint64_t phy_tag, uint64_t mach_base,
+void AddrTransTable::Setup(Tag phy_tag, Addr mach_base,
     ATTEntry::State state, ATTEntry::SubState sub) {
   assert(tag_index_.count(phy_tag) == 0);
   assert(!queues_[ATTEntry::FREE].Empty());
@@ -54,15 +54,15 @@ void AddrTransTable::CleanEntry(int index) {
   entries_[index].sub = ATTEntry::NONE;
 }
 
-void AddrTransTable::Revoke(uint64_t phy_tag) {
-  unordered_map<uint64_t, int>::iterator it = tag_index_.find(phy_tag);
+void AddrTransTable::Revoke(Tag phy_tag) {
+  unordered_map<Tag, int>::iterator it = tag_index_.find(phy_tag);
   if (it != tag_index_.end()) {
     assert(entries_[it->second].phy_tag == phy_tag);
     FreeEntry(it->second);
   }
 }
 
-void AddrTransTable::Reset(int index, uint64_t mach_base,
+void AddrTransTable::Reset(int index, Addr mach_base,
     ATTEntry::State state, ATTEntry::SubState sub) {
   ATTEntry& entry = entries_[index];
   entry.mach_base = mach_base;

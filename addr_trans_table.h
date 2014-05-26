@@ -11,6 +11,9 @@
 #include <initializer_list>
 #include "index_queue.h"
 
+typedef int64_t Tag; // never negative
+typedef uint64_t Addr;
+
 struct ATTEntry {
   enum State {
     DIRTY = 0,
@@ -25,8 +28,8 @@ struct ATTEntry {
     REGULAR,
   };
 
-  uint64_t phy_tag;
-  uint64_t mach_base;
+  Tag phy_tag;
+  Addr mach_base;
   IndexNode queue_node;
   State state;
   SubState sub;
@@ -41,26 +44,26 @@ class AddrTransTable : public IndexArray {
  public:
   AddrTransTable(int length, int block_bits);
 
-  std::pair<int, uint64_t> Lookup(uint64_t phy_tag);
-  void Setup(uint64_t phy_tag, uint64_t mach_base,
+  std::pair<int, Addr> Lookup(Tag phy_tag);
+  void Setup(Tag phy_tag, Addr mach_base,
       ATTEntry::State state, ATTEntry::SubState sub);
-  void Revoke(uint64_t phy_tag);
-  void Reset(int index, uint64_t mach_base,
+  void Revoke(Tag phy_tag);
+  void Reset(int index, Addr mach_base,
       ATTEntry::State state, ATTEntry::SubState sub);
   void FreeEntry(int index);
   void CleanEntry(int index); ///< Only applicable to dirty entries
   void VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
 
   const ATTEntry& At(int i) const;
-  bool Contains(uint64_t phy_addr) const;
+  bool Contains(Addr phy_addr) const;
   bool IsEmpty(ATTEntry::State state) const { return queues_[state].Empty(); }
   int GetLength(ATTEntry::State state) const { return queues_[state].length(); }
   int GetLength(std::initializer_list<ATTEntry::State> states) const;
   int GetFront(ATTEntry::State state) const { return queues_[state].Front(); }
 
-  uint64_t Tag(uint64_t addr) const { return addr >> block_bits_; }
-  uint64_t Addr(uint64_t tag) const { return tag << block_bits_; }
-  uint64_t Translate(uint64_t phy_addr, uint64_t mach_base) const;
+  Tag ToTag(Addr addr) const { return Tag(addr >> block_bits_); }
+  Addr ToAddr(Tag tag) const { return Addr(tag) << block_bits_; }
+  Addr Translate(Addr phy_addr, Addr mach_base) const;
 
   int length() const { return length_; }
   int block_size() const { return 1 << block_bits_; }
@@ -70,8 +73,8 @@ class AddrTransTable : public IndexArray {
  private:
   const int length_;
   const int block_bits_;
-  const uint64_t block_mask_;
-  std::unordered_map<uint64_t, int> tag_index_;
+  const Addr block_mask_;
+  std::unordered_map<Tag, int> tag_index_;
   std::vector<ATTEntry> entries_;
   std::vector<IndexQueue> queues_;
 };
@@ -89,7 +92,7 @@ inline const ATTEntry& AddrTransTable::At(int i) const {
   return entries_[i];
 }
 
-inline bool AddrTransTable::Contains(uint64_t phy_addr) const {
+inline bool AddrTransTable::Contains(Addr phy_addr) const {
   return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
 }
 
@@ -108,8 +111,8 @@ inline void AddrTransTable::VisitQueue(ATTEntry::State state,
   queues_[state].Accept(visitor);
 }
  
-inline uint64_t AddrTransTable::Translate(
-    uint64_t phy_addr, uint64_t mach_base) const {
+inline Addr AddrTransTable::Translate(
+    Addr phy_addr, Addr mach_base) const {
   return mach_base + (phy_addr & block_mask_);
 }
 

@@ -5,10 +5,10 @@
 
 using namespace std;
 
-uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
-  assert(phy_addr < phy_limit());
-  uint64_t phy_tag = att_.Tag(phy_addr);
-  uint64_t mach_addr = att_.Translate(phy_addr, att_.Lookup(phy_tag).second);
+Addr AddrTransController::LoadAddr(Addr phy_addr) {
+  assert(phy_addr < PhyLimit());
+  Tag phy_tag = att_.ToTag(phy_addr);
+  Addr mach_addr = att_.Translate(phy_addr, att_.Lookup(phy_tag).second);
   if (isDRAM(phy_addr)) {
     mem_store_->OnDRAMRead(mach_addr, att_.block_size());
   } else {
@@ -17,14 +17,14 @@ uint64_t AddrTransController::LoadAddr(uint64_t phy_addr) {
   return mach_addr;
 }
 
-uint64_t AddrTransController::NVMStore(uint64_t phy_addr, int size) {
-  const uint64_t phy_tag = att_.Tag(phy_addr);
+Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
+  const Tag phy_tag = att_.ToTag(phy_addr);
   int index = att_.Lookup(phy_tag).first;
   if (!in_ending()) {
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
       if (entry.IsPlaceholder() || entry.IsReset()) {
-        uint64_t mach_base = ATTRevoke(index, size < att_.block_size());
+        Addr mach_base = ATTRevoke(index, size < att_.block_size());
         return att_.Translate(phy_addr, mach_base);
       } else if (entry.IsRegularDirty()) {
         return att_.Translate(phy_addr, entry.mach_base);
@@ -35,7 +35,7 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr, int size) {
       }
     } else { // not found
       assert(att_.GetLength(ATTEntry::DIRTY) < att_.length());
-      const uint64_t mach_base = nvm_buffer_.NewBlock();
+      const Addr mach_base = nvm_buffer_.NewBlock();
       if (att_.IsEmpty(ATTEntry::FREE)) {
         if (!att_.IsEmpty(ATTEntry::TEMP)) {
           int ti = att_.GetFront(ATTEntry::TEMP);
@@ -55,7 +55,7 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr, int size) {
       if (entry.IsRegularDirty() || entry.state == ATTEntry::TEMP) {
         return att_.Translate(phy_addr, entry.mach_base);
       } else {
-        const uint64_t mach_base = dram_buffer_.NewBlock();
+        const Addr mach_base = dram_buffer_.NewBlock();
         nvm_buffer_.PinBlock(entry.mach_base);
         att_.Reset(index, mach_base, ATTEntry::TEMP, ATTEntry::CROSS);
         return att_.Translate(phy_addr, mach_base);
@@ -63,15 +63,15 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr, int size) {
     } else { // not found
       assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
       if (!att_.IsEmpty(ATTEntry::FREE)) {
-        const uint64_t mach_base = nvm_buffer_.NewBlock();
+        const Addr mach_base = nvm_buffer_.NewBlock();
         ATTSetup(phy_tag, mach_base, size, ATTEntry::DIRTY, ATTEntry::REGULAR);
         return att_.Translate(phy_addr, mach_base);
       } else {
-        const uint64_t mach_base = dram_buffer_.NewBlock();
+        const Addr mach_base = dram_buffer_.NewBlock();
         int ci = att_.GetFront(ATTEntry::CLEAN);
         const ATTEntry& entry = att_.At(ci);
         nvm_buffer_.PinBlock(entry.mach_base);
-        mem_store_->Swap(att_.Addr(entry.phy_tag), entry.mach_base,
+        mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base,
             att_.block_size());
         ATTShrink(ci, false);
         // suppose the NV-ATT has the replaced marked as swapped
@@ -83,8 +83,8 @@ uint64_t AddrTransController::NVMStore(uint64_t phy_addr, int size) {
   }
 }
 
-uint64_t AddrTransController::DRAMStore(uint64_t phy_addr, int size) {
-  uint64_t phy_tag = att_.Tag(phy_addr);
+Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
+  Tag phy_tag = att_.ToTag(phy_addr);
   int index = att_.Lookup(phy_tag).first;
   if (index != -EINVAL) { // found
     const ATTEntry& entry = att_.At(index);
@@ -97,13 +97,13 @@ uint64_t AddrTransController::DRAMStore(uint64_t phy_addr, int size) {
     return phy_addr;
   } else { // in ending
     assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
-    const uint64_t mach_base = dram_buffer_.NewBlock();
+    const Addr mach_base = dram_buffer_.NewBlock();
     if (!att_.IsEmpty(ATTEntry::FREE)) {
       ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
     } else {
       int ci = att_.GetFront(ATTEntry::CLEAN);
       const ATTEntry& entry = att_.At(ci);
-      mem_store_->Swap(att_.Addr(entry.phy_tag), entry.mach_base, size);
+      mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base, size);
       nvm_buffer_.PinBlock(entry.mach_base);
       ATTShrink(ci, false);
       ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
@@ -113,11 +113,11 @@ uint64_t AddrTransController::DRAMStore(uint64_t phy_addr, int size) {
   }
 }
 
-void AddrTransController::PseudoPageStore(uint64_t phy_addr) {
-  uint64_t phy_tag = ptt_.Tag(phy_addr);
-  pair<int, uint64_t> target = ptt_.Lookup(phy_tag);
+void AddrTransController::PseudoPageStore(Addr phy_addr) {
+  Tag phy_tag = ptt_.ToTag(phy_addr);
+  pair<int, Addr> target = ptt_.Lookup(phy_tag);
   int index = target.first;
-  uint64_t mach_base = target.second;
+  Addr mach_base = target.second;
   if (index != -EINVAL) {
     if (ptt_.At(index).state != ATTEntry::DIRTY) {
       assert(ptt_.At(index).state == ATTEntry::CLEAN);
@@ -132,7 +132,7 @@ void AddrTransController::PseudoPageStore(uint64_t phy_addr) {
     } else {
       int ci = ptt_.GetFront(ATTEntry::CLEAN);
       const ATTEntry& entry = ptt_.At(ci);
-      mem_store_->Move(ptt_.Addr(entry.phy_tag), entry.mach_base,
+      mem_store_->Move(ptt_.ToAddr(entry.phy_tag), entry.mach_base,
           ptt_.block_size());
       ptt_buffer_.PinBlock(entry.mach_base);
       ptt_.FreeEntry(ci);
@@ -142,8 +142,8 @@ void AddrTransController::PseudoPageStore(uint64_t phy_addr) {
   }
 }
 
-uint64_t AddrTransController::StoreAddr(uint64_t phy_addr, int size) {
-  assert(CheckValid(phy_addr, size) && phy_addr < phy_limit());
+Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
+  assert(CheckValid(phy_addr, size) && phy_addr < PhyLimit());
   if (isDRAM(phy_addr)) {
     PseudoPageStore(phy_addr);
     return DRAMStore(phy_addr, size);
@@ -152,7 +152,7 @@ uint64_t AddrTransController::StoreAddr(uint64_t phy_addr, int size) {
   }
 }
 
-ATTControl AddrTransController::Probe(uint64_t phy_addr) {
+ATTControl AddrTransController::Probe(Addr phy_addr) {
   if (isDRAM(phy_addr)) {
     bool ptt_avail = ptt_.Contains(phy_addr) ||
         ptt_.GetLength(ATTEntry::DIRTY) < ptt_.length();
@@ -207,11 +207,10 @@ void AddrTransController::FinishEpochEnding() {
   in_ending_ = false;
 }
 
-void AddrTransController::ATTSetup(
-    uint64_t phy_tag, uint64_t mach_base, int size,
+void AddrTransController::ATTSetup(Tag phy_tag, Addr mach_base, int size,
     ATTEntry::State state, ATTEntry::SubState sub) {
   if (size < att_.block_size()) {
-    mem_store_->Move(mach_base, att_.Addr(phy_tag), size);
+    mem_store_->Move(mach_base, att_.ToAddr(phy_tag), size);
   }
   att_.Setup(phy_tag, mach_base, state, sub);
 }
@@ -221,17 +220,17 @@ void AddrTransController::ATTShrink(int index, bool move_data) {
   assert(entry.state == ATTEntry::CLEAN);
   if (move_data) {
     mem_store_->Move(
-        att_.Addr(entry.phy_tag), entry.mach_base, att_.block_size()); 
+        att_.ToAddr(entry.phy_tag), entry.mach_base, att_.block_size());
   }
   att_.FreeEntry(index);
 }
 
-uint64_t AddrTransController::ATTRevoke(int index, bool move_data) {
+Addr AddrTransController::ATTRevoke(int index, bool move_data) {
   assert(!in_ending());
   const ATTEntry& entry = att_.At(index);
-  uint64_t phy_base = att_.Addr(entry.phy_tag);
+  Addr phy_base = att_.ToAddr(entry.phy_tag);
   if (entry.IsPlaceholder()) {
-    uint64_t mach_base = nvm_buffer_.NewBlock();
+    Addr mach_base = nvm_buffer_.NewBlock();
     if (move_data) {
       mem_store_->Move(mach_base, entry.mach_base, att_.block_size());
     }

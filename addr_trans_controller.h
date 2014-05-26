@@ -18,24 +18,24 @@ enum ATTControl {
 
 class AddrTransController {
  public:
-  AddrTransController(uint64_t dram_size, uint64_t phy_limit,
+  AddrTransController(uint64_t dram_size, Addr phy_limit,
       int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms);
   virtual ~AddrTransController() { }
 
-  virtual uint64_t LoadAddr(uint64_t phy_addr);
-  virtual uint64_t StoreAddr(uint64_t phy_addr, int size);
-  virtual ATTControl Probe(uint64_t phy_addr);
+  virtual Addr LoadAddr(Addr phy_addr);
+  virtual Addr StoreAddr(Addr phy_addr, int size);
+  virtual ATTControl Probe(Addr phy_addr);
 
   virtual void BeginEpochEnding();
   virtual void FinishEpochEnding();
 
   uint64_t Size() const;
+  Addr PhyLimit() const { return dram_size_ + nvm_size_; }
   int cache_block_size() const { return att_.block_size(); }
-  uint64_t phy_limit() const { return dram_size_ + nvm_size_; }
   bool in_ending() const { return in_ending_; }
 
  protected:
-  virtual bool isDRAM(uint64_t phy_addr);
+  virtual bool isDRAM(Addr phy_addr);
   AddrTransTable att_;
   VersionBuffer nvm_buffer_;
   VersionBuffer dram_buffer_;
@@ -43,15 +43,15 @@ class AddrTransController {
   VersionBuffer ptt_buffer_;
 
  private:
-  bool CheckValid(uint64_t phy_addr, int size);
-  void ATTSetup(uint64_t phy_tag, uint64_t mach_base, int size,
+  bool CheckValid(Addr phy_addr, int size);
+  void ATTSetup(Tag phy_tag, Addr mach_base, int size,
       ATTEntry::State state, ATTEntry::SubState sub); 
   void ATTShrink(int index, bool move_data = true);
-  uint64_t ATTRevoke(int index, bool move_data = true);
+  Addr ATTRevoke(int index, bool move_data = true);
 
-  uint64_t NVMStore(uint64_t phy_addr, int size);
-  uint64_t DRAMStore(uint64_t phy_addr, int size);
-  void PseudoPageStore(uint64_t phy_addr);
+  Addr NVMStore(Addr phy_addr, int size);
+  Addr DRAMStore(Addr phy_addr, int size);
+  void PseudoPageStore(Addr phy_addr);
 
   const uint64_t dram_size_; ///< Size of visible DRAM region
   const uint64_t nvm_size_; ///< Size of visible NVM region
@@ -89,19 +89,19 @@ class AddrTransController {
 // Visible DRAM || Visible NVM (phy_limit)||
 // DRAM backup || PTT buffer || Temporary buffer || ATT buffer
 inline AddrTransController::AddrTransController(
-    uint64_t dram_size, uint64_t phy_size,
+    uint64_t dram_size, Addr phy_limit,
     int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
     att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
     dram_buffer_(att_len, block_bits),
     ptt_(ptt_len, page_bits), ptt_buffer_(2 * ptt_len, page_bits),
-    dram_size_(dram_size), nvm_size_(phy_size - dram_size) {
+    dram_size_(dram_size), nvm_size_(phy_limit - dram_size) {
 
-  assert(phy_size >= dram_size);
+  assert(phy_limit >= dram_size);
   mem_store_ = ms;
   in_ending_ = false;
   num_page_move_ = 0;
 
-  ptt_buffer_.set_addr_base(phy_limit() + dram_size_);
+  ptt_buffer_.set_addr_base(PhyLimit() + dram_size_);
   dram_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
   nvm_buffer_.set_addr_base(dram_buffer_.addr_base() + dram_buffer_.Size());
 }
@@ -110,12 +110,12 @@ inline uint64_t AddrTransController::Size() const {
   return nvm_buffer_.addr_base() + nvm_buffer_.Size();
 }
 
-inline bool AddrTransController::isDRAM(uint64_t phy_addr) {
+inline bool AddrTransController::isDRAM(Addr phy_addr) {
   return phy_addr < dram_size_;
 }
 
-inline bool AddrTransController::CheckValid(uint64_t phy_addr, int size) {
-  return att_.Tag(phy_addr) == att_.Tag(phy_addr + size - 1);
+inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
+  return att_.ToTag(phy_addr) == att_.ToTag(phy_addr + size - 1);
 }
 
 inline void AddrTransController::DirtyEntryRevoker::Visit(int i) {
