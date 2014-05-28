@@ -9,7 +9,7 @@ Addr AddrTransController::LoadAddr(Addr phy_addr) {
   assert(phy_addr < PhyLimit());
   Tag phy_tag = att_.ToTag(phy_addr);
   Addr mach_addr = att_.Translate(phy_addr, att_.Lookup(phy_tag).second);
-  if (isDRAM(phy_addr)) {
+  if (IsDRAM(phy_addr)) {
     mem_store_->OnDRAMRead(mach_addr, att_.block_size());
   } else {
     mem_store_->OnNVMRead(mach_addr, att_.block_size());
@@ -91,29 +91,32 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
   int index = att_.Lookup(phy_tag).first;
   if (index != -EINVAL) { // found
     const ATTEntry& entry = att_.At(index);
-    if (in_ending()) return att_.Translate(phy_addr, entry.mach_base);
-    else {
+    if (in_ending()) {
+      return att_.Translate(phy_addr, entry.mach_base);
+    } else {
       assert(entry.IsRegularTemp());
-      ATTRevokeTemp(index, false);
+      ATTRevokeTemp(index, !FullBlock(phy_addr, size));
       return phy_addr;
     }
-  } else if (!in_ending()) {
-    return phy_addr;
-  } else { // in ending
-    assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
-    const Addr mach_base = dram_buffer_.NewBlock();
-    if (!att_.IsEmpty(ATTEntry::FREE)) {
-      ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
-    } else {
-      int ci = att_.GetFront(ATTEntry::CLEAN);
-      const ATTEntry& entry = att_.At(ci);
-      mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base, size);
-      nvm_buffer_.PinBlock(entry.mach_base);
-      ATTShrinkClean(ci, false);
-      ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
-      // suppose the mapping is marked in NV-ATT
+  } else { // not found
+    if (!in_ending()) {
+      return phy_addr;
+    } else { // in ending
+      assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
+      const Addr mach_base = dram_buffer_.NewBlock();
+      if (!att_.IsEmpty(ATTEntry::FREE)) {
+        ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
+      } else {
+        int ci = att_.GetFront(ATTEntry::CLEAN);
+        const ATTEntry& entry = att_.At(ci);
+        mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base, att_.block_size());
+        nvm_buffer_.PinBlock(entry.mach_base);
+        ATTShrinkClean(ci, false);
+        ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
+        // suppose the mapping is marked in NV-ATT
+      }
+      return att_.Translate(phy_addr, mach_base);
     }
-    return att_.Translate(phy_addr, mach_base);
   }
 }
 
@@ -148,7 +151,7 @@ void AddrTransController::PseudoPageStore(Addr phy_addr) {
 
 Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
   assert(CheckValid(phy_addr, size) && phy_addr < PhyLimit());
-  if (isDRAM(phy_addr)) {
+  if (IsDRAM(phy_addr)) {
     PseudoPageStore(phy_addr);
     return DRAMStore(phy_addr, size);
   } else {
@@ -157,7 +160,7 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
 }
 
 ATTControl AddrTransController::Probe(Addr phy_addr) {
-  if (isDRAM(phy_addr)) {
+  if (IsDRAM(phy_addr)) {
     bool ptt_avail = ptt_.Contains(phy_addr) ||
         ptt_.GetLength(ATTEntry::DIRTY) < ptt_.length();
     if (in_ending()) {

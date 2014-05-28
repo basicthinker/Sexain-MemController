@@ -8,7 +8,7 @@ using namespace std;
 pair<int, Addr> AddrTransTable::Lookup(Tag phy_tag) {
   unordered_map<Tag, int>::iterator it = tag_index_.find(phy_tag);
   if (it == tag_index_.end()) { // not hit
-    return make_pair(-EINVAL, Addr(phy_tag));
+    return make_pair(-EINVAL, ToAddr(phy_tag));
   } else {
     ATTEntry& entry = entries_[it->second];
     assert(entry.state != ATTEntry::FREE && entry.phy_tag == phy_tag);
