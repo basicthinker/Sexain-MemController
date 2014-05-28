@@ -35,6 +35,7 @@ class VersionBuffer {
   /// The total address space size that this buffer area covers in bytes
   ///
   uint64_t Size() const;
+  bool Contains(uint64_t addr) const;
  private:
   uint64_t At(int index);
   int Index(uint64_t mach_addr);
@@ -57,6 +58,10 @@ inline VersionBuffer::VersionBuffer(int length, int block_bits) :
 
 inline uint64_t VersionBuffer::Size() const {
   return length_ << block_bits_;
+}
+
+inline bool VersionBuffer::Contains(uint64_t addr) const {
+  return addr >= addr_base_ && (addr - addr_base_) < Size();
 }
 
 inline uint64_t VersionBuffer::At(int index) {
