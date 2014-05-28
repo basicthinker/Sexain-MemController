@@ -161,7 +161,8 @@ fp = config_fingerprint(options)
 
 if options.check_cpu_2006:
     bench_process, bench_output, ref_output = make_process(
-            options.check_cpu_2006, options.cpu_2006_root, fp)
+            options.check_cpu_2006,
+            options.cpu_2006_root, options.cpu_2006_build_name, fp)
     if ref_output is None or not os.path.isfile(ref_output):
         print 'SPEC CPU 2006 ' + options.check_cpu_2006 + ' has no output!'
     elif not os.path.isfile(bench_output):
