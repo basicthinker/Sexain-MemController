@@ -23,33 +23,34 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
   if (!in_ending()) {
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
-      if (entry.IsCrossDirty()) {
-        Addr mach_base = ATTRegularizeDirty(index, size < att_.block_size());
+      if (entry.IsCrossTemp()) {
+        ATTRevokeTemp(index, !FullBlock(phy_addr, size));
+        return phy_addr;
+      } else if (entry.IsCrossDirty()) {
+        Addr mach_base = ATTRegularizeDirty(index, !FullBlock(phy_addr, size));
         return att_.Translate(phy_addr, mach_base);
-      } else if (entry.IsCrossTemp()) {
-        ATTRevokeTemp(index, size < att_.block_size());
-        return att_.ToAddr(entry.phy_tag);
-      } else if (entry.state == ATTEntry::DIRTY) {
+      } else if (entry.state == ATTEntry::DIRTY) { // regular dirty
         return att_.Translate(phy_addr, entry.mach_base);
       } else {
         nvm_buffer_.PinBlock(entry.mach_base);
-        ATTShrinkClean(index, size < att_.block_size());
+        ATTShrink(index, !FullBlock(phy_addr, size));
         return phy_addr;
       }
     } else { // not found
       assert(att_.GetLength(ATTEntry::DIRTY) < att_.length());
       const Addr mach_base = nvm_buffer_.NewBlock();
       if (att_.IsEmpty(ATTEntry::FREE)) {
-        if (!att_.IsEmpty(ATTEntry::TEMP)) {
-          int ti = att_.GetFront(ATTEntry::TEMP);
-          ATTRevokeTemp(ti);
-        } else {
+        if (att_.IsEmpty(ATTEntry::TEMP)) {
           int ci = att_.GetFront(ATTEntry::CLEAN);
           nvm_buffer_.PinBlock(att_.At(ci).mach_base);
-          ATTShrinkClean(ci);
+          ATTShrink(ci);
+        } else {
+          int ti = att_.GetFront(ATTEntry::TEMP);
+          ATTRevokeTemp(ti);
         }
       }
-      ATTSetup(phy_tag, mach_base, size, ATTEntry::DIRTY, ATTEntry::REGULAR);
+      ATTSetup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR,
+          !FullBlock(phy_addr, size));
       return att_.Translate(phy_addr, mach_base);
     }
   } else { // while checkpointing
@@ -60,26 +61,27 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
       } else {
         const Addr mach_base = dram_buffer_.NewBlock();
         nvm_buffer_.PinBlock(entry.mach_base);
-        att_.Reset(index, mach_base, ATTEntry::TEMP, ATTEntry::CROSS);
+        ATTReset(index, mach_base, !FullBlock(phy_addr, size));
         return att_.Translate(phy_addr, mach_base);
       }
     } else { // not found
       assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
       if (!att_.IsEmpty(ATTEntry::FREE)) {
         const Addr mach_base = nvm_buffer_.NewBlock();
-        ATTSetup(phy_tag, mach_base, size, ATTEntry::DIRTY, ATTEntry::REGULAR);
+        ATTSetup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR,
+            !FullBlock(phy_addr, size));
         return att_.Translate(phy_addr, mach_base);
       } else {
         const Addr mach_base = dram_buffer_.NewBlock();
         int ci = att_.GetFront(ATTEntry::CLEAN);
         const ATTEntry& entry = att_.At(ci);
-        nvm_buffer_.PinBlock(entry.mach_base);
         mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base,
             att_.block_size());
-        ATTShrinkClean(ci, false);
+        nvm_buffer_.PinBlock(entry.mach_base);
+        ATTShrink(ci, false);
         // suppose the NV-ATT has the replaced marked as swapped
-        ATTSetup(phy_addr, mach_base, att_.block_size(),
-            ATTEntry::DIRTY, ATTEntry::CROSS);
+        ATTSetup(phy_addr, mach_base, ATTEntry::DIRTY, ATTEntry::CROSS,
+            !FullBlock(phy_addr, size));
         return att_.Translate(phy_addr, mach_base);
       }
     }
@@ -105,14 +107,17 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
       assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
       const Addr mach_base = dram_buffer_.NewBlock();
       if (!att_.IsEmpty(ATTEntry::FREE)) {
-        ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
+        ATTSetup(phy_tag, mach_base, ATTEntry::TEMP, ATTEntry::REGULAR,
+            !FullBlock(phy_addr, size));
       } else {
         int ci = att_.GetFront(ATTEntry::CLEAN);
         const ATTEntry& entry = att_.At(ci);
-        mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base, att_.block_size());
+        mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base,
+            att_.block_size());
         nvm_buffer_.PinBlock(entry.mach_base);
-        ATTShrinkClean(ci, false);
-        ATTSetup(phy_tag, mach_base, size, ATTEntry::TEMP, ATTEntry::REGULAR);
+        ATTShrink(ci, false);
+        ATTSetup(phy_tag, mach_base, ATTEntry::TEMP, ATTEntry::REGULAR,
+            !FullBlock(phy_addr, size));
         // suppose the mapping is marked in NV-ATT
       }
       return att_.Translate(phy_addr, mach_base);
@@ -214,24 +219,6 @@ void AddrTransController::FinishEpochEnding() {
   in_ending_ = false;
 }
 
-void AddrTransController::ATTSetup(Tag phy_tag, Addr mach_base, int size,
-    ATTEntry::State state, ATTEntry::SubState sub) {
-  if (size < att_.block_size()) {
-    mem_store_->Move(mach_base, att_.ToAddr(phy_tag), size);
-  }
-  att_.Setup(phy_tag, mach_base, state, sub);
-}
-
-void AddrTransController::ATTShrinkClean(int index, bool move_data) {
-  const ATTEntry& entry = att_.At(index);
-  assert(entry.state == ATTEntry::CLEAN);
-  if (move_data) {
-    mem_store_->Move(
-        att_.ToAddr(entry.phy_tag), entry.mach_base, att_.block_size());
-  }
-  att_.FreeEntry(index);
-}
-
 Addr AddrTransController::ATTRegularizeDirty(int index, bool move_data) {
   assert(!in_ending());
   const ATTEntry& entry = att_.At(index);
@@ -250,7 +237,8 @@ void AddrTransController::ATTRevokeTemp(int index, bool move_data) {
   assert(!in_ending());
   const ATTEntry& entry = att_.At(index);
   if (move_data) {
-    mem_store_->Move(att_.ToAddr(entry.phy_tag), entry.mach_base, att_.block_size());
+    mem_store_->Move(att_.ToAddr(entry.phy_tag), entry.mach_base,
+        att_.block_size());
   }
   dram_buffer_.FreeBlock(entry.mach_base, IN_USE_SLOT);
   att_.FreeEntry(index);

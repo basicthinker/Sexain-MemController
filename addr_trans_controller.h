@@ -45,9 +45,12 @@ class AddrTransController {
  private:
   bool CheckValid(Addr phy_addr, int size);
   bool FullBlock(Addr phy_addr, int size);
-  void ATTSetup(Tag phy_tag, Addr mach_base, int size,
-      ATTEntry::State state, ATTEntry::SubState sub); 
-  void ATTShrinkClean(int index, bool move_data = true);
+
+  void ATTSetup(Tag phy_tag, Addr mach_base,
+      ATTEntry::State state, ATTEntry::SubState sub, bool move_data = true);
+  void ATTReset(int index, Addr mach_base, bool move_data = true);
+  void ATTShrink(int index, bool move_data = true);
+
   Addr ATTRegularizeDirty(int index, bool move_data = true);
   void ATTRevokeTemp(int index, bool move_data = true);
 
@@ -122,6 +125,38 @@ inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
 
 inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
   return (phy_addr & (att_.block_size() - 1)) == 0 && size == att_.block_size();
+}
+
+inline void AddrTransController::ATTSetup(Tag phy_tag, Addr mach_base,
+    ATTEntry::State state, ATTEntry::SubState sub, bool move_data) {
+  Addr phy_addr = att_.ToAddr(phy_tag);
+  assert((IsDRAM(phy_addr) == dram_buffer_.Contains(mach_base)) ==
+      (sub == ATTEntry::REGULAR));
+  if (move_data) {
+    mem_store_->Move(mach_base, phy_addr, att_.block_size());
+  }
+  att_.Setup(phy_tag, mach_base, state, sub);
+}
+
+inline void AddrTransController::ATTReset(int index,
+    Addr mach_base, bool move_data) {
+  const ATTEntry& entry = att_.At(index);
+  assert(!dram_buffer_.Contains(entry.mach_base) &&
+      entry.sub == ATTEntry::REGULAR && dram_buffer_.Contains(mach_base));
+  if (move_data) {
+    mem_store_->Move(mach_base, entry.mach_base, att_.block_size());
+  }
+  att_.Reset(index, mach_base, ATTEntry::TEMP, ATTEntry::CROSS);
+}
+
+inline void AddrTransController::ATTShrink(int index, bool move_data) {
+  const ATTEntry& entry = att_.At(index);
+  assert(entry.state == ATTEntry::CLEAN);
+  if (move_data) {
+    mem_store_->Move(att_.ToAddr(entry.phy_tag), entry.mach_base,
+        att_.block_size());
+  }
+  att_.FreeEntry(index);
 }
 
 inline void AddrTransController::DirtyEntryRevoker::Visit(int i) {
