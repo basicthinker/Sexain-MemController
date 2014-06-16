@@ -12,18 +12,18 @@
 
 #define INVAL_ADDR std::numeric_limits<uint64_t>::max()
 
-enum BufferState {
-  IN_USE_SLOT = 0,
-  BACKUP_SLOT,
-  FREE_SLOT,
-};
-
 class VersionBuffer {
  public:
+  enum State {
+    IN_USE = 0,
+    BACKUP,
+    FREE,
+  };
+
   VersionBuffer(int length, int block_bits);
 
   uint64_t NewBlock();
-  void FreeBlock(uint64_t mach_addr, BufferState bs);
+  void FreeBlock(uint64_t mach_addr, State bs);
   void PinBlock(uint64_t mach_addr);
   void FreeBackup();
 
@@ -51,7 +51,7 @@ inline VersionBuffer::VersionBuffer(int length, int block_bits) :
     length_(length), block_bits_(block_bits),
     block_mask_(block_size() - 1), sets_(3) {
   for (int i = 0; i < length_; ++i) {
-    sets_[FREE_SLOT].insert(i);
+    sets_[FREE].insert(i);
   }
   addr_base_ = INVAL_ADDR;
 }
