@@ -16,27 +16,19 @@ typedef uint64_t Addr;
 
 struct ATTEntry {
   enum State {
-    DIRTY = 0,
-    TEMP,
-    CLEAN,
-    FREE, // always placed the last
-  };
-
-  enum SubState {
-    REGULAR = 0,
-    CROSS,
+    VISIBLE_CLEAN = 0,
+    REG_TEMP,
+    FREE, // the following queues are merged
+    HIDDEN_CLEAN,
+    REG_DIRTY,
+    CROSS_DIRTY,
+    CROSS_TEMP,
   };
 
   Tag phy_tag;
   Addr mach_base;
   IndexNode queue_node;
   State state;
-  SubState sub;
-
-  bool IsCrossDirty() const { return state == DIRTY && sub == CROSS; }
-  bool IsRegularDirty() const { return state == DIRTY && sub == REGULAR; }
-  bool IsCrossTemp() const { return state == TEMP && sub == CROSS; }
-  bool IsRegularTemp() const { return state == TEMP && sub == REGULAR; }
 };
 
 class AddrTransTable : public IndexArray {
@@ -44,21 +36,18 @@ class AddrTransTable : public IndexArray {
   AddrTransTable(int length, int block_bits);
 
   std::pair<int, Addr> Lookup(Tag phy_tag);
-  void Setup(Tag phy_tag, Addr mach_base,
-      ATTEntry::State state, ATTEntry::SubState sub);
+  void Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state);
   void Revoke(Tag phy_tag);
-  void Reset(int index, Addr mach_base,
-      ATTEntry::State state, ATTEntry::SubState sub);
-  void FreeEntry(int index);
-  void CleanEntry(int index); ///< Only applicable to dirty entries
+  void Revoke(int index);
+  void ShiftState(int index, ATTEntry::State state);
+  void Reset(int index, Addr mach_base, ATTEntry::State state);
   void VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
 
   const ATTEntry& At(int i) const;
   bool Contains(Addr phy_addr) const;
-  bool IsEmpty(ATTEntry::State state) const { return queues_[state].Empty(); }
-  int GetLength(ATTEntry::State state) const { return queues_[state].length(); }
-  int GetLength(std::initializer_list<ATTEntry::State> states) const;
-  int GetFront(ATTEntry::State state) const { return queues_[state].Front(); }
+  bool IsEmpty(ATTEntry::State state) const;
+  int GetLength(ATTEntry::State state) const;
+  int GetFront(ATTEntry::State state) const;
 
   Tag ToTag(Addr addr) const { return Tag(addr >> block_bits_); }
   Addr ToAddr(Tag tag) const { return Addr(tag) << block_bits_; }
@@ -80,7 +69,7 @@ class AddrTransTable : public IndexArray {
 
 inline AddrTransTable::AddrTransTable(int length, int block_bits) :
     length_(length), block_bits_(block_bits), block_mask_(block_size() - 1),
-    entries_(length_), queues_((int)ATTEntry::FREE + 1, *this) {
+    entries_(length_), queues_(ATTEntry::FREE + 1, *this) {
   for (int i = 0; i < length_; ++i) {
     queues_[ATTEntry::FREE].PushBack(i);
   }
@@ -95,19 +84,25 @@ inline bool AddrTransTable::Contains(Addr phy_addr) const {
   return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
 }
 
-inline int AddrTransTable::GetLength(
-    std::initializer_list<ATTEntry::State> states) const {
-  int len = 0;
-  for (std::initializer_list<ATTEntry::State>::iterator it = states.begin();
-      it != states.end(); ++it) {
-    len += GetLength(*it);
-  }
-  return len;
-}
-
 inline void AddrTransTable::VisitQueue(ATTEntry::State state,
     QueueVisitor* visitor) {
+  if (state > ATTEntry::FREE) state = ATTEntry::State(ATTEntry::FREE + 1);
   queues_[state].Accept(visitor);
+}
+
+inline bool AddrTransTable::IsEmpty(ATTEntry::State state) const {
+  assert(state <= ATTEntry::FREE);
+  return queues_[state].Empty();
+}
+
+inline int AddrTransTable::GetLength(ATTEntry::State state) const {
+  assert(state <= ATTEntry::FREE);
+  return queues_[state].length();
+}
+
+inline int AddrTransTable::GetFront(ATTEntry::State state) const {
+  assert(state <= ATTEntry::FREE);
+  return queues_[state].Front();
 }
  
 inline Addr AddrTransTable::Translate(
@@ -116,4 +111,3 @@ inline Addr AddrTransTable::Translate(
 }
 
 #endif // SEXAIN_ADDR_TRANS_TABLE_H_
-

@@ -20,8 +20,7 @@ pair<int, Addr> AddrTransTable::Lookup(Tag phy_tag) {
   }
 }
 
-void AddrTransTable::Setup(Tag phy_tag, Addr mach_base,
-    ATTEntry::State state, ATTEntry::SubState sub) {
+void AddrTransTable::Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state) {
   assert(tag_index_.count(phy_tag) == 0);
   assert(!queues_[ATTEntry::FREE].Empty());
 
@@ -30,44 +29,39 @@ void AddrTransTable::Setup(Tag phy_tag, Addr mach_base,
   entries_[i].state = state;
   entries_[i].phy_tag = phy_tag;
   entries_[i].mach_base = mach_base;
-  entries_[i].sub = sub;
 
   tag_index_[phy_tag] = i;
 }
 
-void AddrTransTable::FreeEntry(int index) {
+void AddrTransTable::Revoke(int index) {
   ATTEntry& entry = entries_[index];
   assert(entry.state != ATTEntry::FREE);
   tag_index_.erase(entry.phy_tag); 
   queues_[entry.state].Remove(index);
   queues_[ATTEntry::FREE].PushBack(index);
   entry.state = ATTEntry::FREE;
-  entry.sub = ATTEntry::REGULAR;
-}
-
-void AddrTransTable::CleanEntry(int index) {
-  ATTEntry& entry = entries_[index];
-  assert(entry.state == ATTEntry::DIRTY && entry.sub == ATTEntry::REGULAR);
-  queues_[ATTEntry::DIRTY].Remove(index);
-  queues_[ATTEntry::CLEAN].PushBack(index);
-  entries_[index].state = ATTEntry::CLEAN;
 }
 
 void AddrTransTable::Revoke(Tag phy_tag) {
   unordered_map<Tag, int>::iterator it = tag_index_.find(phy_tag);
   if (it != tag_index_.end()) {
     assert(entries_[it->second].phy_tag == phy_tag);
-    FreeEntry(it->second);
+    Revoke(it->second);
   }
 }
 
-void AddrTransTable::Reset(int index, Addr mach_base,
-    ATTEntry::State state, ATTEntry::SubState sub) {
+void AddrTransTable::ShiftState(int index, ATTEntry::State new_state) {
+  ATTEntry& entry = entries_[index];
+  queues_[entry.state].Remove(index);
+  queues_[new_state].PushBack(index);
+  entries_[index].state = new_state;
+}
+
+void AddrTransTable::Reset(int index, Addr mach_base, ATTEntry::State state) {
   ATTEntry& entry = entries_[index];
   entry.mach_base = mach_base;
   queues_[entry.state].Remove(index);
   queues_[state].PushBack(index);
   entry.state = state;
-  entry.sub = sub;
 }
 
