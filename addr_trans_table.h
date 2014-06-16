@@ -19,8 +19,8 @@ struct ATTEntry {
     VISIBLE_CLEAN = 0,
     REG_TEMP,
     FREE, // the following queues are merged
+    REG_DIRTY, // max queue index
     HIDDEN_CLEAN,
-    REG_DIRTY,
     CROSS_DIRTY,
     CROSS_TEMP,
   };
@@ -86,22 +86,22 @@ inline bool AddrTransTable::Contains(Addr phy_addr) const {
 
 inline void AddrTransTable::VisitQueue(ATTEntry::State state,
     QueueVisitor* visitor) {
-  if (state > ATTEntry::FREE) state = ATTEntry::State(ATTEntry::FREE + 1);
+  assert(state <= ATTEntry::REG_DIRTY);
   queues_[state].Accept(visitor);
 }
 
 inline bool AddrTransTable::IsEmpty(ATTEntry::State state) const {
-  assert(state <= ATTEntry::FREE);
+  assert(state <= ATTEntry::REG_DIRTY);
   return queues_[state].Empty();
 }
 
 inline int AddrTransTable::GetLength(ATTEntry::State state) const {
-  assert(state <= ATTEntry::FREE);
+  assert(state <= ATTEntry::REG_DIRTY);
   return queues_[state].length();
 }
 
 inline int AddrTransTable::GetFront(ATTEntry::State state) const {
-  assert(state <= ATTEntry::FREE);
+  assert(state <= ATTEntry::REG_DIRTY);
   return queues_[state].Front();
 }
  

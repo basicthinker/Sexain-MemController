@@ -32,7 +32,7 @@ class AddrTransController {
   uint64_t Size() const;
   Addr PhyLimit() const { return dram_size_ + nvm_size_; }
   int cache_block_size() const { return att_.block_size(); }
-  bool in_ending() const { return in_ending_; }
+  bool in_checkpointing() const { return in_checkpointing_; }
 
  protected:
   virtual bool IsDRAM(Addr phy_addr);
@@ -46,53 +46,37 @@ class AddrTransController {
   bool CheckValid(Addr phy_addr, int size);
   bool FullBlock(Addr phy_addr, int size);
 
-  void ATTSetup(Tag phy_tag, Addr mach_base,
-      ATTEntry::State state, ATTEntry::SubState sub, bool move_data = true);
-  void ATTReset(int index, Addr mach_base, bool move_data = true);
-  void ATTShrink(int index, bool move_data = true);
-
-  Addr ATTRegularizeDirty(int index, bool move_data = true);
-  void ATTRevokeTemp(int index, bool move_data = true);
+  void Setup(Addr phy_addr, Addr mach_base, int size, ATTEntry::State state);
+  void HideClean(int index, bool move_data = true);
+  Addr ResetVisibleClean(int index, bool move_data = true);
+  void FreeVisibleClean(int index, bool move_data = true);
+  Addr RegularizeDirty(int index, bool move_data = true);
+  void FreeRegTemp(int index, bool move_data = true);
+  void CleanCrossTemp(int index, bool move_data = true);
 
   Addr NVMStore(Addr phy_addr, int size);
   Addr DRAMStore(Addr phy_addr, int size);
-  void PseudoPageStore(Addr phy_addr);
+  void PseudoPageStore(Tag phy_tag);
 
-  const uint64_t dram_size_; ///< Size of visible DRAM region
-  const uint64_t nvm_size_; ///< Size of visible NVM region
+  const uint64_t dram_size_; ///< Size of direct DRAM region
+  const uint64_t nvm_size_; ///< Size of direct NVM region
   MemStore* mem_store_;
-  bool in_ending_;
+  bool in_checkpointing_;
 
-  int num_page_move_; ///< Move of NVM pages
-  
-  class TempEntryRevoker : public QueueVisitor {
-   public:
-    TempEntryRevoker(AddrTransController& atc) : atc_(atc) { }
-    void Visit(int i) { atc_.ATTRevokeTemp(i, true); }
-   private:
-    AddrTransController& atc_;
-  };
+  int pages_twice_written_; ///< Number of twice-write pages
 
-  class DirtyEntryRevoker : public QueueVisitor {
+  class DirtyCleaner : public QueueVisitor {
    public:
-    DirtyEntryRevoker(AddrTransController& atc) : atc_(atc) { }
+    DirtyCleaner(AddrTransController& atc) : atc_(atc) { }
     void Visit(int i);
    private:
     AddrTransController& atc_;
-  };
-
-  class DirtyEntryCleaner : public QueueVisitor {
-   public:
-    DirtyEntryCleaner(AddrTransTable& att) : att_(att) { }
-    void Visit(int i);
-   private:
-    AddrTransTable& att_;
   };
 };
 
 // Space partition (low -> high):
-// Visible DRAM || Visible NVM (phy_limit)||
-// DRAM backup || PTT buffer || Temporary buffer || ATT buffer
+// Direct DRAM || Direct NVM (phy_limit)||
+// DRAM backup || PTT buffer || DRAM buffer || NVM buffer
 inline AddrTransController::AddrTransController(
     uint64_t dram_size, Addr phy_limit,
     int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
@@ -103,8 +87,8 @@ inline AddrTransController::AddrTransController(
 
   assert(phy_limit >= dram_size);
   mem_store_ = ms;
-  in_ending_ = false;
-  num_page_move_ = 0;
+  in_checkpointing_ = false;
+  pages_twice_written_ = 0;
 
   ptt_buffer_.set_addr_base(PhyLimit() + dram_size_);
   dram_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
@@ -127,47 +111,13 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
   return (phy_addr & (att_.block_size() - 1)) == 0 && size == att_.block_size();
 }
 
-inline void AddrTransController::ATTSetup(Tag phy_tag, Addr mach_base,
-    ATTEntry::State state, ATTEntry::SubState sub, bool move_data) {
-  Addr phy_addr = att_.ToAddr(phy_tag);
-  assert((IsDRAM(phy_addr) == dram_buffer_.Contains(mach_base)) ==
-      (sub == ATTEntry::REGULAR));
-  if (move_data) {
-    mem_store_->Move(mach_base, phy_addr, att_.block_size());
+inline void AddrTransController::DirtyCleaner::Visit(int i) {
+  const ATTEntry& entry = atc_.att_.At(i);
+  if (entry.state == ATTEntry::CROSS_DIRTY) {
+    atc_.RegularizeDirty(i, true);
   }
-  att_.Setup(phy_tag, mach_base, state, sub);
-}
-
-inline void AddrTransController::ATTReset(int index,
-    Addr mach_base, bool move_data) {
-  const ATTEntry& entry = att_.At(index);
-  assert(!dram_buffer_.Contains(entry.mach_base) &&
-      entry.sub == ATTEntry::REGULAR && dram_buffer_.Contains(mach_base));
-  if (move_data) {
-    mem_store_->Move(mach_base, entry.mach_base, att_.block_size());
-  }
-  att_.Reset(index, mach_base, ATTEntry::TEMP, ATTEntry::CROSS);
-}
-
-inline void AddrTransController::ATTShrink(int index, bool move_data) {
-  const ATTEntry& entry = att_.At(index);
-  assert(entry.state == ATTEntry::CLEAN);
-  if (move_data) {
-    mem_store_->Move(att_.ToAddr(entry.phy_tag), entry.mach_base,
-        att_.block_size());
-  }
-  att_.FreeEntry(index);
-}
-
-inline void AddrTransController::DirtyEntryRevoker::Visit(int i) {
-  if (atc_.att_.At(i).IsCrossDirty()) {
-    atc_.ATTRegularizeDirty(i, true);
-  }
-}
-
-inline void AddrTransController::DirtyEntryCleaner::Visit(int i) {
-  if (att_.At(i).sub == ATTEntry::REGULAR) {
-    att_.CleanEntry(i);
+  if (entry.state == ATTEntry::REG_DIRTY) {
+    atc_.att_.ShiftState(i, ATTEntry::VISIBLE_CLEAN);
   }
 }
 
