@@ -9,7 +9,13 @@
 #include <set>
 #include <algorithm>
 
-typedef std::pair<int, int> IndexNode;
+struct IndexNode {
+  int prev;
+  int next;
+  IndexNode() {
+    prev = next = -EINVAL;
+  }
+};
 
 class IndexArray {
  public:
@@ -24,8 +30,8 @@ class QueueVisitor {
 class IndexQueue {
  public:
   IndexQueue(IndexArray& arr);
-  int Front() const { return head_.first; }
-  int Back() const { return head_.second; }
+  int Front() const { return head_.prev; }
+  int Back() const { return head_.next; }
   bool Empty() const;
   void Remove(int i);
   int PopFront();
@@ -36,8 +42,8 @@ class IndexQueue {
  private:
   IndexNode& FrontNode();
   IndexNode& BackNode();
-  void SetFront(int i) { head_.first = i; }
-  void SetBack(int i) { head_.second = i; }
+  void SetFront(int i) { head_.prev = i; }
+  void SetBack(int i) { head_.next = i; }
 
   IndexNode head_;
   IndexArray& array_;
