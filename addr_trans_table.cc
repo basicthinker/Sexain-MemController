@@ -33,35 +33,28 @@ void AddrTransTable::Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state) {
   tag_index_[phy_tag] = i;
 }
 
-void AddrTransTable::Revoke(int index) {
-  ATTEntry& entry = entries_[index];
-  assert(entry.state != ATTEntry::FREE);
-  tag_index_.erase(entry.phy_tag); 
-  queues_[entry.state].Remove(index);
-  queues_[ATTEntry::FREE].PushBack(index);
-  entry.state = ATTEntry::FREE;
-}
-
 void AddrTransTable::Revoke(Tag phy_tag) {
   unordered_map<Tag, int>::iterator it = tag_index_.find(phy_tag);
   if (it != tag_index_.end()) {
     assert(entries_[it->second].phy_tag == phy_tag);
-    Revoke(it->second);
+    ShiftState(it->second, ATTEntry::FREE);
   }
 }
 
 void AddrTransTable::ShiftState(int index, ATTEntry::State new_state) {
   ATTEntry& entry = entries_[index];
+  assert(entry.state != new_state);
+  if (new_state == ATTEntry::FREE) {
+    tag_index_.erase(entry.phy_tag);
+  }
   queues_[entry.state].Remove(index);
   queues_[new_state].PushBack(index);
   entries_[index].state = new_state;
 }
 
-void AddrTransTable::Reset(int index, Addr mach_base, ATTEntry::State state) {
+void AddrTransTable::Reset(int index,
+    Addr new_base, ATTEntry::State new_state) {
   ATTEntry& entry = entries_[index];
-  entry.mach_base = mach_base;
-  queues_[entry.state].Remove(index);
-  queues_[state].PushBack(index);
-  entry.state = state;
+  entry.mach_base = new_base;
+  ShiftState(index, new_state);
 }
-

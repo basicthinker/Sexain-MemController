@@ -38,9 +38,8 @@ class AddrTransTable : public IndexArray {
   std::pair<int, Addr> Lookup(Tag phy_tag);
   void Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state);
   void Revoke(Tag phy_tag);
-  void Revoke(int index);
   void ShiftState(int index, ATTEntry::State state);
-  void Reset(int index, Addr mach_base, ATTEntry::State state);
+  void Reset(int index, Addr new_base, ATTEntry::State new_state);
   void VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
 
   const ATTEntry& At(int i) const;
