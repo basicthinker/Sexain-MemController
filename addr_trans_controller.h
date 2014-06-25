@@ -40,7 +40,6 @@ class AddrTransController {
   VersionBuffer nvm_buffer_;
   VersionBuffer dram_buffer_;
   AddrTransTable ptt_;
-  VersionBuffer ptt_buffer_;
 
  private:
   bool CheckValid(Addr phy_addr, int size);
@@ -48,11 +47,10 @@ class AddrTransController {
 
   void Setup(Addr phy_addr, Addr mach_base, int size, ATTEntry::State state);
   void HideClean(int index, bool move_data = true);
-  Addr ResetVisibleClean(int index, bool move_data = true);
-  void FreeVisibleClean(int index, bool move_data = true);
-  Addr RegularizeDirty(int index, bool move_data = true);
-  void FreeRegTemp(int index, bool move_data = true);
-  void CleanCrossTemp(int index, bool move_data = true);
+  Addr ResetClean(int index, bool move_data = true);
+  void FreeClean(int index, bool move_data = true);
+  void FreeLoan(int index, bool move_data = true);
+  void HideTemp(int index, bool move_data = true);
 
   Addr NVMStore(Addr phy_addr, int size);
   Addr DRAMStore(Addr phy_addr, int size);
@@ -65,7 +63,7 @@ class AddrTransController {
 
   int pages_twice_written_; ///< Number of twice-write pages
 
-  class DirtyCleaner : public QueueVisitor {
+  class DirtyCleaner : public QueueVisitor { // inc. TEMP and HIDDEN
    public:
     DirtyCleaner(AddrTransController& atc) : atc_(atc) { }
     void Visit(int i);
@@ -73,9 +71,9 @@ class AddrTransController {
     AddrTransController& atc_;
   };
 
-  class TempRevoker : public QueueVisitor {
+  class LoanRevoker : public QueueVisitor {
    public:
-    TempRevoker(AddrTransController& atc) : atc_(atc) { }
+    LoanRevoker(AddrTransController& atc) : atc_(atc) { }
     void Visit(int i);
    private:
     AddrTransController& atc_;
@@ -92,13 +90,12 @@ class AddrTransController {
 
 // Space partition (low -> high):
 // Direct DRAM || Direct NVM (phy_limit)||
-// DRAM backup || PTT buffer || DRAM buffer || NVM buffer
+// DRAM backup || DRAM buffer || NVM buffer
 inline AddrTransController::AddrTransController(
     uint64_t dram_size, Addr phy_limit,
     int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
         att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
-        dram_buffer_(att_len, block_bits),
-        ptt_(ptt_len, page_bits), ptt_buffer_(2 * ptt_len, page_bits),
+        dram_buffer_(att_len, block_bits), ptt_(ptt_len, page_bits),
         dram_size_(dram_size), nvm_size_(phy_limit - dram_size) {
 
   assert(phy_limit >= dram_size);
@@ -106,8 +103,7 @@ inline AddrTransController::AddrTransController(
   in_checkpointing_ = false;
   pages_twice_written_ = 0;
 
-  ptt_buffer_.set_addr_base(PhyLimit() + dram_size_);
-  dram_buffer_.set_addr_base(ptt_buffer_.addr_base() + ptt_buffer_.Size());
+  dram_buffer_.set_addr_base(PhyLimit() + dram_size_);
   nvm_buffer_.set_addr_base(dram_buffer_.addr_base() + dram_buffer_.Size());
 }
 
@@ -129,32 +125,29 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
 
 inline void AddrTransController::DirtyCleaner::Visit(int i) {
   const ATTEntry& entry = atc_.att_.At(i);
-  if (entry.state == ATTEntry::CROSS_DIRTY) {
-    atc_.RegularizeDirty(i, true);
+  if (entry.state == ATTEntry::DIRTY) {
+    atc_.att_.ShiftState(i, ATTEntry::CLEAN);
+  } else if (entry.state == ATTEntry::TEMP) {
+    atc_.HideTemp(i);
   }
-  if (entry.state == ATTEntry::REG_DIRTY) {
-    atc_.att_.ShiftState(i, ATTEntry::VISIBLE_CLEAN);
-  }
-  if (entry.state == ATTEntry::CROSS_TEMP) {
-    atc_.CleanCrossTemp(i, true);
-  }
-  if (entry.state == ATTEntry::HIDDEN_CLEAN) {
+
+  if (entry.state == ATTEntry::HIDDEN) {
     atc_.att_.ShiftState(i, ATTEntry::FREE);
   }
 }
 
-inline void AddrTransController::TempRevoker::Visit(int i) {
+inline void AddrTransController::LoanRevoker::Visit(int i) {
   const ATTEntry& entry = atc_.att_.At(i);
-  assert(entry.state == ATTEntry::REG_TEMP);
-  atc_.FreeRegTemp(i, true);
+  assert(entry.state == ATTEntry::LOAN);
+  atc_.FreeLoan(i);
 }
 
 inline void AddrTransController::PTTCleaner::Visit(int i) {
   const ATTEntry& entry = ptt_.At(i);
-  if (entry.state == ATTEntry::REG_DIRTY) {
-    ptt_.ShiftState(i, ATTEntry::VISIBLE_CLEAN);
+  if (entry.state == ATTEntry::DIRTY) {
+    ptt_.ShiftState(i, ATTEntry::CLEAN);
   } else {
-    assert(entry.state == ATTEntry::HIDDEN_CLEAN);
+    assert(entry.state == ATTEntry::HIDDEN);
     ptt_.ShiftState(i, ATTEntry::FREE);
   }
 }
