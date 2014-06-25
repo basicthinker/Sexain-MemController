@@ -16,13 +16,12 @@ typedef uint64_t Addr;
 
 struct ATTEntry {
   enum State {
-    VISIBLE_CLEAN = 0,
-    REG_TEMP,
-    FREE, // the following queues are merged
-    REG_DIRTY, // max queue index
-    HIDDEN_CLEAN,
-    CROSS_DIRTY,
-    CROSS_TEMP,
+    CLEAN = 0,
+    LOAN,
+    FREE,
+    DIRTY, // max queue index
+    HIDDEN,
+    TEMP,
   };
 
   Tag phy_tag;
@@ -67,7 +66,7 @@ class AddrTransTable : public IndexArray {
 
 inline AddrTransTable::AddrTransTable(int length, int block_bits) :
     length_(length), block_bits_(block_bits), block_mask_(block_size() - 1),
-    entries_(length_), queues_(ATTEntry::FREE + 1, *this) {
+    entries_(length_), queues_(ATTEntry::DIRTY + 1, *this) {
   for (int i = 0; i < length_; ++i) {
     queues_[ATTEntry::FREE].PushBack(i);
   }
@@ -84,22 +83,22 @@ inline bool AddrTransTable::Contains(Addr phy_addr) const {
 
 inline void AddrTransTable::VisitQueue(ATTEntry::State state,
     QueueVisitor* visitor) {
-  assert(state <= ATTEntry::REG_DIRTY);
+  assert(state <= ATTEntry::DIRTY);
   queues_[state].Accept(visitor);
 }
 
 inline bool AddrTransTable::IsEmpty(ATTEntry::State state) const {
-  assert(state <= ATTEntry::REG_DIRTY);
+  assert(state <= ATTEntry::DIRTY);
   return queues_[state].Empty();
 }
 
 inline int AddrTransTable::GetLength(ATTEntry::State state) const {
-  assert(state <= ATTEntry::REG_DIRTY);
+  assert(state <= ATTEntry::DIRTY);
   return queues_[state].length();
 }
 
 inline int AddrTransTable::GetFront(ATTEntry::State state) const {
-  assert(state <= ATTEntry::REG_DIRTY);
+  assert(state <= ATTEntry::DIRTY);
   return queues_[state].Front();
 }
  

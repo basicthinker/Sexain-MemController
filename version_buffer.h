@@ -15,17 +15,18 @@
 class VersionBuffer {
  public:
   enum State {
-    IN_USE = 0,
-    BACKUP,
-    FREE,
+    BACKUP0 = 0,
+    BACKUP1,
+    IN_USE,
+    FREE, // max queue index
   };
 
   VersionBuffer(int length, int block_bits);
 
   uint64_t NewBlock();
-  void FreeBlock(uint64_t mach_addr, State bs);
-  void PinBlock(uint64_t mach_addr);
-  void FreeBackup();
+  void FreeBlock(uint64_t mach_addr, State state);
+  void BackupBlock(uint64_t mach_addr, State state);
+  void ClearBackup();
 
   uint64_t addr_base() const { return addr_base_; }
   void set_addr_base(uint64_t base) { addr_base_ = base; }
@@ -49,7 +50,7 @@ class VersionBuffer {
 
 inline VersionBuffer::VersionBuffer(int length, int block_bits) :
     length_(length), block_bits_(block_bits),
-    block_mask_(block_size() - 1), sets_(3) {
+    block_mask_(block_size() - 1), sets_(FREE + 1) {
   for (int i = 0; i < length_; ++i) {
     sets_[FREE].insert(i);
   }
