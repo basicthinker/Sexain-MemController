@@ -33,14 +33,6 @@ void AddrTransTable::Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state) {
   tag_index_[phy_tag] = i;
 }
 
-void AddrTransTable::Revoke(Tag phy_tag) {
-  unordered_map<Tag, int>::iterator it = tag_index_.find(phy_tag);
-  if (it != tag_index_.end()) {
-    assert(entries_[it->second].phy_tag == phy_tag);
-    ShiftState(it->second, ATTEntry::FREE);
-  }
-}
-
 void AddrTransTable::ShiftState(int index, ATTEntry::State new_state) {
   ATTEntry& entry = entries_[index];
   assert(entry.state != new_state);

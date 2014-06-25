@@ -18,75 +18,61 @@ Addr AddrTransController::LoadAddr(Addr phy_addr) {
 }
 
 Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
-  /*const Tag phy_tag = att_.ToTag(phy_addr);
+  const Tag phy_tag = att_.ToTag(phy_addr);
   int index = att_.Lookup(phy_tag).first;
   if (!in_checkpointing()) {
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
-      if (entry.IsCrossTemp()) {
-        ATTRevokeTemp(index, !FullBlock(phy_addr, size));
-        return phy_addr;
-      } else if (entry.IsCrossDirty()) {
-        Addr mach_base = ATTRegularizeDirty(index, !FullBlock(phy_addr, size));
-        return att_.Translate(phy_addr, mach_base);
-      } else if (entry.state == ATTEntry::DIRTY) { // regular dirty
+      if (entry.state == ATTEntry::REG_DIRTY) {
         return att_.Translate(phy_addr, entry.mach_base);
+      } else if (entry.state == ATTEntry::CROSS_DIRTY) {
+        Addr mach_base = RegularizeDirty(index, !FullBlock(phy_addr, size));
+        return att_.Translate(phy_addr, mach_base);;
+      } else if (entry.state == ATTEntry::CROSS_TEMP) {
+        CleanCrossTemp(index, !FullBlock(phy_addr, size));
+        return phy_addr;
+      } else if (entry.state == ATTEntry::HIDDEN_CLEAN) {
+        return phy_addr;
       } else {
-        nvm_buffer_.PinBlock(entry.mach_base);
-        ATTShrink(index, !FullBlock(phy_addr, size));
+        HideClean(index, !FullBlock(phy_addr, size));
         return phy_addr;
       }
     } else { // not found
-      assert(att_.GetLength(ATTEntry::DIRTY) < att_.length());
-      const Addr mach_base = nvm_buffer_.NewBlock();
       if (att_.IsEmpty(ATTEntry::FREE)) {
-        if (att_.IsEmpty(ATTEntry::TEMP)) {
-          int ci = att_.GetFront(ATTEntry::CLEAN);
-          nvm_buffer_.PinBlock(att_.At(ci).mach_base);
-          ATTShrink(ci);
+        if (!att_.IsEmpty(ATTEntry::REG_TEMP)) {
+          int ci = att_.GetFront(ATTEntry::REG_TEMP);
+          FreeRegTemp(ci);
         } else {
-          int ti = att_.GetFront(ATTEntry::TEMP);
-          ATTRevokeTemp(ti);
+          assert(!att_.IsEmpty(ATTEntry::VISIBLE_CLEAN));
+          int ti = att_.GetFront(ATTEntry::VISIBLE_CLEAN);
+          FreeVisibleClean(ti);
         }
       }
-      ATTSetup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR,
-          !FullBlock(phy_addr, size));
+      Addr mach_base = nvm_buffer_.NewBlock();
+      Setup(phy_addr, mach_base, size, ATTEntry::REG_DIRTY);
       return att_.Translate(phy_addr, mach_base);
     }
-  } else { // while checkpointing
+  } else { // in checkpointing
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
-      if (entry.IsRegularDirty() || entry.state == ATTEntry::TEMP) {
+      if (entry.state == ATTEntry::CROSS_TEMP ||
+          entry.state == ATTEntry::CROSS_DIRTY) {
         return att_.Translate(phy_addr, entry.mach_base);
       } else {
-        const Addr mach_base = dram_buffer_.NewBlock();
-        nvm_buffer_.PinBlock(entry.mach_base);
-        ATTReset(index, mach_base, !FullBlock(phy_addr, size));
+        Addr mach_base = ResetVisibleClean(index, !FullBlock(phy_addr, size));
         return att_.Translate(phy_addr, mach_base);
       }
     } else { // not found
-      assert(att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) < att_.length());
-      if (!att_.IsEmpty(ATTEntry::FREE)) {
-        const Addr mach_base = nvm_buffer_.NewBlock();
-        ATTSetup(phy_tag, mach_base, ATTEntry::DIRTY, ATTEntry::REGULAR,
-            !FullBlock(phy_addr, size));
-        return att_.Translate(phy_addr, mach_base);
-      } else {
-        const Addr mach_base = dram_buffer_.NewBlock();
-        int ci = att_.GetFront(ATTEntry::CLEAN);
-        const ATTEntry& entry = att_.At(ci);
-        mem_store_->Swap(att_.ToAddr(entry.phy_tag), entry.mach_base,
-            att_.block_size());
-        nvm_buffer_.PinBlock(entry.mach_base);
-        ATTShrink(ci, false);
-        // suppose the NV-ATT has the replaced marked as swapped
-        ATTSetup(phy_addr, mach_base, ATTEntry::DIRTY, ATTEntry::CROSS,
-            !FullBlock(phy_addr, size));
-        return att_.Translate(phy_addr, mach_base);
+      if (att_.IsEmpty(ATTEntry::FREE)) {
+        assert(!att_.IsEmpty(ATTEntry::VISIBLE_CLEAN));
+        int ci = att_.GetFront(ATTEntry::VISIBLE_CLEAN);
+        FreeVisibleClean(ci);
       }
+      Addr mach_base = dram_buffer_.NewBlock();
+      Setup(phy_addr, mach_base, size, ATTEntry::CROSS_DIRTY);
+      return att_.Translate(phy_addr, mach_base);
     }
-  } */
-  return phy_addr;
+  }
 }
 
 Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
@@ -104,7 +90,7 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
       if (att_.IsEmpty(ATTEntry::FREE)) {
         assert(!att_.IsEmpty(ATTEntry::VISIBLE_CLEAN));
         int ci = att_.GetFront(ATTEntry::VISIBLE_CLEAN);
-        FreeVisibleClean(ci, !FullBlock(phy_addr, size));
+        FreeVisibleClean(ci);
         // suppose the mapping is marked in NV-ATT
       }
       const Addr mach_base = dram_buffer_.NewBlock();
@@ -137,7 +123,7 @@ void AddrTransController::PseudoPageStore(Tag phy_tag) {
 
       ++pages_twice_written_;
       ptt_buffer_.PinBlock(entry.mach_base);
-      ptt_.Revoke(ci);
+      ptt_.ShiftState(ci, ATTEntry::FREE);
     }
 
     Addr mach_base = ptt_buffer_.NewBlock();
@@ -155,8 +141,7 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
   }
 }
 
-ATTControl AddrTransController::Probe(Addr phy_addr) {
-
+AddrTransController::Control AddrTransController::Probe(Addr phy_addr) {
   if (IsDRAM(phy_addr)) {
     bool ptt_avail = ptt_.Contains(phy_addr) ||
         ptt_.GetLength(ATTEntry::REG_DIRTY) < ptt_.length();
@@ -164,48 +149,45 @@ ATTControl AddrTransController::Probe(Addr phy_addr) {
       bool att_avail = att_.Contains(phy_addr) ||
           att_.GetLength(ATTEntry::REG_DIRTY) < att_.length();
       if (!att_avail || !ptt_avail) {
-        return ATC_RETRY;
+        return RETRY;
       }
     } else if (!ptt_avail) {
-      return ATC_EPOCH;
+      return EPOCH;
     }
-  }/* else { // NVM
+  } else { // NVM
     if (in_checkpointing() && !att_.Contains(phy_addr) &&
-        att_.GetLength({ATTEntry::DIRTY, ATTEntry::TEMP}) == att_.length()) {
-      return ATC_RETRY;
+        att_.IsEmpty(ATTEntry::VISIBLE_CLEAN)) {
+      return RETRY;
     } else if (!in_checkpointing() && !att_.Contains(phy_addr) &&
-        att_.GetLength(ATTEntry::DIRTY) == att_.length()) {
-      return ATC_EPOCH;
+        att_.GetLength(ATTEntry::REG_DIRTY) == att_.length()) {
+      return EPOCH;
     }
-  }*/
-  return ATC_ACCEPT;
+  }
+  return ACCEPT;
 }
 
-void AddrTransController::BeginEpochEnding() {
-/*  assert(!in_checkpointing());
-  TempEntryRevoker temp_revoker(*this);
-  att_.VisitQueue(ATTEntry::TEMP, &temp_revoker);
-  assert(att_.IsEmpty(ATTEntry::TEMP)); 
+void AddrTransController::BeginCheckpointing() {
+  assert(!in_checkpointing());
 
-  DirtyEntryRevoker dirty_revoker(*this);
-  att_.VisitQueue(ATTEntry::DIRTY, &dirty_revoker);
-  // suppose regular dirty entries are written back to NVM
-  DirtyEntryCleaner att_cleaner(att_);
-  att_.VisitQueue(ATTEntry::DIRTY, &att_cleaner);
-  assert(att_.IsEmpty(ATTEntry::DIRTY));
+  DirtyCleaner att_cleaner(*this);
+  att_.VisitQueue(ATTEntry::REG_DIRTY, &att_cleaner);
+  assert(att_.IsEmpty(ATTEntry::REG_DIRTY));
+
+  TempRevoker temp_revoker(*this);
+  att_.VisitQueue(ATTEntry::REG_TEMP, &temp_revoker);
+  assert(att_.IsEmpty(ATTEntry::REG_TEMP));
+  assert(att_.GetLength(ATTEntry::VISIBLE_CLEAN) +
+      att_.GetLength(ATTEntry::FREE) == att_.length());
+
+  PTTCleaner ptt_cleaner(ptt_);
+  ptt_.VisitQueue(ATTEntry::REG_DIRTY, &ptt_cleaner);
+  assert(ptt_.IsEmpty(ATTEntry::REG_DIRTY));
+  ptt_buffer_.FreeBackup(); // PTT supposes the next epoch immediately begins
 
   in_checkpointing_ = true;
-
-  // begin to deal with the next epoch
-  DirtyEntryCleaner ptt_cleaner(ptt_);
-  ptt_.VisitQueue(ATTEntry::DIRTY, &ptt_cleaner);
-  assert(ptt_.IsEmpty(ATTEntry::DIRTY));
-
-  ptt_buffer_.FreeBackup(); // without non-stall property 
-  num_page_move_ = 0;*/
 }
 
-void AddrTransController::FinishEpochEnding() {
+void AddrTransController::FinishCheckpointing() {
   assert(in_checkpointing());
   nvm_buffer_.FreeBackup();
   in_checkpointing_ = false;
@@ -261,7 +243,7 @@ void AddrTransController::FreeVisibleClean(int index, bool move_data) {
     mem_store_->Move(phy_addr, entry.mach_base, att_.block_size());
   }
   nvm_buffer_.PinBlock(entry.mach_base);
-  att_.Revoke(index);
+  att_.ShiftState(index, ATTEntry::FREE);
 }
 
 Addr AddrTransController::RegularizeDirty(int index, bool move_data) {
@@ -288,7 +270,7 @@ void AddrTransController::FreeRegTemp(int index, bool move_data) {
     mem_store_->Move(phy_addr, entry.mach_base, att_.block_size());
   }
   dram_buffer_.FreeBlock(entry.mach_base, VersionBuffer::IN_USE);
-  att_.Revoke(index);
+  att_.ShiftState(index, ATTEntry::FREE);
 }
 
 void AddrTransController::CleanCrossTemp(int index, bool move_data) {

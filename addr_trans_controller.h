@@ -10,24 +10,24 @@
 #include "addr_trans_table.h"
 #include "mem_store.h"
 
-enum ATTControl {
-  ATC_ACCEPT,
-  ATC_EPOCH,
-  ATC_RETRY,
-};
-
 class AddrTransController {
  public:
+  enum Control {
+    ACCEPT,
+    EPOCH,
+    RETRY,
+  };
+
   AddrTransController(uint64_t dram_size, Addr phy_limit,
       int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms);
   virtual ~AddrTransController() { }
 
   virtual Addr LoadAddr(Addr phy_addr);
   virtual Addr StoreAddr(Addr phy_addr, int size);
-  virtual ATTControl Probe(Addr phy_addr);
+  virtual Control Probe(Addr phy_addr);
 
-  virtual void BeginEpochEnding();
-  virtual void FinishEpochEnding();
+  virtual void BeginCheckpointing();
+  virtual void FinishCheckpointing();
 
   uint64_t Size() const;
   Addr PhyLimit() const { return dram_size_ + nvm_size_; }
@@ -71,6 +71,22 @@ class AddrTransController {
     void Visit(int i);
    private:
     AddrTransController& atc_;
+  };
+
+  class TempRevoker : public QueueVisitor {
+   public:
+    TempRevoker(AddrTransController& atc) : atc_(atc) { }
+    void Visit(int i);
+   private:
+    AddrTransController& atc_;
+  };
+
+  class PTTCleaner : public QueueVisitor {
+   public:
+    PTTCleaner(AddrTransTable& ptt) : ptt_(ptt) { }
+    void Visit(int i);
+   private:
+    AddrTransTable& ptt_;
   };
 };
 
@@ -118,6 +134,28 @@ inline void AddrTransController::DirtyCleaner::Visit(int i) {
   }
   if (entry.state == ATTEntry::REG_DIRTY) {
     atc_.att_.ShiftState(i, ATTEntry::VISIBLE_CLEAN);
+  }
+  if (entry.state == ATTEntry::CROSS_TEMP) {
+    atc_.CleanCrossTemp(i, true);
+  }
+  if (entry.state == ATTEntry::HIDDEN_CLEAN) {
+    atc_.att_.ShiftState(i, ATTEntry::FREE);
+  }
+}
+
+inline void AddrTransController::TempRevoker::Visit(int i) {
+  const ATTEntry& entry = atc_.att_.At(i);
+  assert(entry.state == ATTEntry::REG_TEMP);
+  atc_.FreeRegTemp(i, true);
+}
+
+inline void AddrTransController::PTTCleaner::Visit(int i) {
+  const ATTEntry& entry = ptt_.At(i);
+  if (entry.state == ATTEntry::REG_DIRTY) {
+    ptt_.ShiftState(i, ATTEntry::VISIBLE_CLEAN);
+  } else {
+    assert(entry.state == ATTEntry::HIDDEN_CLEAN);
+    ptt_.ShiftState(i, ATTEntry::FREE);
   }
 }
 
