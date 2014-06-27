@@ -168,16 +168,17 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Tick duration = pkt->getSize() * bandwidth;
 
         if (pkt->isWrite()) {
-            ATTControl atc = addrController.Probe(localAddr(pkt));
-            if (atc == ATC_RETRY) {
+            AddrTransController::Control control =
+                    addrController.Probe(localAddr(pkt));
+            if (control == AddrTransController::RETRY) {
                 retryReq = true;
                 return false;
-            } else if (atc == ATC_EPOCH) {
-                addrController.BeginEpochEnding();
+            } else if (control == AddrTransController::EPOCH) {
+                addrController.BeginCheckpointing();
                 Tick ending_duration = 256 * 4 * 1024 * bandwidth; // TODO
                 schedule(unfreezeEvent, curTick() + ending_duration);
             } else {
-                assert(atc == ATC_ACCEPT);
+                assert(control == AddrTransController::ACCEPT);
             }
         }
 
@@ -227,7 +228,7 @@ SimpleMemory::release()
 void
 SimpleMemory::unfreeze()
 {
-    addrController.FinishEpochEnding();
+    addrController.FinishCheckpointing();
     if (retryReq) {
         retryReq = false;
         port.sendRetry();

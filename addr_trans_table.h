@@ -28,6 +28,10 @@ struct ATTEntry {
   Addr mach_base;
   IndexNode queue_node;
   State state;
+
+  static int StateIndex(State state) {
+    return state <= DIRTY ? state : DIRTY;
+  }
 };
 
 class AddrTransTable : public IndexArray {
@@ -53,7 +57,9 @@ class AddrTransTable : public IndexArray {
   int length() const { return length_; }
   int block_size() const { return 1 << block_bits_; }
   int block_bits() const { return block_bits_; }
+
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
+  const IndexQueue& GetQueue(ATTEntry::State state) const;
 
  private:
   const int length_;
@@ -62,13 +68,15 @@ class AddrTransTable : public IndexArray {
   std::unordered_map<Tag, int> tag_index_;
   std::vector<ATTEntry> entries_;
   std::vector<IndexQueue> queues_;
+
+  IndexQueue& GetQueue(ATTEntry::State state);
 };
 
 inline AddrTransTable::AddrTransTable(int length, int block_bits) :
     length_(length), block_bits_(block_bits), block_mask_(block_size() - 1),
     entries_(length_), queues_(ATTEntry::DIRTY + 1, *this) {
   for (int i = 0; i < length_; ++i) {
-    queues_[ATTEntry::FREE].PushBack(i);
+    GetQueue(ATTEntry::FREE).PushBack(i);
   }
 }
 
@@ -84,27 +92,35 @@ inline bool AddrTransTable::Contains(Addr phy_addr) const {
 inline void AddrTransTable::VisitQueue(ATTEntry::State state,
     QueueVisitor* visitor) {
   assert(state <= ATTEntry::DIRTY);
-  queues_[state].Accept(visitor);
+  GetQueue(state).Accept(visitor);
 }
 
 inline bool AddrTransTable::IsEmpty(ATTEntry::State state) const {
   assert(state <= ATTEntry::DIRTY);
-  return queues_[state].Empty();
+  return GetQueue(state).Empty();
 }
 
 inline int AddrTransTable::GetLength(ATTEntry::State state) const {
   assert(state <= ATTEntry::DIRTY);
-  return queues_[state].length();
+  return GetQueue(state).length();
 }
 
 inline int AddrTransTable::GetFront(ATTEntry::State state) const {
-  assert(state <= ATTEntry::DIRTY);
-  return queues_[state].Front();
+  assert(state < ATTEntry::DIRTY);
+  return GetQueue(state).Front();
 }
  
 inline Addr AddrTransTable::Translate(
     Addr phy_addr, Addr mach_base) const {
   return mach_base + (phy_addr & block_mask_);
+}
+
+inline const IndexQueue& AddrTransTable::GetQueue(ATTEntry::State state) const {
+  return queues_[ATTEntry::StateIndex(state)];
+}
+
+inline IndexQueue& AddrTransTable::GetQueue(ATTEntry::State state) {
+  return queues_[ATTEntry::StateIndex(state)];
 }
 
 #endif // SEXAIN_ADDR_TRANS_TABLE_H_

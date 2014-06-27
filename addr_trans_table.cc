@@ -13,8 +13,8 @@ pair<int, Addr> AddrTransTable::Lookup(Tag phy_tag) {
     ATTEntry& entry = entries_[it->second];
     assert(entry.state != ATTEntry::FREE && entry.phy_tag == phy_tag);
     // LRU
-    queues_[entry.state].Remove(it->second);
-    queues_[entry.state].PushBack(it->second);
+    GetQueue(entry.state).Remove(it->second);
+    GetQueue(entry.state).PushBack(it->second);
 
     return make_pair(it->second, entry.mach_base);
   }
@@ -22,10 +22,10 @@ pair<int, Addr> AddrTransTable::Lookup(Tag phy_tag) {
 
 void AddrTransTable::Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state) {
   assert(tag_index_.count(phy_tag) == 0);
-  assert(!queues_[ATTEntry::FREE].Empty());
+  assert(!GetQueue(ATTEntry::FREE).Empty());
 
-  int i = queues_[ATTEntry::FREE].PopFront();
-  queues_[state].PushBack(i);
+  int i = GetQueue(ATTEntry::FREE).PopFront();
+  GetQueue(state).PushBack(i);
   entries_[i].state = state;
   entries_[i].phy_tag = phy_tag;
   entries_[i].mach_base = mach_base;
@@ -39,8 +39,8 @@ void AddrTransTable::ShiftState(int index, ATTEntry::State new_state) {
   if (new_state == ATTEntry::FREE) {
     tag_index_.erase(entry.phy_tag);
   }
-  queues_[entry.state].Remove(index);
-  queues_[new_state].PushBack(index);
+  GetQueue(entry.state).Remove(index);
+  GetQueue(new_state).PushBack(index);
   entries_[index].state = new_state;
 }
 
