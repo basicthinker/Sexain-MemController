@@ -49,6 +49,7 @@ class AddrTransController {
   void HideClean(int index, bool move_data = true);
   Addr ResetClean(int index, bool move_data = true);
   void FreeClean(int index, bool move_data = true);
+  Addr DirtyStained(int index, bool move_data = true);
   void FreeLoan(int index, bool move_data = true);
   void HideTemp(int index, bool move_data = true);
 
@@ -125,13 +126,15 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
 
 inline void AddrTransController::DirtyCleaner::Visit(int i) {
   const ATTEntry& entry = atc_.att_.At(i);
-  if (entry.state == ATTEntry::DIRTY) {
-    atc_.att_.ShiftState(i, ATTEntry::CLEAN);
+  if (entry.state == ATTEntry::STAINED) {
+    atc_.DirtyStained(i);
   } else if (entry.state == ATTEntry::TEMP) {
     atc_.HideTemp(i);
   }
 
-  if (entry.state == ATTEntry::HIDDEN) {
+  if (entry.state == ATTEntry::DIRTY) {
+    atc_.att_.ShiftState(i, ATTEntry::CLEAN);
+  } else if (entry.state == ATTEntry::HIDDEN) {
     atc_.att_.ShiftState(i, ATTEntry::FREE);
   }
 }

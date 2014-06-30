@@ -22,6 +22,7 @@ struct ATTEntry {
     DIRTY, // max queue index
     HIDDEN,
     TEMP,
+    STAINED,
   };
 
   Tag phy_tag;
@@ -30,7 +31,7 @@ struct ATTEntry {
   State state;
 
   static int StateIndex(State state) {
-    return state <= DIRTY ? state : DIRTY;
+    return state < DIRTY ? state : DIRTY;
   }
 };
 

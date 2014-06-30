@@ -23,14 +23,18 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
   if (!in_checkpointing()) {
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
-      if (entry.state == ATTEntry::DIRTY) {
+      switch(entry.state) {
+      case ATTEntry::DIRTY:
         return att_.Translate(phy_addr, entry.mach_base);
-      } else if (entry.state == ATTEntry::TEMP) {
+      case ATTEntry::TEMP:
         HideTemp(index, !FullBlock(phy_addr, size));
         return phy_addr;
-      } else if (entry.state == ATTEntry::HIDDEN) {
+      case ATTEntry::HIDDEN:
         return phy_addr;
-      } else {
+      case ATTEntry::STAINED:
+        return att_.Translate(phy_addr,
+            DirtyStained(index, !FullBlock(phy_addr, size)));
+      default:
         HideClean(index, !FullBlock(phy_addr, size));
         return phy_addr;
       }
@@ -64,8 +68,8 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
         int ci = att_.GetFront(ATTEntry::CLEAN);
         FreeClean(ci);
       }
-      Addr mach_base = nvm_buffer_.NewBlock();
-      Setup(phy_addr, mach_base, size, ATTEntry::DIRTY);
+      Addr mach_base = dram_buffer_.NewBlock();
+      Setup(phy_addr, mach_base, size, ATTEntry::STAINED);
       return att_.Translate(phy_addr, mach_base);
     }
   }
@@ -183,7 +187,8 @@ void AddrTransController::FinishCheckpointing() {
 
 void AddrTransController::Setup(Addr phy_addr, Addr mach_base, int size,
     ATTEntry::State state) {
-  assert(state == ATTEntry::DIRTY || state == ATTEntry::LOAN);
+  assert(state == ATTEntry::DIRTY || state == ATTEntry::STAINED
+      || state == ATTEntry::LOAN);
 
   const Tag phy_tag = att_.ToTag(phy_addr);
   if (!FullBlock(phy_addr, size)) {
@@ -232,6 +237,20 @@ void AddrTransController::FreeClean(int index, bool move_data) {
   nvm_buffer_.BackupBlock(entry.mach_base,
       (VersionBuffer::State)in_checkpointing());
   att_.ShiftState(index, ATTEntry::FREE);
+}
+
+Addr AddrTransController::DirtyStained(int index, bool move_data) {
+  assert(!in_checkpointing());
+  const ATTEntry& entry = att_.At(index);
+  assert(entry.state == ATTEntry::STAINED);
+
+  const Addr mach_base = nvm_buffer_.NewBlock();
+  if (move_data) {
+    mem_store_->Move(mach_base, entry.mach_base, att_.block_size());
+  }
+  dram_buffer_.FreeBlock(entry.mach_base, VersionBuffer::IN_USE);
+  att_.Reset(index, mach_base, ATTEntry::DIRTY);
+  return mach_base;
 }
 
 void AddrTransController::FreeLoan(int index, bool move_data) {
