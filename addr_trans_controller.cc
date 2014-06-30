@@ -138,22 +138,24 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
 
 AddrTransController::Control AddrTransController::Probe(Addr phy_addr) {
   if (IsDRAM(phy_addr)) {
-    if (!ptt_.Contains(phy_addr) &&
-        ptt_.GetLength(ATTEntry::DIRTY) == ptt_.length()) { // inc. HIDDEN
+    bool ptt_avail = ptt_.Contains(phy_addr) ||
+        ptt_.GetLength(ATTEntry::DIRTY) < ptt_.length();  // inc. HIDDEN
+    if (!in_checkpointing() && !ptt_avail) {
       return EPOCH;
     }
-
-    if (in_checkpointing() && !att_.Contains(phy_addr) &&
-        att_.IsEmpty(ATTEntry::FREE) && att_.IsEmpty(ATTEntry::CLEAN)) {
+    bool att_avail = att_.Contains(phy_addr) ||
+        !att_.IsEmpty(ATTEntry::FREE) || !att_.IsEmpty(ATTEntry::CLEAN);
+    if (in_checkpointing() && (!ptt_avail || !att_avail)) {
       return RETRY;
     }
   } else { // NVM
+    if (!in_checkpointing() && !att_.Contains(phy_addr) &&
+        att_.GetLength(ATTEntry::DIRTY) == att_.length()) { // inc. HIDDEN, TEMP
+      return EPOCH;
+    }
     if (in_checkpointing() && !att_.Contains(phy_addr) &&
         att_.IsEmpty(ATTEntry::FREE) && att_.IsEmpty(ATTEntry::CLEAN)) {
       return RETRY;
-    } else if (!in_checkpointing() && !att_.Contains(phy_addr) &&
-        att_.GetLength(ATTEntry::DIRTY) == att_.length()) { // inc. HIDDEN, TEMP
-      return EPOCH;
     }
   }
   return ACCEPT;
