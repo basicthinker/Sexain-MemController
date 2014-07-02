@@ -12,19 +12,12 @@
 
 class AddrTransController {
  public:
-  enum Control {
-    ACCEPT,
-    EPOCH,
-    RETRY,
-  };
-
   AddrTransController(uint64_t dram_size, Addr phy_limit,
       int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms);
   virtual ~AddrTransController() { }
 
   virtual Addr LoadAddr(Addr phy_addr);
   virtual Addr StoreAddr(Addr phy_addr, int size);
-  virtual Control Probe(Addr phy_addr);
 
   virtual void BeginCheckpointing();
   virtual void FinishCheckpointing();
