@@ -31,20 +31,24 @@ void VersionBuffer::BackupBlock(uint64_t mach_addr, State state) {
   sets_[state].insert(i);
 }
 
-void VersionBuffer::ClearBackup() {
+int VersionBuffer::ClearBackup() {
+  int num = 0;
   for(set<int>::iterator it = sets_[BACKUP0].begin();
       it != sets_[BACKUP0].end(); ++it) {
     sets_[FREE].insert(*it);
+    ++num;
   }
   sets_[BACKUP0].clear();
 
   for(set<int>::iterator it = sets_[BACKUP1].begin();
       it != sets_[BACKUP1].end(); ++it) {
     sets_[BACKUP0].insert(*it);
+    ++num;
   }
   sets_[BACKUP1].clear();
 
   assert(sets_[IN_USE].size() + sets_[FREE].size() +
       sets_[BACKUP0].size() == (unsigned int)length_);
+  return num;
 }
 

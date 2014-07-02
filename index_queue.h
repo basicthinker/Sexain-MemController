@@ -37,7 +37,7 @@ class IndexQueue {
   int PopFront();
   void PushBack(int i);
 
-  void Accept(QueueVisitor* visitor);
+  int Accept(QueueVisitor* visitor);
   int length() const { return length_; }
  private:
   IndexNode& FrontNode();

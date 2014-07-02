@@ -26,7 +26,7 @@ class VersionBuffer {
   uint64_t NewBlock();
   void FreeBlock(uint64_t mach_addr, State state);
   void BackupBlock(uint64_t mach_addr, State state);
-  void ClearBackup();
+  int ClearBackup();
 
   uint64_t addr_base() const { return addr_base_; }
   void set_addr_base(uint64_t base) { addr_base_ = base; }

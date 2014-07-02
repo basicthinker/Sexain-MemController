@@ -45,13 +45,13 @@ void IndexQueue::PushBack(int i) {
   ++length_;
 }
 
-void IndexQueue::Accept(QueueVisitor* visitor) {
-  int i = Front();
-  int tmp;
-  while (i != -EINVAL) {
+int IndexQueue::Accept(QueueVisitor* visitor) {
+  int num = 0, tmp;
+  for (int i = Front(); i != -EINVAL; ++num) {
     tmp = array_[i].next;
     visitor->Visit(i);
     i = tmp;
   }
+  return num;
 }
 

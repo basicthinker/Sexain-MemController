@@ -43,7 +43,7 @@ class AddrTransTable : public IndexArray {
   void Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state);
   void ShiftState(int index, ATTEntry::State state);
   void Reset(int index, Addr new_base, ATTEntry::State new_state);
-  void VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
+  int VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
 
   const ATTEntry& At(int i) const;
   bool Contains(Addr phy_addr) const;
@@ -90,10 +90,10 @@ inline bool AddrTransTable::Contains(Addr phy_addr) const {
   return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
 }
 
-inline void AddrTransTable::VisitQueue(ATTEntry::State state,
+inline int AddrTransTable::VisitQueue(ATTEntry::State state,
     QueueVisitor* visitor) {
   assert(state <= ATTEntry::DIRTY);
-  GetQueue(state).Accept(visitor);
+  return GetQueue(state).Accept(visitor);
 }
 
 inline bool AddrTransTable::IsEmpty(ATTEntry::State state) const {
