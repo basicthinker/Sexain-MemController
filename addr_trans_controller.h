@@ -35,7 +35,7 @@ class AddrTransController {
   bool in_checkpointing() const { return in_checkpointing_; }
 
  protected:
-  virtual bool IsDRAM(Addr phy_addr);
+  virtual bool IsVolatile(Addr phy_addr);
   AddrTransTable att_;
   VersionBuffer nvm_buffer_;
   VersionBuffer dram_buffer_;
@@ -57,6 +57,30 @@ class AddrTransController {
   Addr DRAMStore(Addr phy_addr, int size);
   void PseudoPageStore(Tag phy_tag);
 
+  ///
+  /// Wrappers with timings
+  ///
+  /// AddrTransTable
+  void MoveToDRAM(uint64_t destination, uint64_t source, int size);
+  void MoveToNVM(uint64_t destination, uint64_t source, int size);
+  void SwapNVM(uint64_t static_addr, uint64_t mach_addr, int size);
+  std::pair<int, Addr> ATTLookup(AddrTransTable& att, Tag phy_tag);
+  void ATTSetup(AddrTransTable& att,
+      Tag phy_tag, Addr mach_base, ATTEntry::State state);
+  void ATTShiftState(AddrTransTable& att, int index, ATTEntry::State state);
+  void ATTReset(AddrTransTable& att,
+      int index, Addr new_base, ATTEntry::State new_state);
+  void ATTVisit(AddrTransTable& att,
+      ATTEntry::State state, QueueVisitor* visitor);
+  int ATTFront(AddrTransTable& att, ATTEntry::State state);
+  /// VersionBuffer
+  uint64_t VBNewBlock(VersionBuffer& vb);
+  void VBFreeBlock(VersionBuffer& vb,
+      uint64_t mach_addr, VersionBuffer::State state);
+  void VBBackupBlock(VersionBuffer& vb,
+      uint64_t mach_addr, VersionBuffer::State state);
+  void VBClearBackup(VersionBuffer& vb);
+
   const uint64_t dram_size_; ///< Size of direct DRAM region
   const uint64_t nvm_size_; ///< Size of direct NVM region
   MemStore* mem_store_;
@@ -66,26 +90,26 @@ class AddrTransController {
 
   class DirtyCleaner : public QueueVisitor { // inc. TEMP and HIDDEN
    public:
-    DirtyCleaner(AddrTransController& atc) : atc_(atc) { }
+    DirtyCleaner(AddrTransController* atc) : atc_(atc) { }
     void Visit(int i);
    private:
-    AddrTransController& atc_;
+    AddrTransController* atc_;
   };
 
   class LoanRevoker : public QueueVisitor {
    public:
-    LoanRevoker(AddrTransController& atc) : atc_(atc) { }
+    LoanRevoker(AddrTransController* atc) : atc_(atc) { }
     void Visit(int i);
    private:
-    AddrTransController& atc_;
+    AddrTransController* atc_;
   };
 
   class PTTCleaner : public QueueVisitor {
    public:
-    PTTCleaner(AddrTransTable& ptt) : ptt_(ptt) { }
+    PTTCleaner(AddrTransController* atc) : atc_(atc) { }
     void Visit(int i);
    private:
-    AddrTransTable& ptt_;
+    AddrTransController* atc_;
   };
 };
 
@@ -112,7 +136,7 @@ inline uint64_t AddrTransController::Size() const {
   return nvm_buffer_.addr_base() + nvm_buffer_.Size();
 }
 
-inline bool AddrTransController::IsDRAM(Addr phy_addr) {
+inline bool AddrTransController::IsVolatile(Addr phy_addr) {
   return phy_addr < dram_size_;
 }
 
@@ -125,33 +149,116 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
 }
 
 inline void AddrTransController::DirtyCleaner::Visit(int i) {
-  const ATTEntry& entry = atc_.att_.At(i);
+  const ATTEntry& entry = atc_->att_.At(i);
   if (entry.state == ATTEntry::STAINED) {
-    atc_.DirtyStained(i);
+    atc_->DirtyStained(i);
   } else if (entry.state == ATTEntry::TEMP) {
-    atc_.HideTemp(i);
+    atc_->HideTemp(i);
   }
 
   if (entry.state == ATTEntry::DIRTY) {
-    atc_.att_.ShiftState(i, ATTEntry::CLEAN);
+    atc_->ATTShiftState(atc_->att_, i, ATTEntry::CLEAN);
   } else if (entry.state == ATTEntry::HIDDEN) {
-    atc_.att_.ShiftState(i, ATTEntry::FREE);
+    atc_->ATTShiftState(atc_->att_, i, ATTEntry::FREE);
   }
 }
 
 inline void AddrTransController::LoanRevoker::Visit(int i) {
-  const ATTEntry& entry = atc_.att_.At(i);
+  const ATTEntry& entry = atc_->att_.At(i);
   assert(entry.state == ATTEntry::LOAN);
-  atc_.FreeLoan(i);
+  atc_->FreeLoan(i);
 }
 
 inline void AddrTransController::PTTCleaner::Visit(int i) {
-  const ATTEntry& entry = ptt_.At(i);
+  const ATTEntry& entry = atc_->ptt_.At(i);
   if (entry.state == ATTEntry::DIRTY) {
-    ptt_.ShiftState(i, ATTEntry::CLEAN);
+    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::CLEAN);
   } else {
     assert(entry.state == ATTEntry::HIDDEN);
-    ptt_.ShiftState(i, ATTEntry::FREE);
+    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::FREE);
+  }
+}
+
+// Wrapper functions for AddrTransTable
+inline void AddrTransController::MoveToDRAM(
+    uint64_t destination, uint64_t source, int size) {
+  mem_store_->DoMove(destination, source, size);
+  mem_store_->OnDRAMWrite(destination, size);
+}
+
+inline void AddrTransController::MoveToNVM(
+    uint64_t destination, uint64_t source, int size) {
+  mem_store_->DoMove(destination, source, size);
+  mem_store_->OnNVMWrite(destination, size);
+}
+
+inline void AddrTransController::SwapNVM(
+    uint64_t static_addr, uint64_t mach_addr, int size) {
+  mem_store_->DoSwap(static_addr, mach_addr, size);
+  mem_store_->OnNVMWrite(static_addr, size);
+  mem_store_->OnNVMWrite(mach_addr, size);
+}
+
+inline std::pair<int, Addr> AddrTransController::ATTLookup(AddrTransTable& att,
+    Tag phy_tag) {
+  mem_store_->OnATTOp();
+  return att.Lookup(phy_tag);
+}
+
+inline void AddrTransController::ATTSetup(AddrTransTable& att,
+    Tag phy_tag, Addr mach_base, ATTEntry::State state) {
+  mem_store_->OnATTOp();
+  att.Setup(phy_tag, mach_base, state);
+}
+
+inline void AddrTransController::ATTShiftState(AddrTransTable& att,
+    int index, ATTEntry::State state) {
+  mem_store_->OnATTOp();
+  att.ShiftState(index, state);
+}
+
+inline void AddrTransController::ATTReset(AddrTransTable& att,
+    int index, Addr new_base, ATTEntry::State new_state) {
+  mem_store_->OnATTOp();
+  att.Reset(index, new_base, new_state);
+}
+
+inline int AddrTransController::ATTFront(AddrTransTable& att,
+    ATTEntry::State state) {
+  mem_store_->OnATTOp();
+  return att.GetFront(state);
+}
+
+inline void AddrTransController::ATTVisit(AddrTransTable& att,
+    ATTEntry::State state, QueueVisitor* visitor) {
+  int num = att.VisitQueue(state, visitor);
+  while (num--) {
+    mem_store_->OnATTOp();
+  }
+}
+
+// Wrapper functions for VersionBuffer
+inline uint64_t AddrTransController::VBNewBlock(VersionBuffer& vb) {
+  mem_store_->OnBufferOp();
+  return vb.NewBlock();
+}
+
+inline void AddrTransController::VBFreeBlock(VersionBuffer& vb,
+    uint64_t mach_addr, VersionBuffer::State state) {
+  mem_store_->OnBufferOp();
+  vb.FreeBlock(mach_addr, state);
+}
+
+inline void AddrTransController::VBBackupBlock(VersionBuffer& vb,
+    uint64_t mach_addr, VersionBuffer::State state) {
+  mem_store_->OnBufferOp();
+  vb.BackupBlock(mach_addr, state);
+}
+
+inline void AddrTransController::VBClearBackup(VersionBuffer& vb) {
+  int num = vb.ClearBackup();
+  while (num--) {
+    mem_store_->OnBufferOp();
   }
 }
 
