@@ -162,7 +162,7 @@ def config_mem(options, system):
                         block_bits=options.block_bits,
                         page_bits=options.page_bits,
                         dram_size=options.dram_size,
-                        is_lat_att=options.att_latency)
+                        is_timing_att=options.att_latency)
             else:
                 ctrl = cls()
 

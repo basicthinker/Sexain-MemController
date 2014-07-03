@@ -115,15 +115,14 @@ class SimpleMemory : public AbstractMemory
      */
     const Tick latency;
 
-    const Tick latATTOperate;
-    const Tick latBufferOperate;
-    const Tick latNVMRead;
-    const Tick latNVMWrite;
+    const Tick tATTOp;
+    const Tick tBufferOp;
+    const Tick tNVMRead;
+    const Tick tNVMWrite;
 
-    Tick latATT;
-    bool isLatATT;
-
-    int checkNumPages;
+    Tick sumLatency;
+    uint64_t sumSize;
+    bool isTimingATT;
 
     /**
      * Fudge factor added to the latency.
@@ -221,12 +220,12 @@ class SimpleMemory : public AbstractMemory
 
   protected:
 
-    /** Total latency in responding */
+    /** Total latency of memory accesses */
     Stats::Scalar totalLatency;
-    /** Additional latency due to ATT in responding */
-    Stats::Scalar sumLatATT;
-    /** Number of writes during COW of DRAM */
-    Stats::Scalar frozenWrites;
+    /** Total throughput of memory accesses */
+    Stats::Scalar totalThroughput;
+    /** Total time in checkpointing frames */
+    Stats::Scalar totalChkptTime;
 
     Tick recvAtomic(PacketPtr pkt);
 
@@ -236,6 +235,43 @@ class SimpleMemory : public AbstractMemory
 
     void recvRetry();
 
+    void OnATTOp()
+    {
+        sumLatency += tATTOp;
+    }
+
+    void OnBufferOp()
+    {
+        sumLatency += tBufferOp;
+    }
+
+    void OnNVMRead(uint64_t mach_addr, int size)
+    {
+        sumLatency += tNVMRead;
+        sumSize += size;
+    }
+
+    void OnNVMWrite(uint64_t mach_addr, int size)
+    {
+        sumLatency += tNVMWrite;
+        sumSize += size;
+    }
+
+    void OnDRAMRead(uint64_t mach_addr, int size)
+    {
+        sumLatency += getLatency();
+        sumSize += size;
+    }
+
+    void OnDRAMWrite(uint64_t mach_addr, int size)
+    {
+        sumLatency += getLatency();
+        sumSize += size;
+    }
+
+    virtual void OnCheckpointing();
+
+    virtual void OnWaiting();
 };
 
 #endif //__SIMPLE_MEMORY_HH__

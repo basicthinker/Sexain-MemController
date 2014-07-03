@@ -50,16 +50,16 @@ using namespace std;
 SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     AbstractMemory(p),
     port(name() + ".port", *this), latency(p->latency),
-    latATTOperate(p->lat_att_operate), latBufferOperate(p->lat_buffer_operate),
-    latNVMRead(p->lat_nvm_read), latNVMWrite(p->lat_nvm_write),
-    isLatATT(p->is_lat_att), latency_var(p->latency_var),
+    tATTOp(p->lat_att_operate), tBufferOp(p->lat_buffer_operate),
+    tNVMRead(p->lat_nvm_read), tNVMWrite(p->lat_nvm_write),
+    isTimingATT(p->is_timing_att), latency_var(p->latency_var),
     bandwidth(p->bandwidth), isBusy(false),
     retryReq(false), retryResp(false),
     releaseEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
 {
-    latATT = 0;
-    checkNumPages = 0;
+    sumLatency = 0;
+    sumSize = 0;
 }
 
 void
@@ -79,30 +79,21 @@ SimpleMemory::regStats()
     AbstractMemory::regStats();
 
     totalLatency
-        .name(name() + ".totalLatency")
-        .desc("Total latency in memory responds");
-    sumLatATT
-        .name(name() + ".sumLatATT")
-        .desc("Additional latency due to ATT in memory responds");
-    frozenWrites
-        .name(name() + ".frozenWrites")
-        .desc("Number of writes during COW of DRAM");
+        .name(name() + ".total_latency")
+        .desc("Total latency of memory accesses");
+    totalThroughput
+        .name(name() + ".total_throughput")
+        .desc("Total throughput of memory accesses");
+    totalChkptTime
+        .name(name() + ".total_chkpt_time")
+        .desc("Total time in checkpointing frames");
 }
 
 Tick
 SimpleMemory::recvAtomic(PacketPtr pkt)
 {
-    assert(latATT == 0);
     access(pkt);
-
-    Tick lat = getLatency();
-    if (isLatATT) {
-        lat += latATT;
-        sumLatATT += latATT;
-    }
-    latATT = 0;
-
-    return pkt->memInhibitAsserted() ? 0 : lat;
+    return pkt->memInhibitAsserted() ? 0 : getLatency();
 }
 
 void
@@ -110,9 +101,9 @@ SimpleMemory::recvFunctional(PacketPtr pkt)
 {
     pkt->pushLabel(name());
 
-    assert(latATT == 0);
+    assert(sumLatency == 0 && sumSize == 0);
     functionalAccess(pkt);
-    latATT = 0;
+    sumLatency = sumSize = 0;
 
     // potentially update the packets in our packet queue as well
     for (auto i = packetQueue.begin(); i != packetQueue.end(); ++i)
@@ -162,56 +153,70 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // only look at reads and writes when determining if we are busy,
     // and for how long, as it is not clear what to regulate for the
     // other types of commands
+    Tick duration = 0;
     if (pkt->isRead() || pkt->isWrite()) {
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
-        Tick duration = pkt->getSize() * bandwidth;
-
-        if (pkt->isWrite()) {
-            AddrTransController::Control control =
-                    addrController.Probe(localAddr(pkt));
-            if (control == AddrTransController::RETRY) {
-                retryReq = true;
-                return false;
-            } else if (control == AddrTransController::EPOCH) {
-                addrController.BeginCheckpointing();
-                Tick ending_duration = 256 * 4 * 1024 * bandwidth; // TODO
-                schedule(unfreezeEvent, curTick() + ending_duration);
-            } else {
-                assert(control == AddrTransController::ACCEPT);
-            }
-        }
-
-        // only consider ourselves busy if there is any need to wait
-        // to avoid extra events being scheduled for (infinitely) fast
-        // memories
-        if (duration != 0) {
-            schedule(releaseEvent, curTick() + duration);
-            isBusy = true;
-        }
+        duration = pkt->getSize() * bandwidth;
+        if (!isTimingATT) totalThroughput += pkt->getSize();
     }
 
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
-    Tick lat = recvAtomic(pkt);
+    assert(sumLatency == 0 && sumSize == 0);
+    recvAtomic(pkt);
     // turn packet around to go back to requester if response expected
-    if (needsResponse) {
+    if (retryReq) {
+        return false;
+    } else if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
         assert(pkt->isResponse());
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
         // before the packet(s) before it
-        packetQueue.push_back(DeferredPacket(pkt, curTick() + lat));
+        Tick lat = isTimingATT ? sumLatency : getLatency();
+        packetQueue.push_back(
+                DeferredPacket(pkt, curTick() + lat));
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
         totalLatency += lat;
     } else {
         pendingDelete.push_back(pkt);
     }
+    sumLatency = 0;
 
+    // only consider ourselves busy if there is any need to wait
+    // to avoid extra events being scheduled for (infinitely) fast
+    // memories
+    if (duration != 0) {
+        if (isTimingATT) {
+            duration = sumSize * bandwidth;
+            totalThroughput += sumSize;
+        }
+        schedule(releaseEvent, curTick() + duration);
+        isBusy = true;
+    }
+    sumSize = 0;
     return true;
+}
+
+void
+SimpleMemory::OnCheckpointing()
+{
+    Tick chkpt_duration = 256 * 4 * 1024 * bandwidth; // TODO
+    schedule(unfreezeEvent, curTick() + chkpt_duration);
+    if (isTimingATT) {
+        totalThroughput += (chkpt_duration / bandwidth);
+        totalChkptTime += chkpt_duration;
+    }
+}
+
+void
+SimpleMemory::OnWaiting()
+{
+    retryReq = true;
 }
 
 void
@@ -345,37 +350,3 @@ SimpleMemoryParams::create()
 {
     return new SimpleMemory(this);
 }
-
-/*
-void
-SimpleMemory::OnDirectWrite(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    AbstractMemory::OnDirectWrite(phy_tag, mach_tag, bits);
-    latATT += latATTUpdate;
-}
-
-void
-SimpleMemory::OnShrink(uint64_t phy_tag, uint64_t mach_tag, int bits)
-{
-    AbstractMemory::OnShrink(phy_tag, mach_tag, bits);
-    latATT += latATTUpdate;
-}
-
-void
-SimpleMemory::OnEpochEnd()
-{
-    checkNumPages += epochPages;
-    assert(checkNumPages == numPages.value());
-    AbstractMemory::OnEpochEnd();
-}
-
-void
-SimpleMemory::OnNVMRead(uint64_t mach_addr) {
-    latATT += latNVMRead;
-}
-
-void
-SimpleMemory::OnNVMWrite(uint64_t mach_addr) {
-    latATT += latNVMWrite;
-}
-*/

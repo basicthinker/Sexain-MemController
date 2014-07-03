@@ -52,10 +52,10 @@ class SimpleMemory(AbstractMemory):
     # representative of a x64 DDR3-1600 channel.
     bandwidth = Param.MemoryBandwidth('12.8GB/s',
                                       "Combined read and write bandwidth")
-    lat_att_operate = Param.Latency('1ns', "ATT operation latency")
-    lat_buffer_operate = Param.Latency('1ns',
+    lat_att_operate = Param.Latency('3ns', "ATT operation latency")
+    lat_buffer_operate = Param.Latency('3ns',
             "Version buffer operation latency")
-    lat_nvm_read = Param.Latency('30ns', "Additional latency for NVM read")
-    lat_nvm_write = Param.Latency('470ns', "Additional latency for NVM write")
-    is_lat_att = Param.Bool(True, "If ATT latency is counted")
+    lat_nvm_read = Param.Latency('40ns', "Latency for NVM read")
+    lat_nvm_write = Param.Latency('500ns', "Latency for NVM write")
+    is_timing_att = Param.Bool(True, "If ATT latency is timed")
 
