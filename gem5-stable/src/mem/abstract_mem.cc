@@ -179,16 +179,16 @@ AbstractMemory::regStats()
     numEpochs
         .name(name() + ".num_epochs")
         .desc("Total number of epochs");
+    numFreeWrites
+        .name(name() + ".num_free_writes")
+        .desc("Total number of writes that directly have free entries");
     numShrinkWrites
         .name(name() + ".num_shrink_writes")
-        .desc("Total number of shrinking writes that hit clean mappings");
+        .desc("Total number of shrinking writes that hit clean entries");
     numReplWrites
         .name(name() + ".num_repl_writes")
-        .desc("Total number of writes that replace clean mappings");
+        .desc("Total number of writes that replace existent entries");
 
-    numWBWrites
-        .name(name() + ".num_wb_writes")
-        .desc("Total number of writes by THNVM write-back scheme");
     numWBPages
         .name(name() + ".num_wb_pages")
         .desc("Total number of physical pages written back in THNVM schemes");

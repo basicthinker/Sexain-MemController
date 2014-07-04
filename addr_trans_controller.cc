@@ -54,7 +54,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
           BeginCheckpointing();
           return StoreAddr(phy_addr, size);
         }
-      }
+      } else mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::DIRTY);
       Addr mach_base = VBNewBlock(nvm_buffer_);
       Setup(phy_addr, mach_base, size, ATTEntry::DIRTY);
       mach_addr = att_.Translate(phy_addr, mach_base);
@@ -78,7 +78,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
           mem_store_->OnWaiting();
           return INVAL_ADDR;
         }
-      }
+      } else mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::STAINED);
       Addr mach_base = dram_buffer_.NewBlock();
       Setup(phy_addr, mach_base, size, ATTEntry::STAINED);
       mach_addr = att_.Translate(phy_addr, mach_base);
@@ -109,7 +109,7 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
           mem_store_->OnWaiting();
           return INVAL_ADDR;
         }
-      }
+      } else mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::LOAN);
       const Addr mach_base = dram_buffer_.NewBlock();
       Setup(phy_addr, mach_base, size, ATTEntry::LOAN);
       mach_addr = att_.Translate(phy_addr, mach_base);
@@ -208,6 +208,8 @@ void AddrTransController::HideClean(int index, bool move_data) {
   assert(entry.state == ATTEntry::CLEAN);
 
   const Addr phy_addr = att_.ToAddr(entry.phy_tag);
+  mem_store_->OnATTHideClean(phy_addr, move_data);
+
   if (move_data) {
     assert(!IsVolatile(phy_addr));
     MoveToNVM(phy_addr, entry.mach_base, att_.block_size());
@@ -220,6 +222,8 @@ Addr AddrTransController::ResetClean(int index, bool move_data) {
   assert(in_checkpointing());
   const ATTEntry& entry = att_.At(index);
   assert(entry.state == ATTEntry::CLEAN);
+
+  mem_store_->OnATTResetClean(att_.ToAddr(entry.phy_tag), move_data);
 
   const Addr mach_base = dram_buffer_.NewBlock();
   if (move_data) {
@@ -235,6 +239,8 @@ void AddrTransController::FreeClean(int index, bool move_data) {
   assert(entry.state == ATTEntry::CLEAN);
 
   Addr phy_addr = att_.ToAddr(entry.phy_tag);
+  mem_store_->OnATTFreeClean(phy_addr, move_data);
+ 
   if (in_checkpointing()) {
     SwapNVM(phy_addr, entry.mach_base, att_.block_size());
   } else { // in running
@@ -266,6 +272,8 @@ void AddrTransController::FreeLoan(int index, bool move_data) {
   assert(entry.state == ATTEntry::LOAN);
 
   const Addr phy_addr = att_.ToAddr(entry.phy_tag);
+  mem_store_->OnATTFreeLoan(phy_addr, move_data);
+
   if (move_data) {
     assert(IsVolatile(phy_addr));
     MoveToDRAM(phy_addr, entry.mach_base, att_.block_size());
@@ -287,3 +295,4 @@ void AddrTransController::HideTemp(int index, bool move_data) {
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
   ATTShiftState(att_, index, ATTEntry::HIDDEN);
 }
+

@@ -29,10 +29,16 @@ class MemStore {
   /// When ATT is saturated in checkpointing and the write request has to wait
   ///
   virtual void OnWaiting() = 0;
+
   ///
-  /// When the end of checkpointing indicates that the current epoch finishes
+  /// Behavioral events in THNVM schemes
   ///
-  virtual void OnEpochEnd() { };
+  virtual void OnEpochEnd() { }
+  virtual void OnATTFreeSetup(uint64_t phy_addr, int state) { } 
+  virtual void OnATTHideClean(uint64_t phy_addr, bool move_data) { } 
+  virtual void OnATTResetClean(uint64_t phy_addr, bool move_data) { } 
+  virtual void OnATTFreeClean(uint64_t phy_addr, bool move_data) { } 
+  virtual void OnATTFreeLoan(uint64_t phy_addr, bool move_data) { } 
 };
 
 class TraceMemStore : public MemStore {

@@ -188,13 +188,13 @@ class AbstractMemory : public MemObject, public MemStore
 
     /** Number of epochs */
     Stats::Scalar numEpochs;
+    /** Number of free-writes */
+    Stats::Scalar numFreeWrites;
     /** Number of shrink-writes */
     Stats::Scalar numShrinkWrites;
     /** Number of replace-writes */
     Stats::Scalar numReplWrites;
 
-    /** number of writes by THNVM write-back scheme */
-    Stats::Scalar numWBWrites;
     /** Number of physical pages written back in THNVM schemes */
     Stats::Scalar numWBPages;
 
@@ -349,6 +349,31 @@ class AbstractMemory : public MemObject, public MemStore
     virtual void OnEpochEnd()
     {
         ++numEpochs;
+    }
+
+    virtual void OnATTFreeSetup(uint64_t phy_addr, int state)
+    {
+        ++numFreeWrites;
+    }
+
+    virtual void OnATTHideClean(uint64_t phy_addr, bool move_data)
+    {
+        ++numShrinkWrites;
+    }
+
+    virtual void OnATTResetClean(uint64_t phy_addr, bool move_data)
+    {
+        ++numShrinkWrites;
+    }
+
+    virtual void OnATTFreeClean(uint64_t phy_addr, bool move_data)
+    {
+        ++numReplWrites;
+    }
+
+    virtual void OnATTFreeLoan(uint64_t phy_addr, bool move_data)
+    {
+        ++numReplWrites;
     }
 };
 
