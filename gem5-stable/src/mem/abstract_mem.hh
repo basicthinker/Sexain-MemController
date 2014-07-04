@@ -188,15 +188,15 @@ class AbstractMemory : public MemObject, public MemStore
 
     /** Number of epochs */
     Stats::Scalar numEpochs;
-    /** Number of direct writes */
-    Stats::Scalar numDirectWrites;
     /** Number of shrink-writes */
     Stats::Scalar numShrinkWrites;
-    /** Number of move-writes */
-    Stats::Scalar numMoveWrites;
+    /** Number of replace-writes */
+    Stats::Scalar numReplWrites;
 
-    /** Number of page writes in the DRAM scheme */
-    Stats::Scalar numPages;
+    /** number of writes by THNVM write-back scheme */
+    Stats::Scalar numWBWrites;
+    /** Number of physical pages written back in THNVM schemes */
+    Stats::Scalar numWBPages;
 
     /** Pointor to the System object.
      * This is used for getting the number of masters in the system which is
@@ -333,9 +333,23 @@ class AbstractMemory : public MemObject, public MemStore
      */
     virtual void regStats();
 
-    virtual void Move(uint64_t phy_addr, uint64_t mach_addr, int size);
-    virtual void Swap(uint64_t phy_addr, uint64_t mach_addr, int size);
-    virtual void OnEpochEnd();
+    virtual void DoMove(uint64_t phy_addr, uint64_t mach_addr, int size);
+    virtual void DoSwap(uint64_t phy_addr, uint64_t mach_addr, int size);
+
+    virtual void OnCheckpointing()
+    {
+        addrController.FinishCheckpointing();
+    }
+
+    virtual void OnWaiting()
+    {
+        panic("AbstractMemory should never have write waiting\n");
+    }
+
+    virtual void OnEpochEnd()
+    {
+        ++numEpochs;
+    }
 };
 
 #endif //__ABSTRACT_MEMORY_HH__

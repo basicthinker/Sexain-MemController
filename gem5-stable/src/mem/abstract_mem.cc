@@ -177,21 +177,21 @@ AbstractMemory::regStats()
     }
 
     numEpochs
-        .name(name() + ".numEpochs")
+        .name(name() + ".num_epochs")
         .desc("Total number of epochs");
-    numDirectWrites
-        .name(name() + ".numDirectWrites")
-        .desc("Total number of direct writes");
     numShrinkWrites
-        .name(name() + ".numShrinkWrites")
-        .desc("Total number of shrink-writes");
-    numMoveWrites
-        .name(name() + ".numMoveWrites")
-        .desc("Total number of move-writes");
+        .name(name() + ".num_shrink_writes")
+        .desc("Total number of shrinking writes that hit clean mappings");
+    numReplWrites
+        .name(name() + ".num_repl_writes")
+        .desc("Total number of writes that replace clean mappings");
 
-    numPages
-        .name(name() + ".numPages")
-        .desc("Total number of page writes in the DRAM scheme");
+    numWBWrites
+        .name(name() + ".num_wb_writes")
+        .desc("Total number of writes by THNVM write-back scheme");
+    numWBPages
+        .name(name() + ".num_wb_pages")
+        .desc("Total number of physical pages written back in THNVM schemes");
 
     bwRead = bytesRead / simSeconds;
     bwInstRead = bytesInstRead / simSeconds;
@@ -371,8 +371,10 @@ AbstractMemory::access(PacketPtr pkt)
         }
 
         if (overwrite_mem) {
-            host_addr = hostAddr(
-                    addrController.StoreAddr(localAddr(pkt), pkt->getSize()));
+            Addr local_addr = addrController.StoreAddr(
+                    localAddr(pkt), pkt->getSize());
+            if (local_addr == INVAL_ADDR) return;
+            host_addr = hostAddr(local_addr);
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
 
@@ -399,9 +401,11 @@ AbstractMemory::access(PacketPtr pkt)
         if (writeOK(pkt)) {
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.cache_block_size());
-                uint8_t* host_addr = hostAddr(addrController.StoreAddr(
-                        localAddr(pkt), pkt->getSize()));
-                memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
+                Addr local_addr = addrController.StoreAddr(
+                        localAddr(pkt), pkt->getSize());
+                if (local_addr == INVAL_ADDR) return;
+                memcpy(hostAddr(local_addr), pkt->getPtr<uint8_t>(),
+                        pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
             }
@@ -455,13 +459,13 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
-AbstractMemory::Move(uint64_t phy_addr, uint64_t mach_addr, int size)
+AbstractMemory::DoMove(uint64_t phy_addr, uint64_t mach_addr, int size)
 {
     memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
 }
 
 void
-AbstractMemory::Swap(uint64_t phy_addr, uint64_t mach_addr, int size)
+AbstractMemory::DoSwap(uint64_t phy_addr, uint64_t mach_addr, int size)
 {
     char* data = new char[size];
     memcpy(data, hostAddr(phy_addr), size);
@@ -470,9 +474,3 @@ AbstractMemory::Swap(uint64_t phy_addr, uint64_t mach_addr, int size)
     delete[] data;
 }
 
-void
-AbstractMemory::OnEpochEnd()
-{
-    epochPages = 0; // should be fetched before
-    ++numEpochs;
-}
