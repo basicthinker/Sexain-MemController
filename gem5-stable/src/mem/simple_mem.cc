@@ -78,8 +78,11 @@ SimpleMemory::regStats()
     using namespace Stats;
     AbstractMemory::regStats();
 
-    totalLatency
-        .name(name() + ".total_latency")
+    totalRespLatency
+        .name(name() + ".total_resp_latency")
+        .desc("Total latency of memory responses");
+    totalAccessLatency
+        .name(name() + ".total_access_latency")
         .desc("Total latency of memory accesses");
     totalThroughput
         .name(name() + ".total_throughput")
@@ -167,24 +170,24 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     assert(sumLatency == 0 && sumSize == 0);
     recvAtomic(pkt);
     // turn packet around to go back to requester if response expected
-    if (retryReq) {
-        return false;
-    } else if (needsResponse) {
+    Tick lat = isTimingATT ? sumLatency : getLatency();
+    if (retryReq) return false;
+    if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
         assert(pkt->isResponse());
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
         // before the packet(s) before it
-        Tick lat = isTimingATT ? sumLatency : getLatency();
         packetQueue.push_back(
                 DeferredPacket(pkt, curTick() + lat));
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
-        totalLatency += lat;
+        totalRespLatency += lat;
     } else {
         pendingDelete.push_back(pkt);
     }
+    totalAccessLatency += lat;
     sumLatency = 0;
 
     // only consider ourselves busy if there is any need to wait

@@ -220,8 +220,10 @@ class SimpleMemory : public AbstractMemory
 
   protected:
 
+    /** Total latency of memory responses */
+    Stats::Scalar totalRespLatency;
     /** Total latency of memory accesses */
-    Stats::Scalar totalLatency;
+    Stats::Scalar totalAccessLatency;
     /** Total throughput of memory accesses */
     Stats::Scalar totalThroughput;
     /** Total time in checkpointing frames */
