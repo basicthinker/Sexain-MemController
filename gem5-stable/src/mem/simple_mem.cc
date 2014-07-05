@@ -206,13 +206,18 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
 }
 
 void
-SimpleMemory::OnCheckpointing()
+SimpleMemory::OnCheckpointing(int num_new_at, int num_new_pt)
 {
-    Tick chkpt_duration = 256 * 4 * 1024 * bandwidth; // TODO
-    schedule(unfreezeEvent, curTick() + chkpt_duration);
-    if (isTimingATT) {
-        totalThroughput += (chkpt_duration / bandwidth);
-        totalChkptTime += chkpt_duration;
+    uint64_t chkpt_throughput = num_new_pt * addrController.page_size();
+    Tick chkpt_duration = chkpt_throughput * bandwidth;
+    if (chkpt_duration) {
+        schedule(unfreezeEvent, curTick() + chkpt_duration);
+        if (isTimingATT) {
+            totalThroughput += chkpt_throughput;
+            totalChkptTime += chkpt_duration;
+        }
+    } else {
+        unfreeze();
     }
 }
 

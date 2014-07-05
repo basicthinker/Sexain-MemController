@@ -336,7 +336,7 @@ class AbstractMemory : public MemObject, public MemStore
     virtual void DoMove(uint64_t phy_addr, uint64_t mach_addr, int size);
     virtual void DoSwap(uint64_t phy_addr, uint64_t mach_addr, int size);
 
-    virtual void OnCheckpointing()
+    virtual void OnCheckpointing(int num_new_att, int num_new_ptt)
     {
         addrController.FinishCheckpointing();
     }

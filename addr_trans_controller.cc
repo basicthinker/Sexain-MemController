@@ -158,9 +158,41 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
   }
 }
 
+inline void AddrTransController::DirtyCleaner::Visit(int i) {
+  const ATTEntry& entry = atc_->att_.At(i);
+  if (entry.state == ATTEntry::STAINED) {
+    atc_->DirtyStained(i);
+  } else if (entry.state == ATTEntry::TEMP) {
+    atc_->HideTemp(i);
+  }
+
+  if (entry.state == ATTEntry::DIRTY) {
+    atc_->ATTShiftState(atc_->att_, i, ATTEntry::CLEAN);
+    ++num_new_entries_;
+  } else if (entry.state == ATTEntry::HIDDEN) {
+    atc_->ATTShiftState(atc_->att_, i, ATTEntry::FREE);
+  }
+}
+
+inline void AddrTransController::LoanRevoker::Visit(int i) {
+  const ATTEntry& entry = atc_->att_.At(i);
+  assert(entry.state == ATTEntry::LOAN);
+  atc_->FreeLoan(i);
+}
+
+inline void AddrTransController::PTTCleaner::Visit(int i) {
+  const ATTEntry& entry = atc_->ptt_.At(i);
+  if (entry.state == ATTEntry::DIRTY) {
+    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::CLEAN);
+    ++num_new_entries_;
+  } else {
+    assert(entry.state == ATTEntry::HIDDEN);
+    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::FREE);
+  }
+}
+
 void AddrTransController::BeginCheckpointing() {
   assert(!in_checkpointing());
-  mem_store_->OnCheckpointing();
 
   DirtyCleaner att_cleaner(this);
   ATTVisit(att_, ATTEntry::DIRTY, &att_cleaner);
@@ -169,6 +201,7 @@ void AddrTransController::BeginCheckpointing() {
   LoanRevoker loan_revoker(this);
   ATTVisit(att_, ATTEntry::LOAN, &loan_revoker);
   assert(att_.IsEmpty(ATTEntry::LOAN));
+
   assert(att_.GetLength(ATTEntry::CLEAN) +
       att_.GetLength(ATTEntry::FREE) == att_.length());
 
@@ -177,6 +210,8 @@ void AddrTransController::BeginCheckpointing() {
   assert(ptt_.IsEmpty(ATTEntry::DIRTY));
 
   in_checkpointing_ = true;
+  mem_store_->OnCheckpointing(
+      att_cleaner.num_new_entries(), ptt_cleaner.num_new_entries());
 }
 
 void AddrTransController::FinishCheckpointing() {

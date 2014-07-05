@@ -271,7 +271,7 @@ class SimpleMemory : public AbstractMemory
         sumSize += size;
     }
 
-    virtual void OnCheckpointing();
+    virtual void OnCheckpointing(int num_new_att, int num_new_pt);
 
     virtual void OnWaiting();
 };

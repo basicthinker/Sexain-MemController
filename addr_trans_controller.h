@@ -25,6 +25,7 @@ class AddrTransController {
   uint64_t Size() const;
   Addr PhyLimit() const { return dram_size_ + nvm_size_; }
   int cache_block_size() const { return att_.block_size(); }
+  int page_size() const { return ptt_.block_size(); }
   bool in_checkpointing() const { return in_checkpointing_; }
 
  protected:
@@ -83,10 +84,12 @@ class AddrTransController {
 
   class DirtyCleaner : public QueueVisitor { // inc. TEMP and HIDDEN
    public:
-    DirtyCleaner(AddrTransController* atc) : atc_(atc) { }
+    DirtyCleaner(AddrTransController* atc) : atc_(atc), num_new_entries_(0) { }
     void Visit(int i);
+    int num_new_entries() const { return num_new_entries_; }
    private:
     AddrTransController* atc_;
+    int num_new_entries_;
   };
 
   class LoanRevoker : public QueueVisitor {
@@ -99,10 +102,12 @@ class AddrTransController {
 
   class PTTCleaner : public QueueVisitor {
    public:
-    PTTCleaner(AddrTransController* atc) : atc_(atc) { }
+    PTTCleaner(AddrTransController* atc) : atc_(atc), num_new_entries_(0) { }
     void Visit(int i);
+    int num_new_entries() const { return num_new_entries_; }
    private:
     AddrTransController* atc_;
+    int num_new_entries_;
   };
 };
 
@@ -112,9 +117,10 @@ class AddrTransController {
 inline AddrTransController::AddrTransController(
     uint64_t dram_size, Addr phy_limit,
     int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
-        att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
-        dram_buffer_(att_len, block_bits), ptt_(ptt_len, page_bits),
-        dram_size_(dram_size), nvm_size_(phy_limit - dram_size) {
+
+    att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
+    dram_buffer_(att_len, block_bits), ptt_(ptt_len, page_bits),
+    dram_size_(dram_size), nvm_size_(phy_limit - dram_size) {
 
   assert(phy_limit >= dram_size);
   mem_store_ = ms;
@@ -139,37 +145,6 @@ inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
 
 inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
   return (phy_addr & (att_.block_size() - 1)) == 0 && size == att_.block_size();
-}
-
-inline void AddrTransController::DirtyCleaner::Visit(int i) {
-  const ATTEntry& entry = atc_->att_.At(i);
-  if (entry.state == ATTEntry::STAINED) {
-    atc_->DirtyStained(i);
-  } else if (entry.state == ATTEntry::TEMP) {
-    atc_->HideTemp(i);
-  }
-
-  if (entry.state == ATTEntry::DIRTY) {
-    atc_->ATTShiftState(atc_->att_, i, ATTEntry::CLEAN);
-  } else if (entry.state == ATTEntry::HIDDEN) {
-    atc_->ATTShiftState(atc_->att_, i, ATTEntry::FREE);
-  }
-}
-
-inline void AddrTransController::LoanRevoker::Visit(int i) {
-  const ATTEntry& entry = atc_->att_.At(i);
-  assert(entry.state == ATTEntry::LOAN);
-  atc_->FreeLoan(i);
-}
-
-inline void AddrTransController::PTTCleaner::Visit(int i) {
-  const ATTEntry& entry = atc_->ptt_.At(i);
-  if (entry.state == ATTEntry::DIRTY) {
-    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::CLEAN);
-  } else {
-    assert(entry.state == ATTEntry::HIDDEN);
-    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::FREE);
-  }
 }
 
 // Wrapper functions for AddrTransTable
