@@ -171,7 +171,10 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     recvAtomic(pkt);
     // turn packet around to go back to requester if response expected
     Tick lat = isTimingATT ? sumLatency : getLatency();
-    if (retryReq) return false;
+    if (retryReq) {
+        sumLatency = sumSize = 0;
+        return false;
+    }
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response

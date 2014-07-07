@@ -49,7 +49,7 @@ class AddrTransController {
 
   Addr NVMStore(Addr phy_addr, int size);
   Addr DRAMStore(Addr phy_addr, int size);
-  void PseudoPageStore(Tag phy_tag);
+  bool PseudoPageStore(Tag phy_tag);
 
   ///
   /// Wrappers with timings

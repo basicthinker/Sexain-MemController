@@ -121,15 +121,13 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
   return mach_addr;
 }
 
-void AddrTransController::PseudoPageStore(Tag phy_tag) {
+bool AddrTransController::PseudoPageStore(Tag phy_tag) {
   const pair<int, Addr> target = ATTLookup(ptt_, phy_tag);
 
   if (target.first != -EINVAL) { // found
     const ATTEntry &entry = ptt_.At(target.first);
-    if (entry.state == ATTEntry::DIRTY ||
-        entry.state == ATTEntry::HIDDEN) {
-      return;
-    } else {
+    if (entry.state != ATTEntry::DIRTY &&
+        entry.state != ATTEntry::HIDDEN) {
       assert(entry.state == ATTEntry::CLEAN);
       ATTShiftState(ptt_, target.first, ATTEntry::HIDDEN);
     }
@@ -139,20 +137,25 @@ void AddrTransController::PseudoPageStore(Tag phy_tag) {
         int ci = ATTFront(ptt_, ATTEntry::CLEAN);
         ATTShiftState(ptt_, ci, ATTEntry::FREE);
         ++pages_twice_written_;
+      } else if (in_checkpointing()) {
+        mem_store_->OnWaiting();
+        return false;
       } else {
         BeginCheckpointing();
-        return;
+        return true;
       }
     }
     ATTSetup(ptt_, phy_tag, INVAL_ADDR, ATTEntry::DIRTY);
   }
+  return true;
 }
 
 Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
   assert(CheckValid(phy_addr, size) && phy_addr < PhyLimit());
   if (IsVolatile(phy_addr)) {
-    PseudoPageStore(ptt_.ToTag(phy_addr));
-    return DRAMStore(phy_addr, size);
+    if (PseudoPageStore(ptt_.ToTag(phy_addr))) {
+      return DRAMStore(phy_addr, size);
+    } else return INVAL_ADDR;
   } else {
     return NVMStore(phy_addr, size);
   }
