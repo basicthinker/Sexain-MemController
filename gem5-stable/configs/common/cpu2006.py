@@ -85,7 +85,7 @@ def make_process(bench_name, bench_root, build_name, fingerprint):
         lbm = LiveProcess()
         lbm.executable = build_dir + '/lbm'
         lbm.cmd = [lbm.executable] + ['20', 'reference.dat', '0', '1',
-                test_data + '/input/100_100_130_cf_a.of']
+                '100_100_130_cf_a.of']
         lbm.output = output_dir + '/lbm.out-' + fingerprint
         return (lbm, lbm.output, test_data + '/output/lbm.out')
     elif bench_name == '471.omnetpp':
