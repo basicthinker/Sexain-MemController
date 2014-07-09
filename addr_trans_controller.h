@@ -28,8 +28,9 @@ class AddrTransController {
   int page_size() const { return ptt_.block_size(); }
   bool in_checkpointing() const { return in_checkpointing_; }
 
+  virtual bool IsStatic(Addr phy_addr);
+
  protected:
-  virtual bool IsVolatile(Addr phy_addr);
   AddrTransTable att_;
   VersionBuffer nvm_buffer_;
   VersionBuffer dram_buffer_;
@@ -135,7 +136,7 @@ inline uint64_t AddrTransController::Size() const {
   return nvm_buffer_.addr_base() + nvm_buffer_.Size();
 }
 
-inline bool AddrTransController::IsVolatile(Addr phy_addr) {
+inline bool AddrTransController::IsStatic(Addr phy_addr) {
   return phy_addr < dram_size_;
 }
 

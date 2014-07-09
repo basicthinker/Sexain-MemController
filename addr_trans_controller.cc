@@ -9,7 +9,7 @@ Addr AddrTransController::LoadAddr(Addr phy_addr) {
   assert(phy_addr < PhyLimit());
   Tag phy_tag = att_.ToTag(phy_addr);
   Addr mach_addr = att_.Translate(phy_addr, ATTLookup(att_, phy_tag).second);
-  if (IsVolatile(phy_addr)) {
+  if (IsStatic(phy_addr)) {
     mem_store_->OnDRAMRead(mach_addr, att_.block_size());
   } else {
     mem_store_->OnNVMRead(mach_addr, att_.block_size());
@@ -153,7 +153,7 @@ bool AddrTransController::PseudoPageStore(Tag phy_tag) {
 
 Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
   assert(CheckValid(phy_addr, size) && phy_addr < PhyLimit());
-  if (IsVolatile(phy_addr)) {
+  if (IsStatic(phy_addr)) {
     if (PseudoPageStore(ptt_.ToTag(phy_addr))) {
       return DRAMStore(phy_addr, size);
     } else return INVAL_ADDR;
@@ -250,7 +250,7 @@ void AddrTransController::HideClean(int index, bool move_data) {
   mem_store_->OnATTHideClean(phy_addr, move_data);
 
   if (move_data) {
-    assert(!IsVolatile(phy_addr));
+    assert(!IsStatic(phy_addr));
     MoveToNVM(phy_addr, entry.mach_base, att_.block_size());
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base, VersionBuffer::BACKUP0);
@@ -283,7 +283,7 @@ void AddrTransController::FreeClean(int index, bool move_data) {
   if (in_checkpointing()) {
     SwapNVM(phy_addr, entry.mach_base, att_.block_size());
   } else { // in running
-    assert(!IsVolatile(phy_addr));
+    assert(!IsStatic(phy_addr));
     MoveToNVM(phy_addr, entry.mach_base, att_.block_size());
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base,
@@ -314,7 +314,7 @@ void AddrTransController::FreeLoan(int index, bool move_data) {
   mem_store_->OnATTFreeLoan(phy_addr, move_data);
 
   if (move_data) {
-    assert(IsVolatile(phy_addr));
+    assert(IsStatic(phy_addr));
     MoveToDRAM(phy_addr, entry.mach_base, att_.block_size());
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
@@ -328,7 +328,7 @@ void AddrTransController::HideTemp(int index, bool move_data) {
 
   const Addr phy_addr = att_.ToAddr(entry.phy_tag);
   if (move_data) {
-    assert(!IsVolatile(phy_addr));
+    assert(!IsStatic(phy_addr));
     MoveToNVM(phy_addr, entry.mach_base, att_.block_size());
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);

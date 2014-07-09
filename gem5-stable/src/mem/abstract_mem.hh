@@ -334,6 +334,11 @@ class AbstractMemory : public MemObject, public MemStore
      */
     virtual void regStats();
 
+    virtual bool isStatic(Addr phy_addr)
+    {
+        return addrController.IsStatic(phy_addr);
+    }
+
     virtual void DoMove(uint64_t phy_addr, uint64_t mach_addr, int size);
     virtual void DoSwap(uint64_t phy_addr, uint64_t mach_addr, int size);
 
