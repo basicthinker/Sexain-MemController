@@ -315,8 +315,9 @@ class AbstractMemory : public MemObject, public MemStore
      * is turned into a response if required.
      *
      * @param pkt Packet performing the access
+     * @return if this packet is serviced in THNVM schemes
      */
-    void access(PacketPtr pkt);
+    bool access(PacketPtr pkt);
 
     /**
      * Perform an untimed memory read or write without changing

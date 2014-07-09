@@ -149,6 +149,9 @@ class SimpleMemory : public AbstractMemory
      */
     bool isBusy;
 
+    /** Track THNVM waiting state */
+    bool isWaiting;
+
     /**
      * Remember if we have to retry an outstanding request that
      * arrived while we were busy.

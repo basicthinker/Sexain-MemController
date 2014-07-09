@@ -328,7 +328,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 
 #endif
 
-void
+bool
 AbstractMemory::access(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
@@ -337,7 +337,7 @@ AbstractMemory::access(PacketPtr pkt)
     if (pkt->memInhibitAsserted()) {
         DPRINTF(MemoryAccess, "mem inhibited on 0x%x: not responding\n",
                 pkt->getAddr());
-        return;
+        return true;
     }
 
     if (pkt->cmd == MemCmd::SwapReq) {
@@ -373,7 +373,7 @@ AbstractMemory::access(PacketPtr pkt)
         if (overwrite_mem) {
             Addr local_addr = addrController.StoreAddr(
                     localAddr(pkt), pkt->getSize());
-            if (local_addr == INVAL_ADDR) return;
+            if (local_addr == INVAL_ADDR) return false;
             host_addr = hostAddr(local_addr);
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
         }
@@ -403,7 +403,7 @@ AbstractMemory::access(PacketPtr pkt)
                 assert(pkt->getSize() == addrController.cache_block_size());
                 Addr local_addr = addrController.StoreAddr(
                         localAddr(pkt), pkt->getSize());
-                if (local_addr == INVAL_ADDR) return;
+                if (local_addr == INVAL_ADDR) return false;
                 memcpy(hostAddr(local_addr), pkt->getPtr<uint8_t>(),
                         pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
@@ -423,6 +423,8 @@ AbstractMemory::access(PacketPtr pkt)
     if (pkt->needsResponse()) {
         pkt->makeResponse();
     }
+
+    return true;
 }
 
 void

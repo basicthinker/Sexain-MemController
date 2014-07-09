@@ -60,6 +60,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
     mem_store_->OnNVMWrite(mach_addr, size);
+    return mach_addr;
   } else { // in checkpointing
     if (index != -EINVAL) { // found
       const ATTEntry& entry = att_.At(index);
@@ -84,8 +85,8 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
     mem_store_->OnDRAMWrite(mach_addr, size);
+    return mach_addr;
   }
-  return mach_addr;
 }
 
 Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {

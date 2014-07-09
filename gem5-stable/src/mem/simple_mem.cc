@@ -53,7 +53,7 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     tATTOp(p->lat_att_operate), tBufferOp(p->lat_buffer_operate),
     tNVMRead(p->lat_nvm_read), tNVMWrite(p->lat_nvm_write),
     isTimingATT(p->is_timing_att), latency_var(p->latency_var),
-    bandwidth(p->bandwidth), isBusy(false),
+    bandwidth(p->bandwidth), isBusy(false), isWaiting(false),
     retryReq(false), retryResp(false),
     releaseEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
@@ -95,7 +95,7 @@ SimpleMemory::regStats()
 Tick
 SimpleMemory::recvAtomic(PacketPtr pkt)
 {
-    access(pkt);
+    assert(access(pkt)); //TODO
     return pkt->memInhibitAsserted() ? 0 : getLatency();
 }
 
@@ -168,13 +168,12 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
     assert(sumLatency == 0 && sumSize == 0);
-    recvAtomic(pkt);
-    // turn packet around to go back to requester if response expected
-    Tick lat = isTimingATT ? sumLatency : getLatency();
-    if (retryReq) {
+    if (!access(pkt)) {
         sumLatency = sumSize = 0;
         return false;
     }
+    // turn packet around to go back to requester if response expected
+    Tick lat = isTimingATT ? sumLatency : getLatency();
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
@@ -220,14 +219,14 @@ SimpleMemory::OnCheckpointing(int num_new_at, int num_new_pt)
             totalChkptTime += chkpt_duration;
         }
     } else {
-        unfreeze();
+      addrController.FinishCheckpointing();
     }
 }
 
 void
 SimpleMemory::OnWaiting()
 {
-    retryReq = true;
+    isWaiting = true;
 }
 
 void
@@ -245,8 +244,8 @@ void
 SimpleMemory::unfreeze()
 {
     addrController.FinishCheckpointing();
-    if (retryReq) {
-        retryReq = false;
+    if (isWaiting) {
+        isWaiting = false;
         port.sendRetry();
     }
 }
