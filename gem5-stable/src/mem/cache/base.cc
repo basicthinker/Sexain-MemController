@@ -54,6 +54,8 @@
 #include "mem/cache/mshr.hh"
 #include "sim/full_system.hh"
 
+#include "mem/cache/cache_controller.h"
+
 using namespace std;
 
 BaseCache::CacheSlavePort::CacheSlavePort(const std::string &_name,
@@ -79,8 +81,11 @@ BaseCache::BaseCache(const Params *p)
       noTargetMSHR(NULL),
       missCount(p->max_miss_count),
       addrRanges(p->addr_ranges.begin(), p->addr_ranges.end()),
-      system(p->system)
+      system(p->system), controller(p->controller)
 {
+    if (controller) {
+        controller->RegisterCache(this);
+    }
 }
 
 void

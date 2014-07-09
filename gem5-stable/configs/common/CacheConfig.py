@@ -62,11 +62,14 @@ def config_cache(options, system):
 
     # Set the cache line size of the system
     system.cache_line_size = options.cacheline_size
+    system.cache_controller = CacheController(block_bits=options.block_bits,
+                                              att_length=options.att_length)
 
     if options.l3cache:
         system.l3cache = L3Cache(clk_domain=system.cpu_clk_domain,
                                  size=options.l3_size,
-                                 assoc=options.l3_assoc)
+                                 assoc=options.l3_assoc,
+                                 controller=system.cache_controller)
 
         system.tol3bus = CoherentBus(clk_domain = system.cpu_clk_domain,
                                      width = 32)
@@ -79,7 +82,8 @@ def config_cache(options, system):
         # bytes (256 bits).
         system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                    size=options.l2_size,
-                                   assoc=options.l2_assoc)
+                                   assoc=options.l2_assoc,
+                                   controller=system.cache_controller)
 
         system.tol2bus = CoherentBus(clk_domain = system.cpu_clk_domain,
                                      width = 32)
@@ -91,7 +95,8 @@ def config_cache(options, system):
             icache = icache_class(size=options.l1i_size,
                                   assoc=options.l1i_assoc)
             dcache = dcache_class(size=options.l1d_size,
-                                  assoc=options.l1d_assoc)
+                                  assoc=options.l1d_assoc,
+                                  controller=system.cache_controller)
 
             if buildEnv['TARGET_ISA'] == 'x86':
                 iwc = PageTableWalkerCache()
@@ -103,7 +108,8 @@ def config_cache(options, system):
             if options.l3cache:
                 l2c = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                      size=options.l2_size,
-                                     assoc=options.l2_assoc)
+                                     assoc=options.l2_assoc,
+                                     controller=system.cache_controller)
                 system.cpu[i].addTwoLevelCacheHierarchy(icache, dcache,
                                                         l2c, iwc, dwc)
             else:

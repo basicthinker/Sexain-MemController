@@ -40,9 +40,17 @@
 
 from m5.params import *
 from m5.proxy import *
+from m5.SimObject import SimObject
 from MemObject import MemObject
 from Prefetcher import BasePrefetcher
 from Tags import *
+
+class CacheController(SimObject):
+    type = 'CacheController'
+    cxx_class = 'CacheController'
+    cxx_header = "mem/cache/cache_controller.h"
+    block_bits = Param.Int(6, "number of bits of ATT block size")    
+    att_length = Param.Int(0, "number of entries in ATT")    
 
 class BaseCache(MemObject):
     type = 'BaseCache'
@@ -70,3 +78,5 @@ class BaseCache(MemObject):
     addr_ranges = VectorParam.AddrRange([AllMemory], "The address range for the CPU-side port")
     system = Param.System(Parent.any, "System we belong to")
     tags = Param.BaseTags(LRU(), "Tag Store for LRU caches")
+    controller = Param.CacheController(NULL, "THNVM cache controller")
+
