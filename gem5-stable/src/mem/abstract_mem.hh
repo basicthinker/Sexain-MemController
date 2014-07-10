@@ -198,6 +198,9 @@ class AbstractMemory : public MemObject, public MemStore
     /** Number of physical pages written back in THNVM schemes */
     Stats::Scalar numWBPages;
 
+    Stats::Scalar numRegCaches;
+    Stats::Scalar numCacheFlushes;
+
     /** Pointor to the System object.
      * This is used for getting the number of masters in the system which is
      * needed when registering stats
@@ -380,6 +383,16 @@ class AbstractMemory : public MemObject, public MemStore
     virtual void OnATTFreeLoan(uint64_t phy_addr, bool move_data)
     {
         ++numReplWrites;
+    }
+
+    virtual void OnCacheRegister()
+    {
+        ++numRegCaches;
+    }
+
+    virtual void OnCacheFlush(int blocks, int pages)
+    {
+        ++numCacheFlushes;
     }
 };
 

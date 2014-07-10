@@ -65,7 +65,7 @@ inline CacheController::CacheController(const CacheControllerParams* p) :
 
 inline void CacheController::RegisterCache(BaseCache* const cache) {
   caches_.push_back(cache);
-  std::cout << "# registered cache(s): " << caches_.size() << std::endl;
+  memory_->OnCacheRegister();
 }
 
 inline void CacheController::DirtyBlock(uint64_t addr, int size) {
@@ -89,6 +89,7 @@ inline void CacheController::WritebackAll() {
       it != caches_.end(); ++it) {
     (*it)->memWritebackTiming();
   }
+  memory_->OnCacheFlush(blocks_.size(), pages_.size());
   blocks_.clear();
   pages_.clear();
 }

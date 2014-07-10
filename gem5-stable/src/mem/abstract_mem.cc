@@ -193,6 +193,13 @@ AbstractMemory::regStats()
         .name(name() + ".num_wb_pages")
         .desc("Total number of physical pages written back in THNVM schemes");
 
+    numRegCaches
+        .name(name() + ".num_reg_caches")
+        .desc("Number of caches registered to the THNVM cache controller");
+    numCacheFlushes
+        .name(name() + ".num_cache_flushes")
+        .desc("Number of cache flushes by the THNVM cache controller");
+
     bwRead = bytesRead / simSeconds;
     bwInstRead = bytesInstRead / simSeconds;
     bwWrite = bytesWritten / simSeconds;
