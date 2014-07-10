@@ -57,8 +57,8 @@ using namespace std;
 AbstractMemory::AbstractMemory(const Params *p) :
     MemObject(p), range(p->range),
     addrController(p->dram_size, range.span(),
-            p->block_table_length, p->block_bits,
-            p->page_table_length, p->page_bits, this),
+            p->att_length, p->block_bits,
+            p->ptt_length, p->page_bits, this),
     pmemAddr(NULL), confTableReported(p->conf_table_reported),
     inAddrMap(p->in_addr_map), _system(NULL)
 {

@@ -150,8 +150,8 @@ PhysicalMemory::createBackingStore(AddrRange range,
     int num_thnvm = 0;
     for (int i = 0; i < _memories.size(); ++i) {
         assert(_memories[i]->hostSize() == host_size);
-        num_thnvm += (_memories[i]->params()->block_table_length != 0 ||
-                _memories[i]->params()->page_table_length != 0);
+        num_thnvm += (_memories[i]->params()->att_length != 0 ||
+                _memories[i]->params()->ptt_length != 0);
     }
     if (_memories.size() != 1 && num_thnvm > 0) {
         panic("Cannot create backing store for multiple THNVM %s\n",

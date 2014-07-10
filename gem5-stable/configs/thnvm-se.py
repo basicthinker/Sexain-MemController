@@ -120,9 +120,9 @@ Options.addSEOptions(parser)
 parser.add_option("--dram-size", type="string", default="0B",
         help="Size of DRAM")
 parser.add_option("--att-length", type="int", default=0,
-        help="Number of Addr Translation Table entries (for NVM)")
-parser.add_option("--mc-page-table-length", type="int", default=0,
-        help="Number of the secondary page table entries (for DRAM)")
+        help="Number of Addr Translation Table entries")
+parser.add_option("--ptt-length", type="int", default=0,
+        help="Number of the secondary page table entries (for static mapping)")
 parser.add_option("--block-bits", type="int", default=6,
         help="Number of bits of cache line/block")
 parser.add_option("--page-bits", type="int", default=12,
@@ -152,9 +152,11 @@ multiprocesses = []
 numThreads = 1
 
 def config_fingerprint(options):
-    fp = 'b' + str(options.att_length)
-    fp += '-p' + str(options.mc_page_table_length)
-    fp += '-lat' if options.att_latency else '-nor'
+    fp = 'a' + str(options.att_length)
+    fp += '-p' + str(options.ptt_length)
+    fp += '-d' + options.dram_size
+    if options.att_latency:
+        fp += '-lat'
     return fp
 
 fp = config_fingerprint(options)
@@ -313,8 +315,8 @@ if options.ruby:
 else:
     system.membus = CoherentBus()
     system.system_port = system.membus.slave
-    CacheConfig.config_cache(options, system)
     MemConfig.config_mem(options, system)
+    CacheConfig.config_cache(options, system)
 
 root = Root(full_system = False, system = system)
 Simulation.run(options, root, system, FutureClass)

@@ -62,8 +62,9 @@ def config_cache(options, system):
 
     # Set the cache line size of the system
     system.cache_line_size = options.cacheline_size
-    system.cache_controller = CacheController(block_bits=options.block_bits,
-                                              att_length=options.att_length)
+    system.cache_controller = CacheController(memory=system.mem_ctrls[0],
+            block_bits=options.block_bits, att_length=options.att_length,
+            page_bits=options.page_bits, ptt_length=options.ptt_length)
 
     if options.l3cache:
         system.l3cache = L3Cache(clk_domain=system.cpu_clk_domain,

@@ -48,8 +48,8 @@ class AbstractMemory(MemObject):
     abstract = True
     cxx_header = "mem/abstract_mem.hh"
     range = Param.AddrRange(AddrRange('512MB'), "Physical address range")
-    block_table_length = Param.Int(0, "Addr Translation Table length")
-    page_table_length = Param.Int(0, "Secondary page table length")
+    att_length = Param.Int(0, "Addr Translation Table length")
+    ptt_length = Param.Int(0, "Secondary page table length")
     block_bits = Param.Int(6, "Number of bits of cache block size")
     page_bits = Param.Int(12, "Number of bits of page size in 2nd page table")
     dram_size = Param.Addr(AddrRange('512MB').size(), "DRAM size")

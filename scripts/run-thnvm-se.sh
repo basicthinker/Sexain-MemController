@@ -11,9 +11,9 @@ CPU_CLOCK=3GHz
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
-DRAM_SIZE=2GB
-ATT_LENGTH=1024
-MC_PT_LEN=256 # secondary page table length
+DRAM_SIZE=128MB
+ATT_LEN=1024
+PTT_LEN=256 # secondary page table length
 
 L1D_SIZE=32kB
 L1D_ASSOC=8
@@ -27,7 +27,7 @@ L3_SIZE=$((3*NUM_CPUS))MB
 L3_ASSOC=24
 
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
-OUT_DIR=~/Documents/gem5out-b$ATT_LENGTH-p$MC_PT_LEN
+OUT_DIR=~/Documents/gem5out-a$ATT_LEN-p$PTT_LEN-d$MEM_SIZE
 BUILD_NAME=build_base_none.0000
 
 to_run=0
@@ -83,8 +83,8 @@ OPTIONS+=" --cpu-clock=$CPU_CLOCK"
 OPTIONS+=" --mem-type=$MEM_TYPE"
 OPTIONS+=" --mem-size=$MEM_SIZE"
 OPTIONS+=" --dram-size=$DRAM_SIZE"
-OPTIONS+=" --att-length=$ATT_LENGTH"
-OPTIONS+=" --mc-page-table-length=$MC_PT_LEN"
+OPTIONS+=" --att-length=$ATT_LEN"
+OPTIONS+=" --ptt-length=$PTT_LEN"
 OPTIONS+=" --l1d_size=$L1D_SIZE"
 OPTIONS+=" --l1d_assoc=$L1D_ASSOC"
 OPTIONS+=" --l1i_size=$L1I_SIZE"

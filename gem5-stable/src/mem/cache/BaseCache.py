@@ -51,6 +51,9 @@ class CacheController(SimObject):
     cxx_header = "mem/cache/cache_controller.h"
     block_bits = Param.Int(6, "number of bits of ATT block size")    
     att_length = Param.Int(0, "number of entries in ATT")    
+    page_bits = Param.Int(12, "number of bits of PTT page size")    
+    ptt_length = Param.Int(0, "number of entries in PTT")
+    memory = Param.AbstractMemory(NULL, "system single memory")
 
 class BaseCache(MemObject):
     type = 'BaseCache'
