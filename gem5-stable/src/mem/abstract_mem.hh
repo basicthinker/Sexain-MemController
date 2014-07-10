@@ -198,7 +198,8 @@ class AbstractMemory : public MemObject, public MemStore
     /** Number of physical pages written back in THNVM schemes */
     Stats::Scalar numWBPages;
 
-    Stats::Scalar numRegCaches;
+    int regCaches;
+    Stats::Formula numRegCaches;
     Stats::Scalar numCacheFlushes;
 
     /** Pointor to the System object.
@@ -387,7 +388,7 @@ class AbstractMemory : public MemObject, public MemStore
 
     virtual void OnCacheRegister()
     {
-        ++numRegCaches;
+        ++regCaches;
     }
 
     virtual void OnCacheFlush(int blocks, int pages)

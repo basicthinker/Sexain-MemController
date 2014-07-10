@@ -65,6 +65,7 @@ AbstractMemory::AbstractMemory(const Params *p) :
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
     epochPages = 0;
+    regCaches = 0;
 }
 
 void
@@ -196,6 +197,8 @@ AbstractMemory::regStats()
     numRegCaches
         .name(name() + ".num_reg_caches")
         .desc("Number of caches registered to the THNVM cache controller");
+    numRegCaches = constant(regCaches);
+
     numCacheFlushes
         .name(name() + ".num_cache_flushes")
         .desc("Number of cache flushes by the THNVM cache controller");
