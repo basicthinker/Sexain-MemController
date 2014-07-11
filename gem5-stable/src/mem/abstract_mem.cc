@@ -310,7 +310,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 #define CASE(A, T)                                                        \
   case sizeof(T):                                                         \
     DPRINTF(MemoryAccess,"%s from %s of size %i on address 0x%x data " \
-            "0x%x %c %c\n", A, system()->getMasterName(pkt->req->masterId()),\
+            "0x%x %c\n", A, system()->getMasterName(pkt->req->masterId()),\
             pkt->getSize(), pkt->getAddr(), pkt->get<T>(),                \
             pkt->req->isUncacheable() ? 'U' : 'C');                       \
   break
@@ -324,7 +324,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
           CASE(A, uint16_t);                                            \
           CASE(A, uint8_t);                                             \
           default:                                                      \
-            DPRINTF(MemoryAccess, "%s from %s of size %i on address 0x%x %c %c\n",\
+            DPRINTF(MemoryAccess, "%s from %s of size %i on address 0x%x %c\n",\
                     A, system()->getMasterName(pkt->req->masterId()),          \
                     pkt->getSize(), pkt->getAddr(),                            \
                     pkt->req->isUncacheable() ? 'U' : 'C');                    \
