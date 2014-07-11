@@ -170,6 +170,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     assert(sumLatency == 0 && sumSize == 0);
     if (!access(pkt)) {
         sumLatency = sumSize = 0;
+        isWaiting = true;
         return false;
     }
     // turn packet around to go back to requester if response expected
@@ -224,12 +225,6 @@ SimpleMemory::OnCheckpointing(int num_new_at, int num_new_pt)
 }
 
 void
-SimpleMemory::OnWaiting()
-{
-    isWaiting = true;
-}
-
-void
 SimpleMemory::release()
 {
     assert(isBusy);
@@ -244,10 +239,9 @@ void
 SimpleMemory::unfreeze()
 {
     addrController.FinishCheckpointing();
-    if (isWaiting) {
-        isWaiting = false;
-        port.sendRetry();
-    }
+    assert(isWaiting);
+    isWaiting = false;
+    port.sendRetry();
 }
 
 void

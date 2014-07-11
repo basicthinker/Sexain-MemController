@@ -276,7 +276,6 @@ class SimpleMemory : public AbstractMemory
 
     virtual void OnCheckpointing(int num_new_att, int num_new_pt);
 
-    virtual void OnWaiting();
 };
 
 #endif //__SIMPLE_MEMORY_HH__

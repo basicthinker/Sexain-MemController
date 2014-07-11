@@ -54,7 +54,9 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
           BeginCheckpointing();
           return StoreAddr(phy_addr, size);
         }
-      } else mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::DIRTY);
+      } else {
+        mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::DIRTY);
+      }
       Addr mach_base = VBNewBlock(nvm_buffer_);
       Setup(phy_addr, mach_base, size, ATTEntry::DIRTY);
       mach_addr = att_.Translate(phy_addr, mach_base);
@@ -72,14 +74,11 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
       }
     } else { // not found
       if (att_.IsEmpty(ATTEntry::FREE)) {
-        if (!att_.IsEmpty(ATTEntry::CLEAN)) {
-          int ci = ATTFront(att_, ATTEntry::CLEAN);
-          FreeClean(ci);
-        } else {
-          mem_store_->OnWaiting();
-          return INVAL_ADDR;
-        }
-      } else mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::STAINED);
+        if (att_.IsEmpty(ATTEntry::CLEAN)) return INVAL_ADDR;
+        FreeClean(ATTFront(att_, ATTEntry::CLEAN));
+      } else {
+        mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::STAINED);
+      }
       Addr mach_base = dram_buffer_.NewBlock();
       Setup(phy_addr, mach_base, size, ATTEntry::STAINED);
       mach_addr = att_.Translate(phy_addr, mach_base);
@@ -103,14 +102,11 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
   } else { // not found
     if (in_checkpointing()) {
       if (att_.IsEmpty(ATTEntry::FREE)) {
-        if (!att_.IsEmpty(ATTEntry::CLEAN)) {
-          int ci = ATTFront(att_, ATTEntry::CLEAN);
-          FreeClean(ci);
-        } else {
-          mem_store_->OnWaiting();
-          return INVAL_ADDR;
-        }
-      } else mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::LOAN);
+        if (att_.IsEmpty(ATTEntry::CLEAN)) return INVAL_ADDR;
+        FreeClean(ATTFront(att_, ATTEntry::CLEAN));
+      } else {
+        mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::LOAN);
+      }
       const Addr mach_base = dram_buffer_.NewBlock();
       Setup(phy_addr, mach_base, size, ATTEntry::LOAN);
       mach_addr = att_.Translate(phy_addr, mach_base);
@@ -138,10 +134,8 @@ bool AddrTransController::PseudoPageStore(Tag phy_tag) {
         int ci = ATTFront(ptt_, ATTEntry::CLEAN);
         ATTShiftState(ptt_, ci, ATTEntry::FREE);
         ++pages_twice_written_;
-      } else if (in_checkpointing()) {
-        mem_store_->OnWaiting();
-        return false;
       } else {
+        if (in_checkpointing()) return false;
         BeginCheckpointing();
         return true;
       }

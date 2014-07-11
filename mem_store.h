@@ -25,10 +25,6 @@ class MemStore {
   /// Before the checkpointing frame begins
   ///
   virtual void OnCheckpointing(int num_new_at, int num_new_pt) = 0;
-  ///
-  /// When ATT is saturated in checkpointing and the write request has to wait
-  ///
-  virtual void OnWaiting() = 0;
 
   ///
   /// Behavioral events in THNVM schemes
