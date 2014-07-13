@@ -120,13 +120,14 @@ Options.addSEOptions(parser)
 parser.add_option("--dram-size", type="string", default="0B",
         help="Size of DRAM")
 parser.add_option("--att-length", type="int", default=0,
-        help="Number of Addr Translation Table entries")
-parser.add_option("--ptt-length", type="int", default=0,
-        help="Number of the secondary page table entries (for static mapping)")
+        help="Number of Addr Translation Table entries (for NVM)")
 parser.add_option("--block-bits", type="int", default=6,
         help="Number of bits of cache line/block")
+parser.add_option("--ptt-length", type="int", default=0,
+        help="Number of the secondary page table entries (for static mapping)")
 parser.add_option("--page-bits", type="int", default=12,
         help="Number of bits of page in the secondary page table")
+
 parser.add_option("--att-latency", action="store_true", default=False,
         help="Whether to enable ATT latency")
 
@@ -168,12 +169,14 @@ if options.check_cpu_2006:
     if ref_output is None or not os.path.isfile(ref_output):
         print 'SPEC CPU 2006 ' + options.check_cpu_2006 + ' has no output!'
     elif not os.path.isfile(bench_output):
-        print 'SPEC CPU 2006 outputs check: FAILED! No output file:'
+        print 'SPEC CPU 2006 ' + options.check_cpu_2006 + \
+                ' outputs check: FAILED! No output file:'
         print bench_output
     elif filecmp.cmp(bench_output, ref_output):
-        print 'SPEC CPU 2006 outputs check: OK!'
+        print 'SPEC CPU 2006 ' + options.check_cpu_2006 + ' outputs check: OK!'
     else:
-        print 'SPEC CPU 2006 outputs check: FAILED!'
+        print 'SPEC CPU 2006 outputs ' + options.check_cpu_2006 + \
+                ' check: FAILED!'
         for line in unified_diff(open(bench_output).readlines(),
                 open(ref_output).readlines(),
                 bench_output, ref_output):
