@@ -73,6 +73,7 @@ class BaseCache(MemObject):
     two_queue = Param.Bool(False,
         "whether the lifo should have two queue replacement")
     write_buffers = Param.Int(8, "number of write buffers")
+    num_reserved = Param.Int(1024, "number of reserved buffers")
     prefetch_on_access = Param.Bool(False,
          "notify the hardware prefetcher on every access (not just misses)")
     prefetcher = Param.BasePrefetcher(NULL,"Prefetcher attached to cache")

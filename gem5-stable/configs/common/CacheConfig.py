@@ -65,12 +65,15 @@ def config_cache(options, system):
     system.cache_controller = CacheController(memory=system.mem_ctrls[0],
             block_bits=options.block_bits, att_length=options.att_length,
             page_bits=options.page_bits, ptt_length=options.ptt_length)
+    reserved_write_buffers = options.ptt_length * \
+            (1 << (options.page_bits - options.block_bits))
 
     if options.l3cache:
         system.l3cache = L3Cache(clk_domain=system.cpu_clk_domain,
                                  size=options.l3_size,
                                  assoc=options.l3_assoc,
-                                 controller=system.cache_controller)
+                                 controller=system.cache_controller,
+                                 num_reserved=reserved_write_buffers)
 
         system.tol3bus = CoherentBus(clk_domain = system.cpu_clk_domain,
                                      width = 32)
@@ -84,7 +87,8 @@ def config_cache(options, system):
         system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                    size=options.l2_size,
                                    assoc=options.l2_assoc,
-                                   controller=system.cache_controller)
+                                   controller=system.cache_controller,
+                                   num_reserved=reserved_write_buffers)
 
         system.tol2bus = CoherentBus(clk_domain = system.cpu_clk_domain,
                                      width = 32)
@@ -97,7 +101,8 @@ def config_cache(options, system):
                                   assoc=options.l1i_assoc)
             dcache = dcache_class(size=options.l1d_size,
                                   assoc=options.l1d_assoc,
-                                  controller=system.cache_controller)
+                                  controller=system.cache_controller,
+                                  num_reserved=reserved_write_buffers)
 
             if buildEnv['TARGET_ISA'] == 'x86':
                 iwc = PageTableWalkerCache()
@@ -110,7 +115,8 @@ def config_cache(options, system):
                 l2c = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                      size=options.l2_size,
                                      assoc=options.l2_assoc,
-                                     controller=system.cache_controller)
+                                     controller=system.cache_controller,
+                                     num_reserved=reserved_write_buffers)
                 system.cpu[i].addTwoLevelCacheHierarchy(icache, dcache,
                                                         l2c, iwc, dwc)
             else:

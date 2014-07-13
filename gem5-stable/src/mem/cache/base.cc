@@ -69,7 +69,7 @@ BaseCache::CacheSlavePort::CacheSlavePort(const std::string &_name,
 BaseCache::BaseCache(const Params *p)
     : MemObject(p),
       mshrQueue("MSHRs", p->mshrs, 4, MSHRQueue_MSHRs),
-      writeBuffer("write buffer", p->write_buffers, p->mshrs+1000,
+      writeBuffer("write buffer", p->write_buffers, p->num_reserved,
                   MSHRQueue_WriteBuffer),
       blkSize(p->system->cacheLineSize()),
       hitLatency(p->hit_latency),
