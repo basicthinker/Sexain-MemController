@@ -239,9 +239,10 @@ void
 SimpleMemory::unfreeze()
 {
     addrController.FinishCheckpointing();
-    assert(isWaiting);
-    isWaiting = false;
-    port.sendRetry();
+    if (isWaiting) {
+        isWaiting = false;
+        port.sendRetry();
+    }
 }
 
 void
