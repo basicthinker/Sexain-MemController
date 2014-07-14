@@ -27,7 +27,7 @@ L3_SIZE=$((3*NUM_CPUS))MB
 L3_ASSOC=24
 
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
-OUT_DIR=~/Documents/gem5out-a$ATT_LEN-p$PTT_LEN-d$MEM_SIZE
+OUT_DIR=~/Documents/gem5out-a$ATT_LEN-p$PTT_LEN-d$DRAM_SIZE
 BUILD_NAME=build_base_none.0000
 
 to_run=0

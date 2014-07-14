@@ -283,7 +283,7 @@ class BaseCache : public MemObject
     /**
      * Write back dirty blocks in the cache using timing accesses.
      */
-    virtual void writebackAllTiming() { memWriteback(); }
+    virtual void writebackAllTiming() { ++cacheFlushes; }
     /**
      * Invalidates all blocks in the cache.
      *
@@ -369,6 +369,9 @@ class BaseCache : public MemObject
 
     /** The number of cache copies performed. */
     Stats::Scalar cacheCopies;
+
+    /** The number of cache flushes performed. */
+    Stats::Scalar cacheFlushes;
 
     /** Number of blocks written back per thread. */
     Stats::Vector writebacks;

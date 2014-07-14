@@ -417,6 +417,11 @@ BaseCache::regStats()
         .desc("number of cache copies performed")
         ;
 
+    cacheFlushes
+        .name(name() + ".cache_flushes")
+        .desc("number of cache flushes performed")
+        ;
+
     writebacks
         .init(system->maxMasters())
         .name(name() + ".writebacks")
