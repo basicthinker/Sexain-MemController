@@ -414,7 +414,7 @@ class Cache : public BaseCache
     void regStats();
 
     void memWriteback();
-    void memWritebackTiming();
+    void writebackAllTiming();
     void memInvalidate();
     bool isDirty() const;
 

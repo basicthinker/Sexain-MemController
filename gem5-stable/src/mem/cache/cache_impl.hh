@@ -1106,7 +1106,7 @@ Cache<TagStore>::memWriteback()
 
 template<class TagStore>
 void
-Cache<TagStore>::memWritebackTiming()
+Cache<TagStore>::writebackAllTiming()
 {
     WrappedBlkVisitor visitor(*this, &Cache<TagStore>::writebackTimingVisitor);
     tags->forEachBlk(visitor);

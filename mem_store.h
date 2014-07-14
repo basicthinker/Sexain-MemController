@@ -37,7 +37,6 @@ class MemStore {
   virtual void OnATTFreeLoan(uint64_t phy_addr, bool move_data) { }
 
   virtual void OnCacheRegister() { }
-  virtual void OnCacheFlush(int blocks, int pages) { }
 };
 
 class TraceMemStore : public MemStore {

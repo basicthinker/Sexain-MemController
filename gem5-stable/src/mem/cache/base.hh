@@ -283,7 +283,7 @@ class BaseCache : public MemObject
     /**
      * Write back dirty blocks in the cache using timing accesses.
      */
-    virtual void memWritebackTiming() { memWriteback(); }
+    virtual void writebackAllTiming() { memWriteback(); }
     /**
      * Invalidates all blocks in the cache.
      *

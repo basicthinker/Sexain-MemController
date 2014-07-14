@@ -195,12 +195,8 @@ class AbstractMemory : public MemObject, public MemStore
     /** Number of replace-writes */
     Stats::Scalar numReplWrites;
 
-    /** Number of physical pages written back in THNVM schemes */
-    Stats::Scalar numWBPages;
-
     int regCaches;
     Stats::Formula numRegCaches;
-    Stats::Scalar numCacheFlushes;
 
     /** Pointor to the System object.
      * This is used for getting the number of masters in the system which is
@@ -389,11 +385,6 @@ class AbstractMemory : public MemObject, public MemStore
     virtual void OnCacheRegister()
     {
         ++regCaches;
-    }
-
-    virtual void OnCacheFlush(int blocks, int pages)
-    {
-        ++numCacheFlushes;
     }
 };
 

@@ -62,17 +62,17 @@ def config_cache(options, system):
 
     # Set the cache line size of the system
     system.cache_line_size = options.cacheline_size
-    system.cache_controller = CacheController(memory=system.mem_ctrls[0],
-            block_bits=options.block_bits, att_length=options.att_length,
-            page_bits=options.page_bits, ptt_length=options.ptt_length)
     reserved_write_buffers = options.ptt_length * \
             (1 << (options.page_bits - options.block_bits))
 
     if options.l3cache:
+        l3cc = CacheController(memory=system.mem_ctrls[0],
+                block_bits=options.block_bits, att_length=options.att_length,
+                page_bits=options.page_bits, ptt_length=options.ptt_length)
         system.l3cache = L3Cache(clk_domain=system.cpu_clk_domain,
                                  size=options.l3_size,
                                  assoc=options.l3_assoc,
-                                 controller=system.cache_controller,
+                                 controller=l3cc,
                                  num_reserved=reserved_write_buffers)
 
         system.tol3bus = CoherentBus(clk_domain = system.cpu_clk_domain,
@@ -80,6 +80,9 @@ def config_cache(options, system):
         system.l3cache.cpu_side = system.tol3bus.master
         system.l3cache.mem_side = system.membus.slave
     elif options.l2cache:
+        l2cc = CacheController(memory=system.mem_ctrls[0],
+                block_bits=options.block_bits, att_length=options.att_length,
+                page_bits=options.page_bits, ptt_length=options.ptt_length)
         # Provide a clock for the L2 and the L1-to-L2 bus here as they
         # are not connected using addTwoLevelCacheHierarchy. Use the
         # same clock as the CPUs, and set the L1-to-L2 bus width to 32
@@ -87,7 +90,7 @@ def config_cache(options, system):
         system.l2 = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                    size=options.l2_size,
                                    assoc=options.l2_assoc,
-                                   controller=system.cache_controller,
+                                   controller=l2cc,
                                    num_reserved=reserved_write_buffers)
 
         system.tol2bus = CoherentBus(clk_domain = system.cpu_clk_domain,
@@ -99,9 +102,13 @@ def config_cache(options, system):
         if options.caches:
             icache = icache_class(size=options.l1i_size,
                                   assoc=options.l1i_assoc)
+            dcc = CacheController(memory=system.mem_ctrls[0],
+                    block_bits=options.block_bits,
+                    att_length=options.att_length,
+                    page_bits=options.page_bits, ptt_length=options.ptt_length)
             dcache = dcache_class(size=options.l1d_size,
                                   assoc=options.l1d_assoc,
-                                  controller=system.cache_controller,
+                                  controller=dcc,
                                   num_reserved=reserved_write_buffers)
 
             if buildEnv['TARGET_ISA'] == 'x86':
@@ -112,10 +119,15 @@ def config_cache(options, system):
             # When connecting the caches, the clock is also inherited
             # from the CPU in question
             if options.l3cache:
+                l2cc = CacheController(memory=system.mem_ctrls[0],
+                        block_bits=options.block_bits,
+                        att_length=options.att_length,
+                        page_bits=options.page_bits,
+                        ptt_length=options.ptt_length)
                 l2c = l2_cache_class(clk_domain=system.cpu_clk_domain,
                                      size=options.l2_size,
                                      assoc=options.l2_assoc,
-                                     controller=system.cache_controller,
+                                     controller=l2cc,
                                      num_reserved=reserved_write_buffers)
                 system.cpu[i].addTwoLevelCacheHierarchy(icache, dcache,
                                                         l2c, iwc, dwc)
