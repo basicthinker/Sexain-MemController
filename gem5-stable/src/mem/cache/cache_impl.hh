@@ -1286,8 +1286,12 @@ Cache<TagStore>::handleFill(PacketPtr pkt, BlkType *blk,
         // there are cases (such as failed store conditionals or
         // compare-and-swaps) where we'll demand an exclusive copy but
         // end up not writing it.
-        if (pkt->memInhibitAsserted())
+        if (pkt->memInhibitAsserted()) {
             blk->status |= BlkDirty;
+            if (controller) {
+                controller->DirtyBlock(pkt->getAddr(), pkt->getSize());
+            }
+        }
     }
 
     DPRINTF(Cache, "Block addr %x moving from state %x to %s\n",
