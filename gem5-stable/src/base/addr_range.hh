@@ -40,7 +40,6 @@
  * Authors: Nathan Binkert
  *          Steve Reinhardt
  *          Andreas Hansson
- *          Jinglei Ren <jinglei@ren.systems>
  */
 
 #ifndef __BASE_ADDR_RANGE_HH__
@@ -164,11 +163,6 @@ class AddrRange
         return (_end - _start + 1) >> intlvBits;
     }
 
-    Addr span() const
-    {
-        return _end - _start + 1;
-    }
-
     /**
      * Determine if the range is valid.
      */
@@ -178,11 +172,6 @@ class AddrRange
      * Get the start address of the range.
      */
     Addr start() const { return _start; }
-
-    /**
-     * Get the end address of the range.
-     */
-    Addr end() const { return _end; }
 
     /**
      * Get a string representation of the range. This could

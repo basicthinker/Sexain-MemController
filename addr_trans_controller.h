@@ -23,7 +23,6 @@ class AddrTransController {
   virtual void FinishCheckpointing();
 
   uint64_t Size() const;
-  Addr PhyLimit() const { return dram_size_ + nvm_size_; }
   int cache_block_size() const { return att_.block_size(); }
   int page_size() const { return ptt_.block_size(); }
   bool in_checkpointing() const { return in_checkpointing_; }
@@ -76,12 +75,10 @@ class AddrTransController {
       uint64_t mach_addr, VersionBuffer::State state);
   void VBClearBackup(VersionBuffer& vb);
 
-  const uint64_t dram_size_; ///< Size of direct DRAM region
-  const uint64_t nvm_size_; ///< Size of direct NVM region
+  const uint64_t phy_range_; ///< Size of physical address space
+  const uint64_t dram_size_; ///< Size of DRAM cache region
   MemStore* mem_store_;
   bool in_checkpointing_;
-
-  int pages_twice_written_; ///< Number of twice-write pages
 
   class DirtyCleaner : public QueueVisitor { // inc. TEMP and HIDDEN
    public:
@@ -113,27 +110,25 @@ class AddrTransController {
 };
 
 // Space partition (low -> high):
-// Direct DRAM || Direct NVM (phy_limit)||
-// DRAM backup || DRAM buffer || NVM buffer
+// phy_limit || NVM buffer || DRAM buffer
 inline AddrTransController::AddrTransController(
-    uint64_t dram_size, Addr phy_limit,
+    uint64_t phy_range, uint64_t dram_size,
     int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
 
     att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
     dram_buffer_(att_len, block_bits), ptt_(ptt_len, page_bits),
-    dram_size_(dram_size), nvm_size_(phy_limit - dram_size) {
+    phy_range_(phy_range), dram_size_(dram_size) {
 
-  assert(phy_limit >= dram_size);
+  assert(phy_range >= dram_size);
   mem_store_ = ms;
   in_checkpointing_ = false;
-  pages_twice_written_ = 0;
 
-  dram_buffer_.set_addr_base(PhyLimit() + dram_size_);
-  nvm_buffer_.set_addr_base(dram_buffer_.addr_base() + dram_buffer_.Size());
+  nvm_buffer_.set_addr_base(phy_range_);
+  dram_buffer_.set_addr_base(nvm_buffer_.addr_base() + nvm_buffer_.Size());
 }
 
 inline uint64_t AddrTransController::Size() const {
-  return nvm_buffer_.addr_base() + nvm_buffer_.Size();
+  return phy_range_ + nvm_buffer_.Size() + dram_buffer_.Size();
 }
 
 inline bool AddrTransController::IsStatic(Addr phy_addr) {

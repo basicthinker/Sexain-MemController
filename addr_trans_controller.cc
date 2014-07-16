@@ -6,7 +6,7 @@
 using namespace std;
 
 Addr AddrTransController::LoadAddr(Addr phy_addr) {
-  assert(phy_addr < PhyLimit());
+  assert(phy_addr < phy_range_);
   Tag phy_tag = att_.ToTag(phy_addr);
   Addr mach_addr = att_.Translate(phy_addr, ATTLookup(att_, phy_tag).second);
   if (IsStatic(phy_addr)) {
@@ -133,7 +133,6 @@ bool AddrTransController::PseudoPageStore(Tag phy_tag) {
       if (!ptt_.IsEmpty(ATTEntry::CLEAN)) {
         int ci = ATTFront(ptt_, ATTEntry::CLEAN);
         ATTShiftState(ptt_, ci, ATTEntry::FREE);
-        ++pages_twice_written_;
       } else {
         if (in_checkpointing()) return false;
         BeginCheckpointing();
@@ -146,7 +145,7 @@ bool AddrTransController::PseudoPageStore(Tag phy_tag) {
 }
 
 Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
-  assert(CheckValid(phy_addr, size) && phy_addr < PhyLimit());
+  assert(CheckValid(phy_addr, size) && phy_addr < phy_range_);
   if (IsStatic(phy_addr)) {
     if (PseudoPageStore(ptt_.ToTag(phy_addr))) {
       return DRAMStore(phy_addr, size);
