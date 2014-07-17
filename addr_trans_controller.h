@@ -14,7 +14,7 @@
 class AddrTransController {
  public:
   AddrTransController(uint64_t dram_size, Addr phy_limit,
-      int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms);
+      int att_len, int block_bits, int page_bits, MemStore* ms);
   virtual ~AddrTransController() { }
 
   virtual Addr LoadAddr(Addr phy_addr);
@@ -115,10 +115,10 @@ class AddrTransController {
 // phy_limit || NVM buffer || DRAM buffer
 inline AddrTransController::AddrTransController(
     uint64_t phy_range, uint64_t dram_size,
-    int att_len, int block_bits, int ptt_len, int page_bits, MemStore* ms):
+    int att_len, int block_bits, int page_bits, MemStore* ms):
 
     att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
-    dram_buffer_(att_len, block_bits), ptt_(ptt_len, page_bits),
+    dram_buffer_(att_len, block_bits), ptt_(dram_size >> page_bits, page_bits),
     profiler_(block_bits, page_bits),
     phy_range_(phy_range), dram_size_(dram_size) {
 

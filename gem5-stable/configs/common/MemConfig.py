@@ -158,7 +158,6 @@ def config_mem(options, system):
             # mapping and row-buffer size
             if issubclass(cls, m5.objects.AbstractMemory):
                 ctrl = cls(att_length=options.att_length,
-                        ptt_length=options.ptt_length,
                         block_bits=options.block_bits,
                         page_bits=options.page_bits,
                         dram_size=options.dram_size,
