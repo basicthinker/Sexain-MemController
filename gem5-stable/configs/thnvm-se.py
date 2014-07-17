@@ -123,10 +123,10 @@ parser.add_option("--att-length", type="int", default=0,
         help="Number of Addr Translation Table entries (for NVM)")
 parser.add_option("--block-bits", type="int", default=6,
         help="Number of bits of cache line/block")
-parser.add_option("--ptt-length", type="int", default=0,
-        help="Number of the secondary page table entries (for static mapping)")
 parser.add_option("--page-bits", type="int", default=12,
         help="Number of bits of page in the secondary page table")
+parser.add_option("--reserved-writes", type="int",
+        help="Number of reserved writeback buffers in caches")
 
 parser.add_option("--att-latency", action="store_true", default=False,
         help="Whether to enable ATT latency")
@@ -154,7 +154,6 @@ numThreads = 1
 
 def config_fingerprint(options):
     fp = 'a' + str(options.att_length)
-    fp += '-p' + str(options.ptt_length)
     fp += '-d' + options.dram_size
     if options.att_latency:
         fp += '-lat'

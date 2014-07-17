@@ -11,9 +11,8 @@ CPU_CLOCK=3GHz
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
-DRAM_SIZE=128MB
+DRAM_SIZE=4MB
 ATT_LEN=1024
-PTT_LEN=256 # secondary page table length
 
 L1D_SIZE=32kB
 L1D_ASSOC=8
@@ -23,11 +22,13 @@ L1I_ASSOC=8
 L2_SIZE=256kB
 L2_ASSOC=8
 
-L3_SIZE=$((3*NUM_CPUS))MB
-L3_ASSOC=24
+L3_SIZE=$((2*NUM_CPUS))MB
+L3_ASSOC=16
+
+RESV_WRITES=35000
 
 CPU2006ROOT=~/Share/spec-cpu-2006/benchspec/CPU2006
-OUT_DIR=~/Documents/gem5out-a$ATT_LEN-p$PTT_LEN-d$DRAM_SIZE
+OUT_DIR=~/Documents/gem5out-a$ATT_LEN-d$DRAM_SIZE
 BUILD_NAME=build_base_none.0000
 
 to_run=0
@@ -84,7 +85,6 @@ OPTIONS+=" --mem-type=$MEM_TYPE"
 OPTIONS+=" --mem-size=$MEM_SIZE"
 OPTIONS+=" --dram-size=$DRAM_SIZE"
 OPTIONS+=" --att-length=$ATT_LEN"
-OPTIONS+=" --ptt-length=$PTT_LEN"
 OPTIONS+=" --l1d_size=$L1D_SIZE"
 OPTIONS+=" --l1d_assoc=$L1D_ASSOC"
 OPTIONS+=" --l1i_size=$L1I_SIZE"
@@ -93,6 +93,7 @@ OPTIONS+=" --l2_size=$L2_SIZE"
 OPTIONS+=" --l2_assoc=$L2_ASSOC"
 OPTIONS+=" --l3_size=$L3_SIZE"
 OPTIONS+=" --l3_assoc=$L3_ASSOC"
+OPTIONS+=" --reserved-writes=$RESV_WRITES"
 OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
 OPTIONS+=" --cpu-2006-build-name=$BUILD_NAME"
 
