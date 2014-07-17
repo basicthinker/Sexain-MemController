@@ -23,10 +23,6 @@ class CacheController : public SimObject {
   uint64_t block_mask() const { return block_mask_; }
   int att_length() const { return att_length_; }
 
-  int page_size() const { return page_size_; }
-  uint64_t page_mask() const { return page_mask_; }
-  int ptt_length() const { return ptt_length_; }
-
  private:
   AbstractMemory* memory_;
   BaseCache* cache_;
@@ -36,28 +32,17 @@ class CacheController : public SimObject {
   const int att_length_;
   int block_size_;
   uint64_t block_mask_;
-
-  std::map<uint64_t, int> pages_;
-  const int page_bits_;
-  const int ptt_length_;
-  int page_size_;
-  uint64_t page_mask_;
 };
 
 inline CacheController::CacheController(const CacheControllerParams* p) :
     SimObject(p), memory_(p->memory), cache_(NULL),
-    block_bits_(p->block_bits), att_length_(p->att_length),
-    page_bits_(p->page_bits), ptt_length_(p->ptt_length) {
+    block_bits_(p->block_bits), att_length_(p->att_length) {
 
   assert(memory_);
 
   assert(block_bits_ > 0 && att_length_ > 0);
   block_size_ = (1 << block_bits_);
   block_mask_ = block_size_ - 1;
-
-  assert(page_bits_ > 0 && ptt_length_ > 0);
-  page_size_ = (1 << page_bits_);
-  page_mask_ = page_size_ - 1;
 }
 
 inline void CacheController::RegisterCache(BaseCache* const cache) {
