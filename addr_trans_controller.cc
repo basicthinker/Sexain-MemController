@@ -6,6 +6,12 @@
 
 using namespace std;
 
+// Mappings between ATT and PTT states
+#define CLEAN_MAP (ATTEntry::CLEAN)
+#define CLEAN_DIRECT (ATTEntry::LOAN)
+#define DIRTY_MAP (ATTEntry::DIRTY)
+#define DIRTY_DIRECT (ATTEntry::HIDDEN)
+
 Addr AddrTransController::LoadAddr(Addr phy_addr) {
   assert(phy_addr < phy_range_);
   Tag phy_tag = att_.ToTag(phy_addr);
@@ -124,28 +130,21 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
   return mach_addr;
 }
 
-bool AddrTransController::PseudoPageStore(Tag phy_tag) {
+bool AddrTransController::PseudoPageStore(Addr phy_addr) {
+
+  Tag phy_tag = ptt_.ToTag(phy_addr);
   const pair<int, Addr> target = ATTLookup(ptt_, phy_tag);
 
   if (target.first != -EINVAL) { // found
     const ATTEntry &entry = ptt_.At(target.first);
-    if (entry.state != ATTEntry::DIRTY &&
-        entry.state != ATTEntry::HIDDEN) {
-      assert(entry.state == ATTEntry::CLEAN);
-      ATTShiftState(ptt_, target.first, ATTEntry::HIDDEN);
+    if (entry.state == CLEAN_MAP) {
+      ATTShiftState(ptt_, target.first, DIRTY_DIRECT);
+    } else if (entry.state == CLEAN_DIRECT) {
+      ATTShiftState(ptt_, target.first, DIRTY_MAP);
     }
   } else {
-    if (ptt_.IsEmpty(ATTEntry::FREE)) {
-      if (!ptt_.IsEmpty(ATTEntry::CLEAN)) {
-        int ci = ATTFront(ptt_, ATTEntry::CLEAN);
-        ATTShiftState(ptt_, ci, ATTEntry::FREE);
-      } else {
-        if (in_checkpointing()) return false;
-        BeginCheckpointing();
-        return true;
-      }
-    }
-    ATTSetup(ptt_, phy_tag, INVAL_ADDR, ATTEntry::DIRTY);
+    assert(!ptt_.IsEmpty(ATTEntry::FREE));
+    ATTSetup(ptt_, phy_tag, INVAL_ADDR, DIRTY_DIRECT);
   }
   return true;
 }
@@ -153,9 +152,11 @@ bool AddrTransController::PseudoPageStore(Tag phy_tag) {
 Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
   assert(CheckValid(phy_addr, size) && phy_addr < phy_range_);
   if (IsStatic(phy_addr)) {
-    if (PseudoPageStore(ptt_.ToTag(phy_addr))) {
-      return DRAMStore(phy_addr, size);
-    } else return INVAL_ADDR;
+    Addr mach_addr = DRAMStore(phy_addr, size);
+    if (mach_addr == INVAL_ADDR || !PseudoPageStore(phy_addr)) {
+      return INVAL_ADDR;
+    }
+    return mach_addr;
   } else {
     return NVMStore(phy_addr, size);
   }
@@ -185,13 +186,12 @@ inline void AddrTransController::LoanRevoker::Visit(int i) {
 
 inline void AddrTransController::PTTCleaner::Visit(int i) {
   const ATTEntry& entry = atc_->ptt_.At(i);
-  if (entry.state == ATTEntry::DIRTY) {
-    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::CLEAN);
-    ++num_new_entries_;
-  } else {
-    assert(entry.state == ATTEntry::HIDDEN);
-    atc_->ATTShiftState(atc_->ptt_, i, ATTEntry::FREE);
-  }
+  if (entry.state == DIRTY_MAP) {
+    atc_->ATTShiftState(atc_->ptt_, i, CLEAN_MAP);
+  } else if (entry.state == DIRTY_DIRECT) {
+    atc_->ATTShiftState(atc_->ptt_, i, CLEAN_DIRECT);
+  } else assert(false);
+  ++num_new_entries_;
 }
 
 void AddrTransController::BeginCheckpointing() {

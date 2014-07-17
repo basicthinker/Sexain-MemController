@@ -51,7 +51,7 @@ class AddrTransController {
 
   Addr NVMStore(Addr phy_addr, int size);
   Addr DRAMStore(Addr phy_addr, int size);
-  bool PseudoPageStore(Tag phy_tag);
+  bool PseudoPageStore(Addr phy_addr);
 
   ///
   /// Wrappers with timings
