@@ -6,9 +6,10 @@
 
 #include <cassert>
 #include <vector>
+#include "mem_store.h"
 #include "version_buffer.h"
 #include "addr_trans_table.h"
-#include "mem_store.h"
+#include "access_profiler.h"
 
 class AddrTransController {
  public:
@@ -34,6 +35,7 @@ class AddrTransController {
   VersionBuffer nvm_buffer_;
   VersionBuffer dram_buffer_;
   AddrTransTable ptt_;
+  AccessProfiler profiler_;
 
  private:
   bool CheckValid(Addr phy_addr, int size);
@@ -117,6 +119,7 @@ inline AddrTransController::AddrTransController(
 
     att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
     dram_buffer_(att_len, block_bits), ptt_(ptt_len, page_bits),
+    profiler_(block_bits, page_bits),
     phy_range_(phy_range), dram_size_(dram_size) {
 
   assert(phy_range >= dram_size);
