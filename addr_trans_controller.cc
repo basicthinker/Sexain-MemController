@@ -194,41 +194,44 @@ inline void AddrTransController::PTTCleaner::Visit(int i) {
   ++num_new_entries_;
 }
 
+void AddrTransController::MoveOut(Addr addr) {
+  //TODO
+}
+
+void AddrTransController::MoveIn(Addr addr) {
+  //TODO
+}
+
+void AddrTransController::MigratePages(double threshold) {
+  AccessProfiler::Stats s = profiler_.ExtractSource();
+  AccessProfiler::Stats d = profiler_.ExtractDestination();
+  while (s.addr != -EINVAL && s.dirty_ratio > threshold) {
+    if (d.addr == -EINVAL || d.dirty_ratio > 0) break;
+    MoveOut(d.addr);
+    MoveIn(s.addr);
+    s = profiler_.ExtractSource();
+    d = profiler_.ExtractDestination();
+  }
+}
+
 void AddrTransController::BeginCheckpointing() {
   assert(!in_checkpointing());
-
-  static int check_reads = 0;
-  static int check_writes = 0;
-
-  vector<pair<Addr, double>> sources = profiler_.ExtractSources(5);
-  vector<pair<Addr, double>> destinations = profiler_.ExtractDestinations(5);
-  printf("Sources\t%lu\t", sources.size());
-  for (vector<pair<Addr, double>>::iterator it = sources.begin();
-      it != sources.end(); ++it) {
-      printf("(%lu, %f) ", it->first, it->second);
-  }
-  printf("\nDestinations\t%lu\t", destinations.size());
-  for (vector<pair<Addr, double>>::iterator it = destinations.begin();
-      it != destinations.end(); ++it) {
-      printf("(%lu, %f) ", it->first, it->second);
-  }
-  printf("\n");
-  check_reads += profiler_.epoch_reads();
-  check_writes += profiler_.epoch_writes();
-  printf("# reads/writes: %d %d\n", check_reads, check_writes);
-  profiler_.Reset();
-
-  DirtyCleaner att_cleaner(this);
-  ATTVisit(att_, ATTEntry::DIRTY, &att_cleaner);
-  assert(att_.IsEmpty(ATTEntry::DIRTY));
 
   LoanRevoker loan_revoker(this);
   ATTVisit(att_, ATTEntry::LOAN, &loan_revoker);
   assert(att_.IsEmpty(ATTEntry::LOAN));
 
+  MigratePages(0.2);
+
+  profiler_.Reset();
+
+  // ATT flush
+  DirtyCleaner att_cleaner(this);
+  ATTVisit(att_, ATTEntry::DIRTY, &att_cleaner);
   assert(att_.GetLength(ATTEntry::CLEAN) +
       att_.GetLength(ATTEntry::FREE) == att_.length());
 
+  // PTT flush
   PTTCleaner ptt_cleaner(this);
   ATTVisit(ptt_, ATTEntry::DIRTY, &ptt_cleaner);
   assert(ptt_.IsEmpty(ATTEntry::DIRTY));

@@ -54,9 +54,18 @@ class AddrTransController {
   bool PseudoPageStore(Addr phy_addr);
 
   ///
+  /// Move a page out of the DRAM backed
+  ///
+  void MoveOut(Addr addr);
+  ///
+  /// Move a page into the DRAM backed
+  ///
+  void MoveIn(Addr addr);
+  void MigratePages(double threshold);
+
+  ///
   /// Wrappers with timings
   ///
-  /// AddrTransTable
   void MoveToDRAM(uint64_t destination, uint64_t source, int size);
   void MoveToNVM(uint64_t destination, uint64_t source, int size);
   void SwapNVM(uint64_t static_addr, uint64_t mach_addr, int size);
@@ -135,7 +144,8 @@ inline uint64_t AddrTransController::Size() const {
 }
 
 inline bool AddrTransController::IsStatic(Addr phy_addr) {
-  return phy_addr < dram_size_;
+  mem_store_->OnATTOp();
+  return ptt_.Contains(phy_addr);
 }
 
 inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
