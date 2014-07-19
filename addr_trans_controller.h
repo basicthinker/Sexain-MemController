@@ -9,7 +9,7 @@
 #include "mem_store.h"
 #include "version_buffer.h"
 #include "addr_trans_table.h"
-#include "access_profiler.h"
+#include "migration_controller.h"
 
 class AddrTransController {
  public:
@@ -24,18 +24,17 @@ class AddrTransController {
   virtual void FinishCheckpointing();
 
   uint64_t Size() const;
-  int cache_block_size() const { return att_.block_size(); }
-  int page_size() const { return ptt_.block_size(); }
+  int block_size() const { return att_.block_size(); }
+  int page_size() const { return migrator_.page_size(); }
   bool in_checkpointing() const { return in_checkpointing_; }
 
-  virtual bool IsStatic(Addr phy_addr);
+  virtual bool IsDRAM(Addr phy_addr, bool isTiming = true);
 
  protected:
   AddrTransTable att_;
   VersionBuffer nvm_buffer_;
   VersionBuffer dram_buffer_;
-  AddrTransTable ptt_;
-  AccessProfiler profiler_;
+  MigrationController migrator_;
 
  private:
   bool CheckValid(Addr phy_addr, int size);
@@ -53,13 +52,9 @@ class AddrTransController {
   Addr DRAMStore(Addr phy_addr, int size);
   bool PseudoPageStore(Addr phy_addr);
 
-  ///
   /// Move a page out of the DRAM backed
-  ///
   void MoveOut(Addr addr);
-  ///
   /// Move a page into the DRAM backed
-  ///
   void MoveIn(Addr addr);
   void MigratePages(double threshold);
 
@@ -108,16 +103,6 @@ class AddrTransController {
    private:
     AddrTransController* atc_;
   };
-
-  class PTTCleaner : public QueueVisitor {
-   public:
-    PTTCleaner(AddrTransController* atc) : atc_(atc), num_new_entries_(0) { }
-    void Visit(int i);
-    int num_new_entries() const { return num_new_entries_; }
-   private:
-    AddrTransController* atc_;
-    int num_new_entries_;
-  };
 };
 
 // Space partition (low -> high):
@@ -127,8 +112,8 @@ inline AddrTransController::AddrTransController(
     int att_len, int block_bits, int page_bits, MemStore* ms):
 
     att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
-    dram_buffer_(att_len, block_bits), ptt_(dram_size >> page_bits, page_bits),
-    profiler_(block_bits, page_bits),
+    dram_buffer_(att_len, block_bits),
+    migrator_(block_bits, page_bits, dram_size >> page_bits),
     phy_range_(phy_range), dram_size_(dram_size) {
 
   assert(phy_range >= dram_size);
@@ -143,9 +128,9 @@ inline uint64_t AddrTransController::Size() const {
   return phy_range_ + nvm_buffer_.Size() + dram_buffer_.Size();
 }
 
-inline bool AddrTransController::IsStatic(Addr phy_addr) {
-  mem_store_->OnATTOp();
-  return ptt_.Contains(phy_addr);
+inline bool AddrTransController::IsDRAM(Addr phy_addr, bool isTiming) {
+  if (isTiming) mem_store_->OnATTOp();
+  return migrator_.Contains(phy_addr);
 }
 
 inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {

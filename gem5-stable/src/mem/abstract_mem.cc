@@ -388,7 +388,7 @@ AbstractMemory::access(PacketPtr pkt)
             trackLoadLocked(pkt);
         }
         if (pmemAddr) {
-            assert(pkt->getSize() == addrController.cache_block_size());
+            assert(pkt->getSize() == addrController.block_size());
             uint8_t* host_addr = 
                     hostAddr(addrController.LoadAddr(localAddr(pkt)));
             memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
@@ -401,7 +401,7 @@ AbstractMemory::access(PacketPtr pkt)
     } else if (pkt->isWrite()) {
         if (writeOK(pkt)) {
             if (pmemAddr) {
-                assert(pkt->getSize() == addrController.cache_block_size());
+                assert(pkt->getSize() == addrController.block_size());
                 Addr local_addr = addrController.StoreAddr(
                         localAddr(pkt), pkt->getSize());
                 if (local_addr == INVAL_ADDR) return false;

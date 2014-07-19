@@ -7,7 +7,7 @@ void CacheController::DirtyBlock(uint64_t addr, int size) {
   uint64_t begin = addr & ~block_mask();
   uint64_t end = (addr + size - 1) & ~block_mask();
   for (uint64_t a = begin; a <= end; a += block_size()) {
-    if (!memory_->isStatic(a)) {
+    if (!memory_->isDRAM(a)) {
       ++blocks_[a];
     }
   }

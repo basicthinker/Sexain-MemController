@@ -30,6 +30,10 @@ struct ATTEntry {
   IndexNode queue_node;
   State state;
 
+  // Statistics
+  int epoch_hits;
+  int epoch_writes;
+
   static int StateIndex(State state) {
     return state < DIRTY ? state : DIRTY;
   }
@@ -58,6 +62,7 @@ class AddrTransTable : public IndexArray {
   int length() const { return length_; }
   int block_size() const { return 1 << block_bits_; }
   int block_bits() const { return block_bits_; }
+  const std::vector<ATTEntry>& entries() const { return entries_; }
 
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
   const IndexQueue& GetQueue(ATTEntry::State state) const;
