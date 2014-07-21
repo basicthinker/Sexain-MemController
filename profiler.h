@@ -18,6 +18,8 @@ class Profiler {
   unsigned int num_block_move_intra() const { return num_block_move_intra_; }  
   unsigned int num_block_move_inter() const { return num_block_move_inter_; }  
 
+  static Profiler Null;
+  static Profiler Overlap;
  private:
   const int block_bits_;
   const int page_bits_;

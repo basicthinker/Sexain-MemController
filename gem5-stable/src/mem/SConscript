@@ -65,6 +65,7 @@ Source('version_buffer.cc')
 Source('addr_trans_table.cc')
 Source('addr_trans_controller.cc')
 Source('migration_controller.cc')
+Source('profiler.cc')
 
 if env['TARGET_ISA'] != 'null':
     Source('fs_translating_port_proxy.cc')

@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "addr_trans_table.h"
+#include "profiler.h"
 
 struct PTTEntry {
   enum State {
@@ -40,25 +41,25 @@ class MigrationController {
  public:
   MigrationController(int block_bits, int page_bits, int ptt_limit);
 
-  PTTEntryPtr LookupPage(uint64_t phy_addr);
+  PTTEntryPtr LookupPage(uint64_t phy_addr, Profiler& profiler);
   bool IsValid(PTTEntryPtr entry);
-  bool Contains(uint64_t phy_addr);
+  bool Contains(uint64_t phy_addr, Profiler& profiler);
   void OnDRAMRead(PTTEntryPtr entry);
   void OnDRAMWrite(PTTEntryPtr entry);
-  void ShiftState(PTTEntryPtr entry, PTTEntry::State state);
-  void Free(uint64_t page_addr);
-  void Setup(uint64_t page_addr, PTTEntry::State state);
+  void ShiftState(PTTEntryPtr entry, PTTEntry::State state, Profiler& profiler);
+  void Free(uint64_t page_addr, Profiler& profiler);
+  void Setup(uint64_t page_addr, PTTEntry::State state, Profiler& profiler);
 
   /// Calculate statistics over the blocks from ATT
   void InputBlocks(const std::vector<ATTEntry>& blocks);
   /// Next NVM pages with decreasing dirty ratio
-  bool ExtractNVMPage(PageStats& stats);
+  bool ExtractNVMPage(PageStats& stats, Profiler& profiler);
   /// Next DRAM page with increasing dirty ratio
-  bool ExtractDRAMPage(PageStats& stats);
+  bool ExtractDRAMPage(PageStats& stats, Profiler& profiler);
   /// Clean up all entries, heaps, epoch statistics, etc.
-  /// \return the number of dirty pages to write back
-  int Clean();
+  void Clean(Profiler& profiler);
 
+  int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }
   int total_writes() const { return total_writes_; }
 
@@ -109,7 +110,9 @@ inline MigrationController::MigrationController(
     ptt_limit_(ptt_limit), dirty_pages_(0), total_writes_(0) {
 }
 
-inline PTTEntryPtr MigrationController::LookupPage(uint64_t phy_addr) {
+inline PTTEntryPtr MigrationController::LookupPage(uint64_t phy_addr,
+    Profiler& profiler) {
+  profiler.AddTableOp();
   return entries_.find(PageAlign(phy_addr));
 }
 
@@ -117,7 +120,9 @@ inline bool MigrationController::IsValid(PTTEntryPtr entry) {
   return entry != entries_.end();
 }
 
-inline bool MigrationController::Contains(uint64_t phy_addr) {
+inline bool MigrationController::Contains(uint64_t phy_addr,
+    Profiler& profiler) {
+  profiler.AddTableOp();
   return entries_.find(PageAlign(phy_addr)) != entries_.end();
 }
 
@@ -130,31 +135,34 @@ inline void MigrationController::OnDRAMWrite(PTTEntryPtr entry) {
 }
 
 inline void MigrationController::ShiftState(
-    PTTEntryPtr entry, PTTEntry::State state) {
+    PTTEntryPtr entry, PTTEntry::State state, Profiler& profiler) {
   entry->second.state = state;
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_pages_;
   }
+  profiler.AddTableOp();
 }
 
-inline void MigrationController::Free(uint64_t page_addr) {
-  PTTEntryPtr p = LookupPage(page_addr);
+inline void MigrationController::Free(uint64_t page_addr, Profiler& profiler) {
+  PTTEntryPtr p = LookupPage(page_addr, Profiler::Null);
   assert(IsValid(p) && p->first == page_addr);
   if (p->second.state == PTTEntry::DIRTY_DIRECT ||
       p->second.state == PTTEntry::DIRTY_STATIC) {
     --dirty_pages_;
   }
   entries_.erase(p);
+  profiler.AddTableOp();
 }
 
 inline void MigrationController::Setup(
-    uint64_t page_addr, PTTEntry::State state) {
+    uint64_t page_addr, PTTEntry::State state, Profiler& profiler) {
   assert((page_addr & page_mask_) == 0);
   entries_[page_addr].state = state;
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_pages_;
   }
   assert(entries_.size() <= ptt_limit_);
+  profiler.AddTableOp();
 }
 
 #endif // SEXAIN_MIGRATION_CONTROLLER_H_
