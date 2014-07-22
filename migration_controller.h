@@ -44,11 +44,12 @@ class MigrationController {
   PTTEntryPtr LookupPage(uint64_t phy_addr, Profiler& profiler);
   bool IsValid(PTTEntryPtr entry);
   bool Contains(uint64_t phy_addr, Profiler& profiler);
-  void OnDRAMRead(PTTEntryPtr entry);
-  void OnDRAMWrite(PTTEntryPtr entry);
   void ShiftState(PTTEntryPtr entry, PTTEntry::State state, Profiler& profiler);
   void Free(uint64_t page_addr, Profiler& profiler);
   void Setup(uint64_t page_addr, PTTEntry::State state, Profiler& profiler);
+  uint64_t Translate(uint64_t phy_addr, uint64_t page_base) const;
+  void AddDRAMPageRead(PTTEntryPtr entry);
+  void AddDRAMPageWrite(PTTEntryPtr entry);
 
   /// Calculate statistics over the blocks from ATT
   void InputBlocks(const std::vector<ATTEntry>& blocks);
@@ -56,8 +57,8 @@ class MigrationController {
   bool ExtractNVMPage(PageStats& stats, Profiler& profiler);
   /// Next DRAM page with increasing dirty ratio
   bool ExtractDRAMPage(PageStats& stats, Profiler& profiler);
-  /// Clean up all entries, heaps, epoch statistics, etc.
-  void Clean(Profiler& profiler);
+  /// Clear up all entries, heaps, epoch statistics, etc.
+  void Clear(Profiler& profiler);
 
   int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }
@@ -126,11 +127,11 @@ inline bool MigrationController::Contains(uint64_t phy_addr,
   return entries_.find(PageAlign(phy_addr)) != entries_.end();
 }
 
-inline void MigrationController::OnDRAMRead(PTTEntryPtr entry) {
+inline void MigrationController::AddDRAMPageRead(PTTEntryPtr entry) {
   ++entry->second.epoch_reads;
 }
 
-inline void MigrationController::OnDRAMWrite(PTTEntryPtr entry) {
+inline void MigrationController::AddDRAMPageWrite(PTTEntryPtr entry) {
   ++entry->second.epoch_writes;
 }
 
@@ -144,7 +145,7 @@ inline void MigrationController::ShiftState(
 }
 
 inline void MigrationController::Free(uint64_t page_addr, Profiler& profiler) {
-  PTTEntryPtr p = LookupPage(page_addr, Profiler::Null);
+  PTTEntryPtr p = LookupPage(page_addr, Profiler::Overlap);
   assert(IsValid(p) && p->first == page_addr);
   if (p->second.state == PTTEntry::DIRTY_DIRECT ||
       p->second.state == PTTEntry::DIRTY_STATIC) {
@@ -163,6 +164,12 @@ inline void MigrationController::Setup(
   }
   assert(entries_.size() <= ptt_limit_);
   profiler.AddTableOp();
+}
+
+inline uint64_t MigrationController::Translate(uint64_t phy_addr,
+    uint64_t page_base) const {
+  assert((page_base & page_mask_) == 0);
+  return page_base + (phy_addr & page_mask_);
 }
 
 #endif // SEXAIN_MIGRATION_CONTROLLER_H_

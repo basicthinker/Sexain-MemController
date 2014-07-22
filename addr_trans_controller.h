@@ -10,6 +10,7 @@
 #include "version_buffer.h"
 #include "addr_trans_table.h"
 #include "migration_controller.h"
+#include "profiler.h"
 
 class AddrTransController {
  public:
@@ -22,6 +23,7 @@ class AddrTransController {
 
   virtual void BeginCheckpointing();
   virtual void FinishCheckpointing();
+  void MigratePages(double threshold, Profiler& profiler);
 
   uint64_t Size() const;
   int block_size() const { return att_.block_size(); }
@@ -40,7 +42,7 @@ class AddrTransController {
   bool CheckValid(Addr phy_addr, int size);
   bool FullBlock(Addr phy_addr, int size);
 
-  void Setup(Addr phy_addr, Addr mach_base, int size, ATTEntry::State state);
+  int Setup(Addr phy_addr, Addr mach_base, int size, ATTEntry::State state);
   void HideClean(int index, bool move_data = true);
   Addr ResetClean(int index, bool move_data = true);
   void FreeClean(int index, bool move_data = true);
@@ -52,11 +54,10 @@ class AddrTransController {
   Addr DRAMStore(Addr phy_addr, int size);
   bool PseudoPageStore(Addr phy_addr);
 
-  /// Move a page out of the DRAM backed
-  void MoveOut(Addr addr);
-  /// Move a page into the DRAM backed
-  void MoveIn(Addr addr);
-  void MigratePages(double threshold);
+  /// Move a DRAM page out
+  void MigrateDRAM(const PageStats& stats, Profiler& profiler);
+  /// Move a NVM page out
+  void MigrateNVM(const PageStats& stats, Profiler& profiler);
 
   ///
   /// Wrappers with timings
@@ -65,7 +66,7 @@ class AddrTransController {
   void MoveToNVM(uint64_t destination, uint64_t source, int size);
   void SwapNVM(uint64_t static_addr, uint64_t mach_addr, int size);
   std::pair<int, Addr> ATTLookup(AddrTransTable& att, Tag phy_tag);
-  void ATTSetup(AddrTransTable& att,
+  int ATTSetup(AddrTransTable& att,
       Tag phy_tag, Addr mach_base, ATTEntry::State state);
   void ATTShiftState(AddrTransTable& att, int index, ATTEntry::State state);
   void ATTReset(AddrTransTable& att,
@@ -105,32 +106,13 @@ class AddrTransController {
   };
 };
 
-// Space partition (low -> high):
-// phy_limit || NVM buffer || DRAM buffer
-inline AddrTransController::AddrTransController(
-    uint64_t phy_range, uint64_t dram_size,
-    int att_len, int block_bits, int page_bits, MemStore* ms):
-
-    att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
-    dram_buffer_(att_len, block_bits),
-    migrator_(block_bits, page_bits, dram_size >> page_bits),
-    phy_range_(phy_range), dram_size_(dram_size) {
-
-  assert(phy_range >= dram_size);
-  mem_store_ = ms;
-  in_checkpointing_ = false;
-
-  nvm_buffer_.set_addr_base(phy_range_);
-  dram_buffer_.set_addr_base(nvm_buffer_.addr_base() + nvm_buffer_.Size());
-}
-
 inline uint64_t AddrTransController::Size() const {
   return phy_range_ + nvm_buffer_.Size() + dram_buffer_.Size();
 }
 
 inline bool AddrTransController::IsDRAM(Addr phy_addr, bool isTiming) {
   if (isTiming) mem_store_->OnATTOp();
-  return migrator_.Contains(phy_addr);
+  return migrator_.Contains(phy_addr, Profiler::Null);
 }
 
 inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
@@ -167,10 +149,10 @@ inline std::pair<int, Addr> AddrTransController::ATTLookup(AddrTransTable& att,
   return att.Lookup(phy_tag);
 }
 
-inline void AddrTransController::ATTSetup(AddrTransTable& att,
+inline int AddrTransController::ATTSetup(AddrTransTable& att,
     Tag phy_tag, Addr mach_base, ATTEntry::State state) {
   mem_store_->OnATTOp();
-  att.Setup(phy_tag, mach_base, state);
+  return att.Setup(phy_tag, mach_base, state);
 }
 
 inline void AddrTransController::ATTShiftState(AddrTransTable& att,

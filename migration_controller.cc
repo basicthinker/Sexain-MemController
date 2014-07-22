@@ -13,7 +13,7 @@ void MigrationController::InputBlocks(
     if (it->state == ATTEntry::CLEAN || it->state == ATTEntry::FREE) continue;
     uint64_t block_addr = it->phy_tag << block_bits_;
     NVMPage& p = nvm_pages_[PageAlign(block_addr)];
-    p.epoch_reads += it->epoch_hits - it->epoch_writes;
+    p.epoch_reads += it->epoch_reads;
     p.epoch_writes += it->epoch_writes;
     total_writes_ += it->epoch_writes;
     if (it->epoch_writes) p.blocks.insert(block_addr);
@@ -63,7 +63,7 @@ bool MigrationController::ExtractDRAMPage(PageStats& stats,
   return true;
 }
 
-void MigrationController::Clean(Profiler& profiler) {
+void MigrationController::Clear(Profiler& profiler) {
   int dirts = 0;
   for (PTTEntryPtr it = entries_.begin(); it != entries_.end(); ++it) {
     it->second.epoch_reads = 0;

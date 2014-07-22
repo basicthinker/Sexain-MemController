@@ -20,7 +20,7 @@ pair<int, Addr> AddrTransTable::Lookup(Tag phy_tag) {
   }
 }
 
-void AddrTransTable::Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state) {
+int AddrTransTable::Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state) {
   assert(tag_index_.count(phy_tag) == 0);
   assert(!GetQueue(ATTEntry::FREE).Empty());
 
@@ -31,6 +31,7 @@ void AddrTransTable::Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state) {
   entries_[i].mach_base = mach_base;
 
   tag_index_[phy_tag] = i;
+  return i;
 }
 
 void AddrTransTable::ShiftState(int index, ATTEntry::State new_state) {
@@ -49,4 +50,12 @@ void AddrTransTable::Reset(int index,
   ATTEntry& entry = entries_[index];
   entry.mach_base = new_base;
   ShiftState(index, new_state);
+}
+
+void AddrTransTable::ClearStats() {
+  for (vector<ATTEntry>::iterator it = entries_.begin(); it != entries_.end();
+      ++it) {
+    it->epoch_reads = 0;
+    it->epoch_writes = 0;
+  }
 }

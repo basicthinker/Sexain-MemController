@@ -31,8 +31,10 @@ struct ATTEntry {
   State state;
 
   // Statistics
-  int epoch_hits;
+  int epoch_reads;
   int epoch_writes;
+
+  ATTEntry() : epoch_reads(0), epoch_writes(0) { }
 
   static int StateIndex(State state) {
     return state < DIRTY ? state : DIRTY;
@@ -44,7 +46,7 @@ class AddrTransTable : public IndexArray {
   AddrTransTable(int length, int block_bits);
 
   std::pair<int, Addr> Lookup(Tag phy_tag);
-  void Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state);
+  int Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state);
   void ShiftState(int index, ATTEntry::State state);
   void Reset(int index, Addr new_base, ATTEntry::State new_state);
   int VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
@@ -62,6 +64,10 @@ class AddrTransTable : public IndexArray {
   int length() const { return length_; }
   int block_size() const { return 1 << block_bits_; }
   int block_bits() const { return block_bits_; }
+
+  void AddBlockRead(int index) { ++entries_[index].epoch_reads; }
+  void AddBlockWrite(int index) { ++entries_[index].epoch_writes; }
+  void ClearStats();
   const std::vector<ATTEntry>& entries() const { return entries_; }
 
   IndexNode& operator[](int i) { return entries_[i].queue_node; }
@@ -118,6 +124,7 @@ inline int AddrTransTable::GetFront(ATTEntry::State state) const {
  
 inline Addr AddrTransTable::Translate(
     Addr phy_addr, Addr mach_base) const {
+  assert((mach_base & block_mask_) == 0);
   return mach_base + (phy_addr & block_mask_);
 }
 
