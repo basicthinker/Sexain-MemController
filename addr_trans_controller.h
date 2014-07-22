@@ -12,6 +12,12 @@
 #include "migration_controller.h"
 #include "profiler.h"
 
+enum Control {
+  REG_WRITE,
+  NEW_EPOCH,
+  WAIT_CKPT,
+};
+
 class AddrTransController {
  public:
   AddrTransController(uint64_t dram_size, Addr phy_limit,
@@ -19,11 +25,12 @@ class AddrTransController {
   virtual ~AddrTransController() { }
 
   virtual Addr LoadAddr(Addr phy_addr);
+  virtual Control Probe(Addr phy_addr);
   virtual Addr StoreAddr(Addr phy_addr, int size);
 
   virtual void BeginCheckpointing();
   virtual void FinishCheckpointing();
-  void MigratePages(double threshold, Profiler& profiler);
+  virtual void MigratePages(double threshold, Profiler& profiler);
 
   uint64_t Size() const;
   int block_size() const { return att_.block_size(); }
@@ -55,9 +62,9 @@ class AddrTransController {
   bool PseudoPageStore(Addr phy_addr);
 
   /// Move a DRAM page out
-  void MigrateDRAM(const PageStats& stats, Profiler& profiler);
+  void MigrateDRAM(const DRAMPageStats& stats, Profiler& profiler);
   /// Move a NVM page out
-  void MigrateNVM(const PageStats& stats, Profiler& profiler);
+  void MigrateNVM(const NVMPageStats& stats, Profiler& profiler);
 
   ///
   /// Wrappers with timings
