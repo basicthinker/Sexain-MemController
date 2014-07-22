@@ -108,6 +108,9 @@ class AbstractMemory : public MemObject, public MemStore
     // Physical ddress range of this memory
     AddrRange range;
 
+    // Base profiler for copy construction
+    Profiler profBase;
+
     // Controller for addr translation
     AddrTransController addrController;
 
@@ -317,7 +320,7 @@ class AbstractMemory : public MemObject, public MemStore
      * @param pkt Packet performing the access
      * @return if this packet is serviced in THNVM schemes
      */
-    bool access(PacketPtr pkt);
+    void access(PacketPtr pkt);
 
     /**
      * Perform an untimed memory read or write without changing

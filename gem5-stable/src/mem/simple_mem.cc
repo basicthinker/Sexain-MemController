@@ -55,11 +55,14 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     isTimingATT(p->is_timing_att), latency_var(p->latency_var),
     bandwidth(p->bandwidth), isBusy(false), isWaiting(false),
     retryReq(false), retryResp(false),
-    releaseEvent(this), unfreezeEvent(this),
+    releaseEvent(this), freezeEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
 {
     sumLatency = 0;
     sumSize = 0;
+    profBase.set_op_latency(p->lat_att_operate);
+    profBase.set_bus_util_intra_(addrController.block_size());
+    profBase.set_bus_util_inter_(addrController.block_size());
 }
 
 void
@@ -95,7 +98,7 @@ SimpleMemory::regStats()
 Tick
 SimpleMemory::recvAtomic(PacketPtr pkt)
 {
-    assert(access(pkt)); //TODO
+    access(pkt);
     return pkt->memInhibitAsserted() ? 0 : getLatency();
 }
 
@@ -145,6 +148,21 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         return false;
     }
 
+    if (pkt->isWrite()) {
+        Control ctrl = addrController.Probe(pkt->getAddr());
+        if (ctrl == NEW_EPOCH) {
+            Profiler profiler(profBase);
+            addrController.MigratePages(0.2, profiler); //TODO
+            schedule(freezeEvent, curTick() + profiler.SumLatency());
+            isBusy = true;
+            retryReq = true;
+            return false;
+        } else if (ctrl == WAIT_CKPT) {
+            isWaiting = true;
+            return false;
+        } else assert(ctrl == REG_WRITE);
+    }
+
     // @todo someone should pay for this
     pkt->busFirstWordDelay = pkt->busLastWordDelay = 0;
 
@@ -168,11 +186,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
     assert(sumLatency == 0 && sumSize == 0);
-    if (!access(pkt)) {
-        sumLatency = sumSize = 0;
-        isWaiting = true;
-        return false;
-    }
+    recvAtomic(pkt);
     // turn packet around to go back to requester if response expected
     Tick lat = isTimingATT ? sumLatency : getLatency();
     if (needsResponse) {
@@ -236,9 +250,23 @@ SimpleMemory::release()
 }
 
 void
+SimpleMemory::freeze()
+{
+    assert(isBusy);
+    isBusy = false;
+    addrController.BeginCheckpointing();
+    sumLatency = sumSize = 0;
+    if (retryReq) {
+        retryReq = false;
+        port.sendRetry();
+    }
+}
+
+void
 SimpleMemory::unfreeze()
 {
     addrController.FinishCheckpointing();
+    sumLatency = sumSize = 0;
     if (isWaiting) {
         isWaiting = false;
         port.sendRetry();

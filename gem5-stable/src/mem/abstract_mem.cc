@@ -56,6 +56,7 @@ using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
     MemObject(p), range(p->range),
+    profBase(p->block_bits, p->page_bits),
     addrController(range.size(), p->dram_size,
             p->att_length, p->block_bits, p->page_bits, this),
     pmemAddr(NULL), confTableReported(p->conf_table_reported),
@@ -329,7 +330,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 
 #endif
 
-bool
+void
 AbstractMemory::access(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
@@ -338,7 +339,7 @@ AbstractMemory::access(PacketPtr pkt)
     if (pkt->memInhibitAsserted()) {
         DPRINTF(MemoryAccess, "mem inhibited on 0x%x: not responding\n",
                 pkt->getAddr());
-        return true;
+        return;
     }
 
     if (pkt->cmd == MemCmd::SwapReq) {
@@ -371,13 +372,8 @@ AbstractMemory::access(PacketPtr pkt)
                 panic("Invalid size for conditional read/write\n");
         }
 
-        if (overwrite_mem) {
-            Addr local_addr = addrController.StoreAddr(
-                    localAddr(pkt), pkt->getSize());
-            if (local_addr == INVAL_ADDR) return false;
-            host_addr = hostAddr(local_addr);
+        if (overwrite_mem)
             std::memcpy(host_addr, &overwrite_val, pkt->getSize());
-        }
 
         assert(!pkt->req->isInstFetch());
         TRACE_PACKET("Read/Write");
@@ -404,7 +400,6 @@ AbstractMemory::access(PacketPtr pkt)
                 assert(pkt->getSize() == addrController.block_size());
                 Addr local_addr = addrController.StoreAddr(
                         localAddr(pkt), pkt->getSize());
-                if (local_addr == INVAL_ADDR) return false;
                 memcpy(hostAddr(local_addr), pkt->getPtr<uint8_t>(),
                         pkt->getSize());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
@@ -424,8 +419,6 @@ AbstractMemory::access(PacketPtr pkt)
     if (pkt->needsResponse()) {
         pkt->makeResponse();
     }
-
-    return true;
 }
 
 void

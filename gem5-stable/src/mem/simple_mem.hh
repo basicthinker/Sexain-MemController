@@ -173,7 +173,14 @@ class SimpleMemory : public AbstractMemory
     EventWrapper<SimpleMemory, &SimpleMemory::release> releaseEvent;
 
     /**
-     * Unfreeze the memory after COW finishes.
+     * Free the memory after migration finishes
+     */
+    void freeze();
+
+    EventWrapper<SimpleMemory, &SimpleMemory::freeze> freezeEvent;
+
+    /**
+     * Unfreeze the memory after checkpointing finishes.
      */
     void unfreeze();
 
