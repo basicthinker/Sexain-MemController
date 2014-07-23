@@ -121,7 +121,15 @@ class SimpleMemory : public AbstractMemory
     const Tick tNVMWrite;
 
     Tick sumLatency;
+
     uint64_t sumSize;
+    uint64_t getBusUtil()
+    {
+        uint64_t v = sumSize;
+        sumSize = 0;
+        return v;
+    }
+
     bool isTimingATT;
 
     /**
@@ -280,9 +288,6 @@ class SimpleMemory : public AbstractMemory
         sumLatency += getLatency();
         sumSize += size;
     }
-
-    virtual void OnCheckpointing(int num_new_att, int num_new_pt);
-
 };
 
 #endif //__SIMPLE_MEMORY_HH__

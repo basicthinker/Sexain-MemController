@@ -199,9 +199,10 @@ void AddrTransController::DirtyCleaner::Visit(int i) {
 
   if (entry.state == ATTEntry::DIRTY) {
     atc_->ATTShiftState(atc_->att_, i, ATTEntry::CLEAN);
-    ++num_new_entries_;
+    ++num_flushed_entries_;
   } else if (entry.state == ATTEntry::HIDDEN) {
     atc_->ATTShiftState(atc_->att_, i, ATTEntry::FREE);
+    ++num_flushed_entries_;
   }
 }
 
@@ -272,12 +273,9 @@ void AddrTransController::MigratePages(double threshold, Profiler& profiler) {
     if (d.write_ratio > 1) break;
     MigrateDRAM(d, profiler);
   } while (migrator_.ExtractDRAMPage(d, profiler));
-
-  att_.ClearStats();
-  migrator_.Clear(profiler);
 }
 
-void AddrTransController::BeginCheckpointing() {
+void AddrTransController::BeginCheckpointing(Profiler& profiler) {
   assert(!in_checkpointing());
 
   // ATT flush
@@ -285,10 +283,12 @@ void AddrTransController::BeginCheckpointing() {
   ATTVisit(att_, ATTEntry::DIRTY, &att_cleaner);
   assert(att_.GetLength(ATTEntry::CLEAN) +
       att_.GetLength(ATTEntry::FREE) == att_.length());
+  profiler.AddTableOp(); // suppose in parallel
 
   in_checkpointing_ = true;
-  mem_store_->OnCheckpointing(
-      att_cleaner.num_new_entries(), att_cleaner.num_new_entries()); //TODO
+
+  att_.ClearStats();
+  migrator_.Clear(profiler);
 }
 
 void AddrTransController::FinishCheckpointing() {

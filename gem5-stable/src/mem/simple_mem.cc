@@ -61,8 +61,7 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     sumLatency = 0;
     sumSize = 0;
     profBase.set_op_latency(p->lat_att_operate);
-    profBase.set_bus_util_intra_(addrController.block_size());
-    profBase.set_bus_util_inter_(addrController.block_size());
+    profBase.set_exclude_intra(false);
 }
 
 void
@@ -152,7 +151,8 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
             Profiler profiler(profBase);
-            addrController.MigratePages(0.2, profiler); //TODO
+            addrController.MigratePages(0.2, profiler);
+            sumSize = profiler.SumBusUtil(); // pass to freeze()
             schedule(freezeEvent, curTick() + profiler.SumLatency());
             isBusy = true;
             retryReq = true;
@@ -223,22 +223,6 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
 }
 
 void
-SimpleMemory::OnCheckpointing(int num_new_at, int num_new_pt)
-{
-    uint64_t chkpt_throughput = num_new_pt * addrController.page_size();
-    Tick chkpt_duration = chkpt_throughput * bandwidth;
-    if (chkpt_duration) {
-        schedule(unfreezeEvent, curTick() + chkpt_duration);
-        if (isTimingATT) {
-            totalThroughput += chkpt_throughput;
-            totalChkptTime += chkpt_duration;
-        }
-    } else {
-      addrController.FinishCheckpointing();
-    }
-}
-
-void
 SimpleMemory::release()
 {
     assert(isBusy);
@@ -254,8 +238,24 @@ SimpleMemory::freeze()
 {
     assert(isBusy);
     isBusy = false;
-    addrController.BeginCheckpointing();
-    sumLatency = sumSize = 0;
+    uint64_t bytes = getBusUtil(); // migration
+
+    Profiler profiler(profBase);
+    addrController.BeginCheckpointing(profiler);
+    bytes += profiler.SumBusUtil();
+
+    Tick chkpt_duration = bytes * bandwidth;
+    if (chkpt_duration) {
+        schedule(unfreezeEvent, curTick() + chkpt_duration);
+        if (isTimingATT) {
+            totalThroughput += bytes;
+            totalChkptTime += chkpt_duration;
+        }
+    } else {
+      addrController.FinishCheckpointing();
+    }
+
+    sumLatency = 0;
     if (retryReq) {
         retryReq = false;
         port.sendRetry();

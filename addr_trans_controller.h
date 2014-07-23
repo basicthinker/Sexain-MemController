@@ -28,7 +28,7 @@ class AddrTransController {
   virtual Control Probe(Addr phy_addr);
   virtual Addr StoreAddr(Addr phy_addr, int size);
 
-  virtual void BeginCheckpointing();
+  virtual void BeginCheckpointing(Profiler& profiler);
   virtual void FinishCheckpointing();
   virtual void MigratePages(double threshold, Profiler& profiler);
 
@@ -96,12 +96,12 @@ class AddrTransController {
 
   class DirtyCleaner : public QueueVisitor { // inc. TEMP and HIDDEN
    public:
-    DirtyCleaner(AddrTransController* atc) : atc_(atc), num_new_entries_(0) { }
+    DirtyCleaner(AddrTransController* atc) : atc_(atc), num_flushed_entries_(0) { }
     void Visit(int i);
-    int num_new_entries() const { return num_new_entries_; }
+    int num_flushed_entries() const { return num_flushed_entries_; }
    private:
     AddrTransController* atc_;
-    int num_new_entries_;
+    int num_flushed_entries_;
   };
 
   class LoanRevoker : public QueueVisitor {
