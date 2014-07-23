@@ -1,0 +1,1 @@
+-p system.mem_ctrls -s num_nvm_writes num_dram_writes

@@ -35,9 +35,8 @@ class AddrTransController {
   uint64_t Size() const;
   int block_size() const { return att_.block_size(); }
   int page_size() const { return migrator_.page_size(); }
-  int total_nvm_writes() const { return migrator_.total_nvm_writes(); }
-  int total_dram_writes() const { return migrator_.total_dram_writes(); }
   bool in_checkpointing() const { return in_checkpointing_; }
+  const MigrationController& migrator() const { return migrator_; }
 
   virtual bool IsDRAM(Addr phy_addr, bool isTiming = true);
 

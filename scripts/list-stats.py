@@ -6,7 +6,8 @@ import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--dirs", nargs='*', help="list of gem5out dirs")
-parser.add_argument("-s", "--stats", nargs='*', help="list of statistic items")
+parser.add_argument("-s", "--stats", nargs='*', help="list of stats items")
+parser.add_argument("-p", "--prefix", help="prefix of stats items")
 
 args = parser.parse_args()
 
@@ -15,6 +16,14 @@ if args.dirs is None:
     exit(-1)
 
 results = { } # results[benchmark][dir][stat]
+
+metrics = [ ]
+if args.prefix is not None:
+    prefix = args.prefix + '.'
+else:
+    prefix = ''
+for stats in args.stats:
+    metrics.append(prefix + stats)
 
 for dir in args.dirs:
     for bench in os.listdir(dir):
@@ -25,7 +34,7 @@ for dir in args.dirs:
         stats_file = open(dir + '/' + bench + '/stats.txt', 'r')
         for line in stats_file:
             items = line.split()
-            if len(items) >= 2 and items[0] in args.stats:
+            if len(items) >= 2 and items[0] in metrics:
                 results[bench][dir][items[0]] = items[1]
 
 # Header
@@ -39,7 +48,7 @@ print
 for bench in results.keys():
     sys.stdout.write(bench)
     for dir in args.dirs:
-        for stat in args.stats:
+        for stat in metrics:
             if stat in results[bench][dir]:
                 sys.stdout.write('\t' + results[bench][dir][stat])
             else:
