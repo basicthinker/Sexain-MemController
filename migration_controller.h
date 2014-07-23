@@ -73,8 +73,13 @@ class MigrationController {
 
   int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }
+  int page_blocks() const { return page_blocks_; }
+
   int total_nvm_writes() const { return total_nvm_writes_; }
   int total_dram_writes() const { return total_dram_writes_; }
+  int dirty_nvm_blocks() const { return dirty_nvm_blocks_; }
+  int dirty_nvm_pages() const { return dirty_nvm_pages_; }
+  int dirty_dram_pages() const { return dirty_dram_pages_; }
 
  private:
   typedef std::unordered_map<uint64_t, PTTEntry>::iterator PTTEntryIterator;
@@ -95,10 +100,13 @@ class MigrationController {
   const int page_blocks_;
   const int ptt_limit_;
 
-  int dirty_pages_; ///< Number of dirty pages each epoch
+  int dirty_entries_; ///< Number of dirty pages each epoch
 
   int total_nvm_writes_; ///< Sum number of NVM writes, for verification
   int total_dram_writes_; ///< Sum number of DRAM writes, for verification
+  int dirty_nvm_blocks_; ///< Sum number of dirty NVM blocks
+  int dirty_nvm_pages_; ///< Sum number of dirty NVM pages
+  int dirty_dram_pages_; ///< Sum number of dirty DRAM pages
 
   std::unordered_map<uint64_t, PTTEntry> entries_;
   std::unordered_map<uint64_t, NVMPage> nvm_pages_;
@@ -112,8 +120,9 @@ inline MigrationController::MigrationController(
     block_bits_(block_bits), block_mask_((1 << block_bits) - 1),
     page_bits_(page_bits), page_mask_((1 << page_bits) - 1),
     page_blocks_(1 << (page_bits - block_bits)),
-    ptt_limit_(ptt_limit), dirty_pages_(0),
-    total_nvm_writes_(0), total_dram_writes_(0) {
+    ptt_limit_(ptt_limit), dirty_entries_(0),
+    total_nvm_writes_(0), total_dram_writes_(0),
+    dirty_nvm_blocks_(0), dirty_dram_pages_(0) {
 }
 
 inline PTTEntry* MigrationController::LookupPage(uint64_t phy_addr,
@@ -142,7 +151,7 @@ inline void MigrationController::ShiftState(
     PTTEntry& entry, PTTEntry::State state, Profiler& profiler) {
   entry.state = state;
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
-    ++dirty_pages_;
+    ++dirty_entries_;
   }
   profiler.AddTableOp();
 }
@@ -152,7 +161,7 @@ inline void MigrationController::Free(uint64_t page_addr, Profiler& profiler) {
   assert(page);
   if (page->state == PTTEntry::DIRTY_DIRECT ||
       page->state == PTTEntry::DIRTY_STATIC) {
-    --dirty_pages_;
+    --dirty_entries_;
   }
   assert(entries_.erase(page_addr) == 1);
   profiler.AddTableOp();
@@ -165,7 +174,7 @@ inline void MigrationController::Setup(
   entry.state = state;
   entry.mach_base = page_addr; // simulate direct/static page allocation
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
-    ++dirty_pages_;
+    ++dirty_entries_;
   }
   assert(entries_.size() <= ptt_limit_);
   profiler.AddTableOp();

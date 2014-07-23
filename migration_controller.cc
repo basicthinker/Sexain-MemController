@@ -24,6 +24,7 @@ void MigrationController::InputBlocks(
       assert(p.blocks.size() <= page_blocks_);
     }
   }
+  dirty_nvm_pages_ += nvm_pages_.size();
 }
 
 bool MigrationController::ExtractNVMPage(NVMPageStats& stats,
@@ -36,6 +37,7 @@ bool MigrationController::ExtractNVMPage(NVMPageStats& stats,
       nvm_heap_.push_back({it->first, dr, wr});
 
       total_nvm_writes_ += it->second.epoch_writes;
+      dirty_nvm_blocks_ += it->second.blocks.size();
     }
     make_heap(nvm_heap_.begin(), nvm_heap_.end());
   }
@@ -52,13 +54,18 @@ bool MigrationController::ExtractNVMPage(NVMPageStats& stats,
 bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats,
     Profiler& profiler) {
   if (dram_heap_.empty()) {
+    int dirts = 0;
     for (unordered_map<uint64_t, PTTEntry>::iterator it = entries_.begin();
          it != entries_.end(); ++it) {
       double wr = it->second.epoch_writes / page_blocks_;
       dram_heap_.push_back({it->first, it->second.state, wr});
 
       total_dram_writes_ += it->second.epoch_writes;
+      dirts += (it->second.epoch_writes ? 1 : 0);
     }
+    assert(dirts == dirty_entries_);
+    dirty_dram_pages_ += dirty_entries_;
+
     make_heap(dram_heap_.begin(), dram_heap_.end());
   }
   profiler.AddTableOp();
@@ -72,22 +79,20 @@ bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats,
 }
 
 void MigrationController::Clear(Profiler& profiler) {
-  int dirts = 0;
+  profiler.AddPageMoveInter(dirty_entries_); // epoch write-backs
   for (PTTEntryIterator it = entries_.begin(); it != entries_.end(); ++it) {
     it->second.epoch_reads = 0;
     it->second.epoch_writes = 0;
     if (it->second.state == PTTEntry::DIRTY_DIRECT) {
       ShiftState(it->second, PTTEntry::CLEAN_DIRECT, Profiler::Overlap);
-      ++dirts;
-    } else if (it->second.state == PTTEntry::CLEAN_STATIC) {
+      --dirty_entries_;
+    } else if (it->second.state == PTTEntry::DIRTY_STATIC) {
       ShiftState(it->second, PTTEntry::CLEAN_STATIC, Profiler::Overlap);
-      ++dirts;
+      --dirty_entries_;
     }
   }
   profiler.AddTableOp();
-
-  assert(dirts == dirty_pages_);
-  profiler.AddPageMoveInter(dirty_pages_); // epoch write-backs
+  assert(dirty_entries_ == 0);
 
   nvm_pages_.clear();
   dram_heap_.clear();

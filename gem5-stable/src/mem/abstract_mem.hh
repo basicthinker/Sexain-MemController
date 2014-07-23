@@ -202,6 +202,17 @@ class AbstractMemory : public MemObject, public MemStore
     Stats::Scalar numNVMWrites;
     /** Number of writes on DRAM pages */
     Stats::Scalar numDRAMWrites;
+    /** Number of dirty NVM blocks */
+    Stats::Scalar numDirtyNVMBlocks;
+    /** Number of dirty NVM pages */
+    Stats::Scalar numDirtyNVMPages;
+    /** Number of dirty DRAM pages */
+    Stats::Scalar numDirtyDRAMPages;
+
+    /** Average dirty ratio of NVM pages */
+    Stats::Formula avgNVMDirtyRatio;
+    /** Average write ratio of DRAM pages */
+    Stats::Formula avgDRAMWriteRatio;
 
     int regCaches;
     Stats::Formula numRegCaches;

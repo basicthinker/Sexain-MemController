@@ -1,1 +1,1 @@
--p system.mem_ctrls -s num_nvm_writes num_dram_writes
+-p system.mem_ctrls -s num_nvm_writes num_dram_writes avg_nvm_dirty_ratio avg_dram_write_ratio

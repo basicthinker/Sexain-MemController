@@ -196,6 +196,24 @@ AbstractMemory::regStats()
     numDRAMWrites
         .name(name() + ".num_dram_writes")
         .desc("Total number of writes on DRAM pages");
+    numDirtyNVMBlocks
+        .name(name() + ".dirty_nvm_blocks")
+        .desc("Total number of dirty NVM blocks");
+    numDirtyNVMPages
+        .name(name() + ".dirty_nvm_pages")
+        .desc("Total number of dirty NVM pages");
+    numDirtyDRAMPages
+        .name(name() + ".dirty_dram_pages")
+        .desc("Total number of dirty DRAM pages");
+
+    avgNVMDirtyRatio
+        .name(name() + ".avg_nvm_dirty_ratio")
+        .desc("Average dirty ratio of NVM pages")
+        .prereq(numDirtyNVMBlocks);
+    avgDRAMWriteRatio
+        .name(name() + ".avg_dram_write_ratio")
+        .desc("Average write ratio of DRAM pages")
+        .prereq(numDirtyDRAMPages);
 
     numRegCaches
         .name(name() + ".num_reg_caches")
@@ -206,6 +224,11 @@ AbstractMemory::regStats()
     bwInstRead = bytesInstRead / simSeconds;
     bwWrite = bytesWritten / simSeconds;
     bwTotal = (bytesRead + bytesWritten) / simSeconds;
+
+    avgNVMDirtyRatio = numDirtyNVMBlocks / numDirtyNVMPages /
+        constant(addrController.migrator().page_blocks());
+    avgDRAMWriteRatio = numDRAMWrites / numDirtyDRAMPages /
+        constant(addrController.migrator().page_blocks());
 }
 
 AddrRange

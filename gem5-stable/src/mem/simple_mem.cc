@@ -240,6 +240,10 @@ SimpleMemory::freeze()
     isBusy = false;
     assert(numNVMWrites.value() == addrController.migrator().total_nvm_writes());
     assert(numDRAMWrites.value() == addrController.migrator().total_dram_writes());
+    numDirtyNVMBlocks = addrController.migrator().dirty_nvm_blocks();
+    numDirtyNVMPages = addrController.migrator().dirty_nvm_pages();
+    numDirtyDRAMPages = addrController.migrator().dirty_dram_pages();
+
     uint64_t bytes = getBusUtil(); // migration
 
     Profiler profiler(profBase);
