@@ -51,7 +51,7 @@ struct NVMPageStats {
 
 class MigrationController {
  public:
-  MigrationController(int block_bits, int page_bits, int ptt_limit);
+  MigrationController(int block_bits, int page_bits, int ptt_length);
 
   PTTEntry* LookupPage(uint64_t phy_addr, Profiler& profiler);
   bool Contains(uint64_t phy_addr, Profiler& profiler);
@@ -74,6 +74,9 @@ class MigrationController {
   int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }
   int page_blocks() const { return page_blocks_; }
+  int ptt_length() const { return ptt_length_; }
+  int num_entries() const { return entries_.size(); }
+  int num_dirty_entries() const { return dirty_entries_; }
 
   int total_nvm_writes() const { return total_nvm_writes_; }
   int total_dram_writes() const { return total_dram_writes_; }
@@ -92,13 +95,15 @@ class MigrationController {
 
   uint64_t BlockAlign(uint64_t addr) { return addr & ~block_mask_; }
   uint64_t PageAlign(uint64_t addr) { return addr & ~page_mask_; }
+  void FillNVMPageHeap();
+  void FillDRAMPageHeap();
 
   const int block_bits_;
   const uint64_t block_mask_;
   const int page_bits_;
   const uint64_t page_mask_;
   const int page_blocks_;
-  const int ptt_limit_;
+  const int ptt_length_;
 
   int dirty_entries_; ///< Number of dirty pages each epoch
 
@@ -112,17 +117,20 @@ class MigrationController {
   std::unordered_map<uint64_t, NVMPage> nvm_pages_;
   std::vector<DRAMPageStats> dram_heap_;
   std::vector<NVMPageStats> nvm_heap_;
+  bool dram_heap_filled_;
+  bool nvm_heap_filled_;
 };
 
 inline MigrationController::MigrationController(
-    int block_bits, int page_bits, int ptt_limit) :
+    int block_bits, int page_bits, int ptt_length) :
 
     block_bits_(block_bits), block_mask_((1 << block_bits) - 1),
     page_bits_(page_bits), page_mask_((1 << page_bits) - 1),
     page_blocks_(1 << (page_bits - block_bits)),
-    ptt_limit_(ptt_limit), dirty_entries_(0),
+    ptt_length_(ptt_length), dirty_entries_(0),
     total_nvm_writes_(0), total_dram_writes_(0),
-    dirty_nvm_blocks_(0), dirty_dram_pages_(0) {
+    dirty_nvm_blocks_(0), dirty_dram_pages_(0),
+    dram_heap_filled_(false), nvm_heap_filled_(false) {
 }
 
 inline PTTEntry* MigrationController::LookupPage(uint64_t phy_addr,
@@ -176,7 +184,7 @@ inline void MigrationController::Setup(
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_entries_;
   }
-  assert(entries_.size() <= ptt_limit_);
+  assert(entries_.size() <= ptt_length_);
   profiler.AddTableOp();
 }
 
