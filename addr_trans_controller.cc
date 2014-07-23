@@ -147,6 +147,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
 }
 
 Control AddrTransController::Probe(Addr phy_addr) {
+  static int ptt_limit = migrator_.ptt_length() - (migrator_.ptt_length() >> 3);
   if (migrator_.Contains(phy_addr, Profiler::Null)) { // DRAM
     if (in_checkpointing()) {
       if (!att_.Contains(phy_addr) &&
@@ -159,7 +160,8 @@ Control AddrTransController::Probe(Addr phy_addr) {
       if (att_.IsEmpty(ATTEntry::FREE) && att_.IsEmpty(ATTEntry::CLEAN)) {
         return WAIT_CKPT;
       }
-    } else if (att_.GetLength(ATTEntry::DIRTY) == att_.length()) {
+    } else if (att_.GetLength(ATTEntry::DIRTY) == att_.length() ||
+        migrator_.num_dirty_entries() > ptt_limit) {
       return NEW_EPOCH;
     }
   }
@@ -231,11 +233,19 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats,
     int index = ATTLookup(att_, tag).first;
     if (index == -EINVAL) continue;
     const ATTEntry& entry = att_.At(index);
-    if (entry.state != ATTEntry::HIDDEN) {
-      assert(entry.state != ATTEntry::LOAN);
-      mem_store_->DoMove(stats.phy_addr, entry.mach_base, att_.block_size());
+    // copy data to DRAM
+    mem_store_->DoMove(stats.phy_addr, entry.mach_base, att_.block_size());
+    switch (entry.state) {
+      case ATTEntry::CLEAN:
+      case ATTEntry::DIRTY:
+        Discard(index, nvm_buffer_, profiler);
+        break;
+      case ATTEntry::STAINED:
+      case ATTEntry::TEMP:
+        Discard(index, dram_buffer_, profiler);
+      default:
+        break;
     }
-    att_.ShiftState(index, ATTEntry::FREE);
   }
   if (stats.dirty_ratio > 0.5) {
     migrator_.Setup(stats.phy_addr, PTTEntry::DIRTY_STATIC, profiler);
@@ -244,7 +254,8 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats,
   }
 }
 
-void AddrTransController::MigratePages(double threshold, Profiler& profiler) {
+void AddrTransController::MigratePages(Profiler& profiler,
+    double dr, double wr) {
   assert(!in_checkpointing());
 
   LoanRevoker loan_revoker(this);
@@ -256,18 +267,22 @@ void AddrTransController::MigratePages(double threshold, Profiler& profiler) {
   NVMPageStats n;
   DRAMPageStats d;
   bool d_ready = false;
-  while (migrator_.ExtractNVMPage(n, profiler) && n.dirty_ratio > threshold) {
-    if (!migrator_.ExtractDRAMPage(d, Profiler::Overlap)) return;
-    if (d.write_ratio > 0) {
-      d_ready = true;
-      break;
+  while (migrator_.ExtractNVMPage(n, profiler)) {
+    if (n.dirty_ratio < dr) break;
+    // Find a DRAM page for exchange
+    if (migrator_.num_entries() == migrator_.ptt_length()) {
+      if (!migrator_.ExtractDRAMPage(d, Profiler::Overlap)) return;
+      if (d.write_ratio > 0) {
+        d_ready = true;
+        break;
+      }
+      MigrateDRAM(d, profiler);
     }
-    MigrateDRAM(d, profiler);
     MigrateNVM(n, profiler);
   }
   if (!d_ready && !migrator_.ExtractDRAMPage(d, profiler)) return;
   do {
-    if (d.write_ratio > 1) break;
+    if (d.write_ratio > wr) break;
     MigrateDRAM(d, profiler);
   } while (migrator_.ExtractDRAMPage(d, profiler));
 }
@@ -403,5 +418,13 @@ void AddrTransController::HideTemp(int index, bool move_data) {
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
   ATTShiftState(att_, index, ATTEntry::HIDDEN);
+}
+
+void AddrTransController::Discard(int index, VersionBuffer& vb,
+    Profiler& profiler) {
+  assert(!in_checkpointing());
+  const ATTEntry& entry = att_.At(index);
+  FreeBlock(vb, entry.mach_base, VersionBuffer::IN_USE, profiler);
+  ShiftState(index, ATTEntry::HIDDEN, profiler);
 }
 

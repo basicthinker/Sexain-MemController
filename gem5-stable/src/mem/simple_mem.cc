@@ -151,7 +151,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
             Profiler profiler(profBase);
-            addrController.MigratePages(0.2, profiler);
+            addrController.MigratePages(profiler);
             sumSize = profiler.SumBusUtil(); // pass to freeze()
             schedule(freezeEvent, curTick() + profiler.SumLatency());
             isBusy = true;

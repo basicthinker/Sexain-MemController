@@ -30,7 +30,8 @@ class AddrTransController {
 
   virtual void BeginCheckpointing(Profiler& profiler);
   virtual void FinishCheckpointing();
-  virtual void MigratePages(double threshold, Profiler& profiler);
+  virtual void MigratePages(Profiler& profiler,
+      double dr = 0.33, double wr = 0.67);
 
   uint64_t Size() const;
   int block_size() const { return att_.block_size(); }
@@ -62,6 +63,7 @@ class AddrTransController {
   Addr DRAMStore(Addr phy_addr, int size);
   bool PseudoPageStore(Addr phy_addr);
 
+  void Discard(int index, VersionBuffer& vb, Profiler& profiler);
   /// Move a DRAM page out
   void MigrateDRAM(const DRAMPageStats& stats, Profiler& profiler);
   /// Move a NVM page out
@@ -77,6 +79,7 @@ class AddrTransController {
   int ATTSetup(AddrTransTable& att,
       Tag phy_tag, Addr mach_base, ATTEntry::State state);
   void ATTShiftState(AddrTransTable& att, int index, ATTEntry::State state);
+  void ShiftState(int index, ATTEntry::State state, Profiler& profiler);
   void ATTReset(AddrTransTable& att,
       int index, Addr new_base, ATTEntry::State new_state);
   void ATTVisit(AddrTransTable& att,
@@ -86,6 +89,8 @@ class AddrTransController {
   uint64_t VBNewBlock(VersionBuffer& vb);
   void VBFreeBlock(VersionBuffer& vb,
       uint64_t mach_addr, VersionBuffer::State state);
+  void FreeBlock(VersionBuffer& vb,
+      uint64_t mach_addr, VersionBuffer::State state, Profiler& profiler);
   void VBBackupBlock(VersionBuffer& vb,
       uint64_t mach_addr, VersionBuffer::State state);
   void VBClearBackup(VersionBuffer& vb);
@@ -169,6 +174,12 @@ inline void AddrTransController::ATTShiftState(AddrTransTable& att,
   att.ShiftState(index, state);
 }
 
+inline void AddrTransController::ShiftState(int index, ATTEntry::State state,
+    Profiler& profiler) {
+  profiler.AddTableOp();
+  att_.ShiftState(index, state);
+}
+
 inline void AddrTransController::ATTReset(AddrTransTable& att,
     int index, Addr new_base, ATTEntry::State new_state) {
   mem_store_->OnATTOp();
@@ -199,6 +210,12 @@ inline void AddrTransController::VBFreeBlock(VersionBuffer& vb,
     uint64_t mach_addr, VersionBuffer::State state) {
   mem_store_->OnBufferOp();
   vb.FreeBlock(mach_addr, state);
+}
+
+inline void AddrTransController::FreeBlock(VersionBuffer& vb,
+    uint64_t mach_addr, VersionBuffer::State state, Profiler& profiler) {
+  vb.FreeBlock(mach_addr, state);
+  profiler.AddTableOp();
 }
 
 inline void AddrTransController::VBBackupBlock(VersionBuffer& vb,
