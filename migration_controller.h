@@ -73,7 +73,8 @@ class MigrationController {
 
   int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }
-  int total_writes() const { return total_writes_; }
+  int total_nvm_writes() const { return total_nvm_writes_; }
+  int total_dram_writes() const { return total_dram_writes_; }
 
  private:
   typedef std::unordered_map<uint64_t, PTTEntry>::iterator PTTEntryIterator;
@@ -95,7 +96,9 @@ class MigrationController {
   const int ptt_limit_;
 
   int dirty_pages_; ///< Number of dirty pages each epoch
-  int total_writes_; ///< Sum number of DRAM writes received
+
+  int total_nvm_writes_; ///< Sum number of NVM writes, for verification
+  int total_dram_writes_; ///< Sum number of DRAM writes, for verification
 
   std::unordered_map<uint64_t, PTTEntry> entries_;
   std::unordered_map<uint64_t, NVMPage> nvm_pages_;
@@ -109,7 +112,8 @@ inline MigrationController::MigrationController(
     block_bits_(block_bits), block_mask_((1 << block_bits) - 1),
     page_bits_(page_bits), page_mask_((1 << page_bits) - 1),
     page_blocks_(1 << (page_bits - block_bits)),
-    ptt_limit_(ptt_limit), dirty_pages_(0), total_writes_(0) {
+    ptt_limit_(ptt_limit), dirty_pages_(0),
+    total_nvm_writes_(0), total_dram_writes_(0) {
 }
 
 inline PTTEntry* MigrationController::LookupPage(uint64_t phy_addr,

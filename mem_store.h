@@ -17,9 +17,9 @@ class MemStore {
   virtual void OnBufferOp() { }
 
   virtual void OnNVMRead(uint64_t mach_addr, int size) { }
-  virtual void OnNVMWrite(uint64_t mach_addr, int size) { }
+  virtual void OnNVMStore(uint64_t phy_addr, int size) { }
   virtual void OnDRAMRead(uint64_t mach_addr, int size) { }
-  virtual void OnDRAMWrite(uint64_t mach_addr, int size) { }
+  virtual void OnDRAMStore(uint64_t phy_addr, int size) { }
 
   ///
   /// Before the checkpointing frame begins

@@ -238,6 +238,8 @@ SimpleMemory::freeze()
 {
     assert(isBusy);
     isBusy = false;
+    assert(numNVMWrites.value() == addrController.total_nvm_writes());
+    assert(numDRAMWrites.value() == addrController.total_dram_writes());
     uint64_t bytes = getBusUtil(); // migration
 
     Profiler profiler(profBase);

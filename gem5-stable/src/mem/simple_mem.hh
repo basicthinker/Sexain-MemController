@@ -271,10 +271,9 @@ class SimpleMemory : public AbstractMemory
         sumSize += size;
     }
 
-    void OnNVMWrite(uint64_t mach_addr, int size)
+    void OnNVMStore(uint64_t phy_addr, int size)
     {
-        sumLatency += tNVMWrite;
-        sumSize += size;
+        ++numNVMWrites;
     }
 
     void OnDRAMRead(uint64_t mach_addr, int size)
@@ -283,10 +282,9 @@ class SimpleMemory : public AbstractMemory
         sumSize += size;
     }
 
-    void OnDRAMWrite(uint64_t mach_addr, int size)
+    void OnDRAMStore(uint64_t phy_addr, int size)
     {
-        sumLatency += getLatency();
-        sumSize += size;
+        ++numDRAMWrites;
     }
 };
 

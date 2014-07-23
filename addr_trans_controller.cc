@@ -58,7 +58,6 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
       FreeLoan(index, !FullBlock(phy_addr, size));
       mach_addr = phy_addr;
     }
-    mem_store_->OnDRAMWrite(mach_addr, size);
     return mach_addr;
   } else { // not found
     if (in_checkpointing()) {
@@ -74,7 +73,6 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
     } else { // in running
       mach_addr = phy_addr;
     }
-    mem_store_->OnDRAMWrite(mach_addr, size);
     return mach_addr;
   }
 }
@@ -122,7 +120,6 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
     att_.AddBlockWrite(index);
-    mem_store_->OnNVMWrite(mach_addr, size);
     return mach_addr;
   } else { // in checkpointing
     if (index != -EINVAL) { // found
@@ -145,7 +142,6 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
     att_.AddBlockWrite(index);
-    mem_store_->OnDRAMWrite(mach_addr, size);
     return mach_addr;
   }
 }
@@ -174,18 +170,17 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size) {
   assert(CheckValid(phy_addr, size) && phy_addr < phy_range_);
   PTTEntry* page = migrator_.LookupPage(phy_addr, Profiler::Null); //TODO
   if (!page) {
+    mem_store_->OnNVMStore(phy_addr, size);
     return NVMStore(phy_addr, size);
   } else {
-    Addr mach_addr = DRAMStore(phy_addr, size);
-    if (mach_addr != INVAL_ADDR) {
-      migrator_.AddDRAMPageWrite(*page);
-      if (page->state == PTTEntry::CLEAN_STATIC) {
-        migrator_.ShiftState(*page, PTTEntry::DIRTY_DIRECT, Profiler::Null); //TODO
-      } else if (page->state == PTTEntry::CLEAN_DIRECT) {
-        migrator_.ShiftState(*page, PTTEntry::DIRTY_STATIC, Profiler::Null); //TODO
-      }
+    migrator_.AddDRAMPageWrite(*page);
+    if (page->state == PTTEntry::CLEAN_STATIC) {
+      migrator_.ShiftState(*page, PTTEntry::DIRTY_DIRECT, Profiler::Null); //TODO
+    } else if (page->state == PTTEntry::CLEAN_DIRECT) {
+      migrator_.ShiftState(*page, PTTEntry::DIRTY_STATIC, Profiler::Null); //TODO
     }
-    return mach_addr;
+    mem_store_->OnDRAMStore(phy_addr, size);
+    return DRAMStore(phy_addr, size);
   }
 }
 
@@ -255,6 +250,8 @@ void AddrTransController::MigratePages(double threshold, Profiler& profiler) {
   LoanRevoker loan_revoker(this);
   ATTVisit(att_, ATTEntry::LOAN, &loan_revoker);
   assert(att_.IsEmpty(ATTEntry::LOAN));
+
+  migrator_.InputBlocks(att_.entries());
 
   NVMPageStats n;
   DRAMPageStats d;

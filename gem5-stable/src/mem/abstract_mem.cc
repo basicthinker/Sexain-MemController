@@ -190,6 +190,13 @@ AbstractMemory::regStats()
         .name(name() + ".num_repl_writes")
         .desc("Total number of writes that replace existent entries");
 
+    numNVMWrites
+        .name(name() + ".num_nvm_writes")
+        .desc("Total number of writes on NVM pages");
+    numDRAMWrites
+        .name(name() + ".num_dram_writes")
+        .desc("Total number of writes on DRAM pages");
+
     numRegCaches
         .name(name() + ".num_reg_caches")
         .desc("Number of caches registered to the THNVM cache controller");

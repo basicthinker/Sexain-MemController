@@ -18,7 +18,7 @@ void MigrationController::InputBlocks(
     NVMPage& p = nvm_pages_[PageAlign(block_addr)];
     p.epoch_reads += it->epoch_reads;
     p.epoch_writes += it->epoch_writes;
-    total_writes_ += it->epoch_writes;
+
     if (it->epoch_writes) {
       p.blocks.insert(block_addr);
       assert(p.blocks.size() <= page_blocks_);
@@ -34,6 +34,8 @@ bool MigrationController::ExtractNVMPage(NVMPageStats& stats,
       double dr = it->second.blocks.size() / page_blocks_;
       double wr = it->second.epoch_writes / page_blocks_;
       nvm_heap_.push_back({it->first, dr, wr});
+
+      total_nvm_writes_ += it->second.epoch_writes;
     }
     make_heap(nvm_heap_.begin(), nvm_heap_.end());
   }
@@ -41,8 +43,8 @@ bool MigrationController::ExtractNVMPage(NVMPageStats& stats,
 
   if (nvm_heap_.empty()) return false;
 
+  stats = nvm_heap_.front();
   pop_heap(nvm_heap_.begin(), nvm_heap_.end());
-  stats = nvm_heap_.back();
   nvm_heap_.pop_back();
   return true;
 }
@@ -54,6 +56,8 @@ bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats,
          it != entries_.end(); ++it) {
       double wr = it->second.epoch_writes / page_blocks_;
       dram_heap_.push_back({it->first, it->second.state, wr});
+
+      total_dram_writes_ += it->second.epoch_writes;
     }
     make_heap(dram_heap_.begin(), dram_heap_.end());
   }
@@ -61,8 +65,8 @@ bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats,
 
   if (dram_heap_.empty()) return false;
 
+  stats = dram_heap_.front();
   pop_heap(dram_heap_.begin(), dram_heap_.end());
-  stats = dram_heap_.back();
   dram_heap_.pop_back();
   return true;
 }

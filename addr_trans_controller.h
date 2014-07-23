@@ -35,6 +35,8 @@ class AddrTransController {
   uint64_t Size() const;
   int block_size() const { return att_.block_size(); }
   int page_size() const { return migrator_.page_size(); }
+  int total_nvm_writes() const { return migrator_.total_nvm_writes(); }
+  int total_dram_writes() const { return migrator_.total_dram_writes(); }
   bool in_checkpointing() const { return in_checkpointing_; }
 
   virtual bool IsDRAM(Addr phy_addr, bool isTiming = true);
@@ -134,20 +136,20 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
 inline void AddrTransController::MoveToDRAM(
     uint64_t destination, uint64_t source, int size) {
   mem_store_->DoMove(destination, source, size);
-  mem_store_->OnDRAMWrite(destination, size);
+  //mem_store_->OnDRAMWrite(destination, size);//TODO
 }
 
 inline void AddrTransController::MoveToNVM(
     uint64_t destination, uint64_t source, int size) {
   mem_store_->DoMove(destination, source, size);
-  mem_store_->OnNVMWrite(destination, size);
+  //mem_store_->OnNVMWrite(destination, size);//TODO
 }
 
 inline void AddrTransController::SwapNVM(
     uint64_t static_addr, uint64_t mach_addr, int size) {
   mem_store_->DoSwap(static_addr, mach_addr, size);
-  mem_store_->OnNVMWrite(static_addr, size);
-  mem_store_->OnNVMWrite(mach_addr, size);
+  //mem_store_->OnNVMWrite(static_addr, size);//TODO
+  //mem_store_->OnNVMWrite(mach_addr, size);//TODO
 }
 
 inline std::pair<int, Addr> AddrTransController::ATTLookup(AddrTransTable& att,

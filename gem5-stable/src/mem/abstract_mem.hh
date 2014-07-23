@@ -198,6 +198,11 @@ class AbstractMemory : public MemObject, public MemStore
     /** Number of replace-writes */
     Stats::Scalar numReplWrites;
 
+    /** Number of writes on NVM pages */
+    Stats::Scalar numNVMWrites;
+    /** Number of writes on DRAM pages */
+    Stats::Scalar numDRAMWrites;
+
     int regCaches;
     Stats::Formula numRegCaches;
 
