@@ -26,24 +26,19 @@ AddrTransController::AddrTransController(
 }
 
 Addr AddrTransController::LoadAddr(Addr phy_addr) {
-  assert(phy_addr < phy_range_);
-  Tag phy_tag = att_.ToTag(phy_addr);
-
-  PTTEntry* page = migrator_.LookupPage(phy_addr, Profiler::Null);
-  if (!page) { // NVM
-    int index = ATTLookup(att_, phy_tag).first;
-    mem_store_->OnNVMRead(phy_addr, att_.block_size());
-    if (index == -EINVAL) return phy_addr; // direct mapping
-
+  int index = ATTLookup(att_, att_.ToTag(phy_addr)).first;
+  if (index != -EINVAL) {
     const ATTEntry& entry = att_.At(index);
-    Addr mach_addr = att_.Translate(phy_addr, entry.mach_base);
     att_.AddBlockRead(index);
-    return mach_addr;
-  } else { // DRAM
-    Addr mach_addr = migrator_.Translate(phy_addr, page->mach_base);
-    migrator_.AddDRAMPageRead(*page);
-    mem_store_->OnDRAMRead(mach_addr, att_.block_size());
-    return mach_addr;
+    return att_.Translate(phy_addr, entry.mach_base);
+  } else {
+    PTTEntry* page = migrator_.LookupPage(phy_addr, Profiler::Null);
+    if (page) {
+      migrator_.AddDRAMPageRead(*page);
+      return migrator_.Translate(phy_addr, page->mach_base);
+    } else {
+      return phy_addr;
+    }
   }
 }
 
