@@ -250,12 +250,12 @@ SimpleMemory::freeze()
     addrController.BeginCheckpointing(profiler);
     bytes += profiler.SumBusUtil();
 
-    Tick chkpt_duration = bytes * bandwidth;
-    if (chkpt_duration) {
-        schedule(unfreezeEvent, curTick() + chkpt_duration);
+    Tick ckpt_duration = bytes * bandwidth;
+    if (ckpt_duration) {
+        schedule(unfreezeEvent, curTick() + ckpt_duration);
         if (isTimingATT) {
             totalThroughput += bytes;
-            totalChkptTime += chkpt_duration;
+            totalChkptTime += ckpt_duration;
         }
     } else {
       addrController.FinishCheckpointing();

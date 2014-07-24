@@ -145,15 +145,8 @@ PhysicalMemory::createBackingStore(AddrRange range,
         panic("Cannot create backing store for interleaved range %s\n",
               range.to_string());
 
-    assert(!_memories.empty());
+    assert(_memories.size() == 1);
     uint64_t host_size = _memories[0]->hostSize();
-    for (int i = 0; i < _memories.size(); ++i) {
-        assert(_memories[i]->hostSize() == host_size);
-    }
-    if (_memories.size() != 1) {
-        panic("Cannot create backing store for multiple THNVM %s\n",
-              range.to_string());
-    }
 
     // perform the actual mmap
     DPRINTF(BusAddrRanges, "Creating backing store for range %s with size %d\n",
