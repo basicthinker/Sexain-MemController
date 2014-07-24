@@ -108,3 +108,9 @@ CompoundFlag('Ruby', [ 'RubyQueue', 'RubyNetwork', 'RubyTester',
     'RubyGenerated', 'RubySlicc', 'RubySystem', 'RubyCache',
     'RubyMemory', 'RubyDma', 'RubyPort', 'RubySequencer', 'RubyCacheTrace',
     'RubyPrefetcher'])
+
+mem_env = main.Clone()
+memck = ARGUMENTS.get('memck', 0)
+if int(memck):
+    env.Append(CCFLAGS = '-DMEMCK')
+

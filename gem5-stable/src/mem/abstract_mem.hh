@@ -166,7 +166,10 @@ class AbstractMemory : public MemObject, public MemStore
 
     // Convert local address to host memory address
     uint8_t* hostAddr(Addr local_addr) const
-    { return pmemAddr + local_addr; }
+    {
+        assert(local_addr < hostSize());
+        return pmemAddr + local_addr;
+    }
 
     /** Number of total bytes read from this memory */
     Stats::Vector bytesRead;
@@ -232,6 +235,10 @@ class AbstractMemory : public MemObject, public MemStore
     // Prevent assignment
     AbstractMemory& operator=(const AbstractMemory&);
 
+#ifdef MEMCK
+    uint8_t* ckmem;
+#endif
+
   public:
 
     typedef AbstractMemoryParams Params;
@@ -258,7 +265,7 @@ class AbstractMemory : public MemObject, public MemStore
     /**
      * Get the length of backing host memory
      */
-    uint64_t hostSize()
+    uint64_t hostSize() const
     { return addrController.Size(); };
 
     /**

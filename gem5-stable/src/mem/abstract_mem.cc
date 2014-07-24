@@ -43,6 +43,7 @@
  *          Jinglei Ren <jinglei@ren.systems>
  */
 
+#include <sys/mman.h>
 #include "arch/registers.hh"
 #include "config/the_isa.hh"
 #include "debug/LLSC.hh"
@@ -66,6 +67,10 @@ AbstractMemory::AbstractMemory(const Params *p) :
         panic("Memory Size not divisible by page size\n");
     epochPages = 0;
     regCaches = 0;
+#ifdef MEMCK
+    ckmem = (uint8_t*) mmap(NULL, hostSize(), PROT_READ | PROT_WRITE,
+            MAP_ANON | MAP_PRIVATE, -1, 0);
+#endif
 }
 
 void
@@ -360,6 +365,37 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 
 #endif
 
+#ifdef MEMCK
+
+#define MEMCK_BEFORE_READ(HA, PKT)                                             \
+    do {                                                                       \
+        uint8_t* shadow_addr = ckmem + localAddr(PKT);                         \
+        if (std::memcmp(HA, shadow_addr, (PKT)->getSize()) != 0) {             \
+            warn("Memory read of %d bytes corrupted @ %lx\n",                  \
+                 (PKT)->getSize(), localAddr(PKT));                            \
+        }                                                                      \
+        HA = shadow_addr;                                                      \
+    } while (0)
+
+#define MEMCK_AFTER_WRITE(LA, PKT)                                             \
+    do {                                                                       \
+        Addr post_addr = addrController.LoadAddr(localAddr(PKT));              \
+    	if (post_addr != (LA)) {                                               \
+    	    warn("%s: Memory write meets corrupted post address: "             \
+    	         "%lx => %lx for physical %lx\n",                              \
+    	         __func__, (LA), post_addr, localAddr(PKT));                   \
+        }                                                                      \
+        uint8_t* shadow_addr = ckmem + localAddr(PKT);                         \
+        memcpy(shadow_addr, hostAddr(LA), (PKT)->getSize());                   \
+    } while (0)
+
+#else
+
+#define MEMCK_BEFORE_READ(host_addr, pkt)
+#define MEMCK_AFTER_WRITE(local_addr, pkt)
+
+#endif
+
 void
 AbstractMemory::access(PacketPtr pkt)
 {
@@ -387,6 +423,7 @@ AbstractMemory::access(PacketPtr pkt)
         // memory address into the packet
         std::memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
         uint8_t* host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
+        MEMCK_BEFORE_READ(host_addr, pkt);
         std::memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
 
         if (pkt->req->isCondSwap()) {
@@ -417,6 +454,7 @@ AbstractMemory::access(PacketPtr pkt)
             assert(pkt->getSize() == addrController.block_size());
             uint8_t* host_addr = 
                     hostAddr(addrController.LoadAddr(localAddr(pkt)));
+            MEMCK_BEFORE_READ(host_addr, pkt);
             memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
         }
         TRACE_PACKET(pkt->req->isInstFetch() ? "IFetch" : "Read");
@@ -432,6 +470,7 @@ AbstractMemory::access(PacketPtr pkt)
                         localAddr(pkt), pkt->getSize());
                 memcpy(hostAddr(local_addr), pkt->getPtr<uint8_t>(),
                         pkt->getSize());
+                MEMCK_AFTER_WRITE(local_addr, pkt);
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
             }
@@ -456,17 +495,21 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
                      pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
-
-    uint8_t *host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
+    Addr local_addr = addrController.LoadAddr(localAddr(pkt));
+    uint8_t *host_addr = hostAddr(local_addr);
 
     if (pkt->isRead()) {
-        if (pmemAddr)
+        if (pmemAddr) {
+            MEMCK_BEFORE_READ(host_addr, pkt);
             memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
+        }
         TRACE_PACKET("Read");
         pkt->makeResponse();
     } else if (pkt->isWrite()) {
-        if (pmemAddr)
+        if (pmemAddr) {
             memcpy(host_addr, pkt->getPtr<uint8_t>(), pkt->getSize());
+            MEMCK_AFTER_WRITE(local_addr, pkt);
+        }
         TRACE_PACKET("Write");
         pkt->makeResponse();
     } else if (pkt->isPrint()) {
