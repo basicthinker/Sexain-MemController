@@ -371,8 +371,8 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
     do {                                                                       \
         uint8_t* shadow_addr = ckmem + localAddr(PKT);                         \
         if (std::memcmp(HA, shadow_addr, (PKT)->getSize()) != 0) {             \
-            warn("Memory read of %d bytes corrupted @ %lx\n",                  \
-                 (PKT)->getSize(), localAddr(PKT));                            \
+            warn("File %s, line %d: Memory read of %d bytes corrupted @ %lx\n",\
+                 __FILE__, __LINE__, (PKT)->getSize(), localAddr(PKT));        \
         }                                                                      \
         HA = shadow_addr;                                                      \
     } while (0)
@@ -381,9 +381,9 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
     do {                                                                       \
         Addr post_addr = addrController.LoadAddr(localAddr(PKT));              \
     	if (post_addr != (LA)) {                                               \
-    	    warn("%s: Memory write meets corrupted post address: "             \
+    	    warn("File %s, line %d: Memory write meets corrupted address: "    \
     	         "%lx => %lx for physical %lx\n",                              \
-    	         __func__, (LA), post_addr, localAddr(PKT));                   \
+    	         __FILE__, __LINE__, (LA), post_addr, localAddr(PKT));         \
         }                                                                      \
         uint8_t* shadow_addr = ckmem + localAddr(PKT);                         \
         memcpy(shadow_addr, hostAddr(LA), (PKT)->getSize());                   \
@@ -439,8 +439,12 @@ AbstractMemory::access(PacketPtr pkt)
                 panic("Invalid size for conditional read/write\n");
         }
 
-        if (overwrite_mem)
-            std::memcpy(host_addr, &overwrite_val, pkt->getSize());
+        if (overwrite_mem) {
+            Addr local_addr = addrController.StoreAddr(
+                    localAddr(pkt), pkt->getSize());
+            std::memcpy(hostAddr(local_addr), &overwrite_val, pkt->getSize());
+            MEMCK_AFTER_WRITE(local_addr, pkt);
+        }
 
         assert(!pkt->req->isInstFetch());
         TRACE_PACKET("Read/Write");

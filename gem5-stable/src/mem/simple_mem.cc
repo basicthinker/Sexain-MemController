@@ -147,7 +147,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         return false;
     }
 
-    if (pkt->isWrite()) {
+    if (pkt->cmd == MemCmd::SwapReq || pkt->isWrite()) {
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
             Profiler profiler(profBase);
