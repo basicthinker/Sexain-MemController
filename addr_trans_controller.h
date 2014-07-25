@@ -12,6 +12,14 @@
 #include "migration_controller.h"
 #include "profiler.h"
 
+#ifdef MEMCK
+struct AddrInfo {
+  Addr phy_base;
+  Addr mach_base;
+  const char* state;
+};
+#endif
+
 enum Control {
   REG_WRITE,
   NEW_EPOCH,
@@ -40,6 +48,9 @@ class AddrTransController {
   const MigrationController& migrator() const { return migrator_; }
 
   virtual bool IsDRAM(Addr phy_addr, bool isTiming = true);
+#ifdef MEMCK
+  std::pair<AddrInfo, AddrInfo> GetAddrInfo(Addr phy_addr);
+#endif
 
  protected:
   AddrTransTable att_;

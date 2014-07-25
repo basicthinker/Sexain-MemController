@@ -5,6 +5,10 @@
 
 using namespace std;
 
+const char* PTTEntry::state_strings[] = {
+    "CLEAN_DIRECT", "CLEAN_STATIC", "DIRTY_DIRECT", "DIRTY_STATIC"
+};
+
 void MigrationController::FillNVMPageHeap() {
   for (unordered_map<uint64_t, NVMPage>::iterator it = nvm_pages_.begin();
       it != nvm_pages_.end(); ++it) {

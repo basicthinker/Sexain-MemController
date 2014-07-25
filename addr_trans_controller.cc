@@ -237,13 +237,13 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
       case ATTEntry::CLEAN:
       case ATTEntry::DIRTY:
         pf.AddBlockMoveInter(); // for copying data to DRAM
-        CopyBlockIntra(stats.phy_addr, entry.mach_base, pf);
+        CopyBlockIntra(att_.ToAddr(entry.phy_tag), entry.mach_base, pf);
         Discard(index, nvm_buffer_, pf);
         break;
       case ATTEntry::STAINED:
       case ATTEntry::TEMP:
         pf.AddBlockMoveIntra(); // for copying data to DRAM
-        CopyBlockInter(stats.phy_addr, entry.mach_base, pf);
+        CopyBlockInter(att_.ToAddr(entry.phy_tag), entry.mach_base, pf);
         Discard(index, dram_buffer_, pf);
         break;
       case ATTEntry::LOAN:
@@ -436,3 +436,27 @@ void AddrTransController::Discard(int index, VersionBuffer& vb, Profiler& pf) {
   att_.ShiftState(index, ATTEntry::FREE, pf);
 }
 
+#ifdef MEMCK
+  pair<AddrInfo, AddrInfo> AddrTransController::GetAddrInfo(Addr phy_addr) {
+    pair<AddrInfo, AddrInfo> info;
+
+    int index = att_.Lookup(phy_addr, Profiler::Null);
+    if (index != -EINVAL) {
+      const ATTEntry& entry = att_.At(index);
+      info.first = { att_.ToAddr(entry.phy_tag), entry.mach_base,
+          entry.StateString() };
+    } else {
+      info.first = { 0, 0, NULL };
+    }
+
+    PTTEntry* p = migrator_.LookupPage(phy_addr, Profiler::Null);
+    if (p) {
+      info.second = { migrator_.PageAlign(phy_addr), p->mach_base,
+          p->StateString() };
+    } else {
+      info.second = { 0, 0, NULL };
+    }
+
+    return info;
+  }
+#endif

@@ -5,6 +5,10 @@
 
 using namespace std;
 
+const char* ATTEntry::state_strings[] = {
+    "CLEAN", "LOAN", "FREE", "DIRTY", "HIDDEN", "TEMP", "STAINED"
+};
+
 int AddrTransTable::Lookup(Tag phy_tag, Profiler& pf) {
   unordered_map<Tag, int>::iterator it = tag_index_.find(phy_tag);
   pf.AddTableOp();

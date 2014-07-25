@@ -373,6 +373,16 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
         if (std::memcmp(HA, shadow_addr, (PKT)->getSize()) != 0) {             \
             warn("File %s, line %d: Memory read of %d bytes corrupted @ %lx\n",\
                  __FILE__, __LINE__, (PKT)->getSize(), localAddr(PKT));        \
+            pair<AddrInfo, AddrInfo> info =                                    \
+                    addrController.GetAddrInfo(localAddr(PKT));                \
+            if (info.first.state) {                                            \
+                warn("\tATT: %lx => %lx in %s\n", info.first.phy_base,         \
+                     info.first.mach_base, info.first.state);                  \
+            } else warn("\tATT: none");                                        \
+            if (info.second.state) {                                           \
+                warn("\tPTT: %lx => %lx in %s\n", info.second.phy_base,        \
+                     info.second.mach_base, info.second.state);                \
+            } else warn("\tPTT: none");                                        \
         }                                                                      \
         HA = shadow_addr;                                                      \
     } while (0)

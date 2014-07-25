@@ -26,7 +26,13 @@ struct PTTEntry {
   int epoch_writes;
   uint64_t mach_base;
 
+  static const char* state_strings[];
+
   PTTEntry() : epoch_reads(0), epoch_writes(0) { }
+
+  const char* StateString() const {
+    return state_strings[state];
+  }
 };
 
 struct DRAMPageStats {
@@ -74,6 +80,9 @@ class MigrationController {
   int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }
   int page_blocks() const { return page_blocks_; }
+  uint64_t BlockAlign(uint64_t addr) { return addr & ~block_mask_; }
+  uint64_t PageAlign(uint64_t addr) { return addr & ~page_mask_; }
+
   int ptt_length() const { return ptt_length_; }
   int num_entries() const { return entries_.size(); }
   int num_dirty_entries() const { return dirty_entries_; }
@@ -93,8 +102,6 @@ class MigrationController {
     std::set<uint64_t> blocks;
   };
 
-  uint64_t BlockAlign(uint64_t addr) { return addr & ~block_mask_; }
-  uint64_t PageAlign(uint64_t addr) { return addr & ~page_mask_; }
   void FillNVMPageHeap();
   void FillDRAMPageHeap();
 

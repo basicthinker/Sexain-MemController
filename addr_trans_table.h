@@ -35,7 +35,13 @@ struct ATTEntry {
   int epoch_reads;
   int epoch_writes;
 
+  static const char* state_strings[];
+
   ATTEntry() : epoch_reads(0), epoch_writes(0) { }
+
+  const char* StateString() const {
+    return state_strings[state];
+  }
 
   static int StateIndex(State state) {
     return state < DIRTY ? state : DIRTY;
