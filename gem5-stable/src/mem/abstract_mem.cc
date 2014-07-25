@@ -421,10 +421,10 @@ AbstractMemory::access(PacketPtr pkt)
         overwrite_mem = true;
         // keep a copy of our possible write value, and copy what is at the
         // memory address into the packet
-        std::memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
+        memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
         uint8_t* host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
         MEMCK_BEFORE_READ(host_addr, pkt);
-        std::memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
+        memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
 
         if (pkt->req->isCondSwap()) {
             if (pkt->getSize() == sizeof(uint64_t)) {
@@ -442,7 +442,7 @@ AbstractMemory::access(PacketPtr pkt)
         if (overwrite_mem) {
             Addr local_addr = addrController.StoreAddr(
                     localAddr(pkt), pkt->getSize());
-            std::memcpy(hostAddr(local_addr), &overwrite_val, pkt->getSize());
+            memcpy(hostAddr(local_addr), &overwrite_val, pkt->getSize());
             MEMCK_AFTER_WRITE(local_addr, pkt);
         }
 
@@ -532,18 +532,19 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
-AbstractMemory::DoMove(uint64_t phy_addr, uint64_t mach_addr, int size)
+AbstractMemory::MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size)
 {
-    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
+    assert(direct_addr != mach_addr);
+    memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
 }
 
 void
-AbstractMemory::DoSwap(uint64_t phy_addr, uint64_t mach_addr, int size)
+AbstractMemory::MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size)
 {
-    char* data = new char[size];
-    memcpy(data, hostAddr(phy_addr), size);
-    memcpy(hostAddr(phy_addr), hostAddr(mach_addr), size);
+    assert(direct_addr != mach_addr);
+    uint8_t data[size];
+    memcpy(data, hostAddr(direct_addr), size);
+    memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
     memcpy(hostAddr(mach_addr), data, size);
-    delete[] data;
 }
 

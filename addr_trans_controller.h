@@ -51,10 +51,11 @@ class AddrTransController {
   bool CheckValid(Addr phy_addr, int size);
   bool FullBlock(Addr phy_addr, int size);
 
-  int Setup(Addr phy_addr, Addr mach_base, int size, ATTEntry::State state);
+  int Setup(Addr phy_addr, Addr mach_base, ATTEntry::State state,
+      bool move_data = true);
   void HideClean(int index, bool move_data = true);
   Addr ResetClean(int index, bool move_data = true);
-  void FreeClean(int index, bool move_data = true);
+  void FreeClean(int index);
   Addr DirtyStained(int index, bool move_data = true);
   void FreeLoan(int index, bool move_data = true);
   void HideTemp(int index, bool move_data = true);
@@ -72,9 +73,6 @@ class AddrTransController {
   ///
   /// Wrappers with timings
   ///
-  void MoveToDRAM(uint64_t destination, uint64_t source, int size);
-  void MoveToNVM(uint64_t destination, uint64_t source, int size);
-  void SwapNVM(uint64_t static_addr, uint64_t mach_addr, int size);
   std::pair<int, Addr> ATTLookup(AddrTransTable& att, Tag phy_tag);
   int ATTSetup(AddrTransTable& att,
       Tag phy_tag, Addr mach_base, ATTEntry::State state);
@@ -94,6 +92,10 @@ class AddrTransController {
   void VBBackupBlock(VersionBuffer& vb,
       uint64_t mach_addr, VersionBuffer::State state);
   void VBClearBackup(VersionBuffer& vb);
+
+  void CopyBlockIntra(Addr dest_addr, Addr src_addr, Profiler& profiler);
+  void CopyBlockInter(Addr dest_addr, Addr src_addr, Profiler& profiler);
+  void SwapBlock(Addr direct_addr, Addr mach_addr, Profiler& profiler);
 
   const uint64_t phy_range_; ///< Size of physical address space
   const uint64_t dram_size_; ///< Size of DRAM cache region
@@ -136,24 +138,22 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
   return (phy_addr & (att_.block_size() - 1)) == 0 && size == att_.block_size();
 }
 
-// Wrapper functions for AddrTransTable
-inline void AddrTransController::MoveToDRAM(
-    uint64_t destination, uint64_t source, int size) {
-  mem_store_->DoMove(destination, source, size);
-  //mem_store_->OnDRAMWrite(destination, size);//TODO
+inline void AddrTransController::CopyBlockIntra(
+    Addr dest_addr, Addr src_addr, Profiler& profiler) {
+  mem_store_->MemCopy(dest_addr, src_addr, att_.block_size());
+  profiler.AddBlockMoveIntra();
 }
 
-inline void AddrTransController::MoveToNVM(
-    uint64_t destination, uint64_t source, int size) {
-  mem_store_->DoMove(destination, source, size);
-  //mem_store_->OnNVMWrite(destination, size);//TODO
+inline void AddrTransController::CopyBlockInter(
+    Addr dest, Addr src, Profiler& profiler) {
+  mem_store_->MemCopy(dest, src, att_.block_size());
+  profiler.AddBlockMoveInter();
 }
 
-inline void AddrTransController::SwapNVM(
-    uint64_t static_addr, uint64_t mach_addr, int size) {
-  mem_store_->DoSwap(static_addr, mach_addr, size);
-  //mem_store_->OnNVMWrite(static_addr, size);//TODO
-  //mem_store_->OnNVMWrite(mach_addr, size);//TODO
+inline void AddrTransController::SwapBlock(
+    Addr direct_addr, Addr mach_addr, Profiler& profiler) {
+  mem_store_->MemSwap(direct_addr, mach_addr, att_.block_size());
+
 }
 
 inline std::pair<int, Addr> AddrTransController::ATTLookup(AddrTransTable& att,

@@ -365,8 +365,8 @@ class AbstractMemory : public MemObject, public MemStore
         return addrController.IsDRAM(phy_addr, false);
     }
 
-    virtual void DoMove(uint64_t phy_addr, uint64_t mach_addr, int size);
-    virtual void DoSwap(uint64_t phy_addr, uint64_t mach_addr, int size);
+    virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size);
+    virtual void MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size);
 
     virtual void OnCheckpointing(int num_new_att, int num_new_ptt)
     {

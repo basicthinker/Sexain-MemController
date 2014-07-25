@@ -10,8 +10,8 @@
 
 class MemStore {
  public:
-  virtual void DoMove(uint64_t destination, uint64_t source, int size) = 0;
-  virtual void DoSwap(uint64_t static_addr, uint64_t mach_addr, int size) = 0;
+  virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size) = 0;
+  virtual void MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size) = 0;
  
   virtual void OnATTOp() { }
   virtual void OnBufferOp() { }

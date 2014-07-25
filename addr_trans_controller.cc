@@ -61,7 +61,7 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
         mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::LOAN);
       }
       const Addr mach_base = dram_buffer_.NewBlock();
-      Setup(phy_addr, mach_base, size, ATTEntry::LOAN);
+      Setup(phy_addr, mach_base, ATTEntry::LOAN, !FullBlock(phy_addr, size));
       return att_.Translate(phy_addr, mach_base);
     } else { // in running
       return phy_addr;
@@ -106,7 +106,8 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
         mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::DIRTY);
       }
       Addr mach_base = VBNewBlock(nvm_buffer_);
-      index = Setup(phy_addr, mach_base, size, ATTEntry::DIRTY);
+      index = Setup(phy_addr, mach_base, ATTEntry::DIRTY,
+          !FullBlock(phy_addr, size));
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
     att_.AddBlockWrite(index);
@@ -128,7 +129,8 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
         mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::STAINED);
       }
       Addr mach_base = dram_buffer_.NewBlock();
-      index = Setup(phy_addr, mach_base, size, ATTEntry::STAINED);
+      index = Setup(phy_addr, mach_base, ATTEntry::STAINED,
+          !FullBlock(phy_addr, size));
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
     att_.AddBlockWrite(index);
@@ -205,7 +207,7 @@ void AddrTransController::MigrateDRAM(const DRAMPageStats& stats,
     profiler.AddPageMoveIntra();
   } else if (stats.state == PTTEntry::DIRTY_DIRECT) {
     profiler.AddPageMoveInter(); // for write back
-  } else if (stats.state == PTTEntry::DIRTY_DIRECT) {
+  } else if (stats.state == PTTEntry::DIRTY_STATIC) {
     profiler.AddPageMoveIntra();
     profiler.AddPageMoveInter();
   }
@@ -223,21 +225,27 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats,
     Profiler& profiler) {
   Tag phy_tag = att_.ToTag(stats.phy_addr);
   Tag limit = att_.ToTag(stats.phy_addr + migrator_.page_size());
-  assert(limit - phy_tag == 1 << (migrator_.page_bits() - att_.block_bits()));
+  assert(limit - phy_tag == migrator_.page_blocks());
 
   for (Tag tag = phy_tag; tag < limit; ++tag) {
     int index = ATTLookup(att_, tag).first;
-    if (index == -EINVAL) continue;
+    if (index == -EINVAL) {
+      profiler.AddBlockMoveInter(); // for copying data to DRAM
+      continue;
+    }
     const ATTEntry& entry = att_.At(index);
-    // copy data to DRAM
-    mem_store_->DoMove(stats.phy_addr, entry.mach_base, att_.block_size());
+
     switch (entry.state) {
       case ATTEntry::CLEAN:
       case ATTEntry::DIRTY:
+        profiler.AddBlockMoveInter(); // for copying data to DRAM
+        CopyBlockIntra(stats.phy_addr, entry.mach_base, profiler);
         Discard(index, nvm_buffer_, profiler);
         break;
       case ATTEntry::STAINED:
       case ATTEntry::TEMP:
+        profiler.AddBlockMoveIntra(); // for copying data to DRAM
+        CopyBlockInter(stats.phy_addr, entry.mach_base, profiler);
         Discard(index, dram_buffer_, profiler);
         break;
       case ATTEntry::LOAN:
@@ -245,13 +253,15 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats,
       case ATTEntry::FREE:
         assert(entry.state != ATTEntry::FREE);
       case ATTEntry::HIDDEN:
+        profiler.AddBlockMoveInter();
+        ShiftState(index, ATTEntry::FREE, profiler);
         break;
     }
   }
   if (stats.dirty_ratio > 0.5) {
-    migrator_.Setup(stats.phy_addr, PTTEntry::DIRTY_STATIC, profiler);
+    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_STATIC, profiler);
   } else {
-    migrator_.Setup(stats.phy_addr, PTTEntry::DIRTY_DIRECT, profiler);
+    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, profiler);
   }
 }
 
@@ -311,18 +321,14 @@ void AddrTransController::FinishCheckpointing() {
   mem_store_->OnEpochEnd();
 }
 
-int AddrTransController::Setup(Addr phy_addr, Addr mach_base, int size,
-    ATTEntry::State state) {
+int AddrTransController::Setup(Addr phy_addr, Addr mach_base,
+    ATTEntry::State state, bool move_data) {
   assert(state == ATTEntry::DIRTY || state == ATTEntry::STAINED
       || state == ATTEntry::LOAN);
 
   const Tag phy_tag = att_.ToTag(phy_addr);
-  if (!FullBlock(phy_addr, size)) {
-    if (state == ATTEntry::DIRTY) {
-      MoveToNVM(mach_base, phy_addr, att_.block_size());
-    } else {
-      MoveToDRAM(mach_base, phy_addr, att_.block_size());
-    }
+  if (move_data) {
+    CopyBlockIntra(mach_base, att_.ToAddr(phy_tag), Profiler::Null); //TODO
   }
   return ATTSetup(att_, phy_tag, mach_base, state);
 }
@@ -336,8 +342,10 @@ void AddrTransController::HideClean(int index, bool move_data) {
   mem_store_->OnATTHideClean(phy_addr, move_data);
 
   if (move_data) {
+#ifdef MEMCK
     assert(!IsDRAM(phy_addr));
-    MoveToNVM(phy_addr, entry.mach_base, att_.block_size());
+#endif
+    CopyBlockIntra(phy_addr, entry.mach_base, Profiler::Null); //TODO
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base, VersionBuffer::BACKUP0);
   ATTReset(att_, index, phy_addr, ATTEntry::HIDDEN);
@@ -352,25 +360,27 @@ Addr AddrTransController::ResetClean(int index, bool move_data) {
 
   const Addr mach_base = dram_buffer_.NewBlock();
   if (move_data) {
-    MoveToDRAM(mach_base, entry.mach_base, att_.block_size());
+    CopyBlockInter(mach_base, entry.mach_base, Profiler::Null); //TODO
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base, VersionBuffer::BACKUP1);
   ATTReset(att_, index, mach_base, ATTEntry::TEMP);
   return mach_base;
 }
 
-void AddrTransController::FreeClean(int index, bool move_data) {
+void AddrTransController::FreeClean(int index) {
   const ATTEntry& entry = att_.At(index);
   assert(entry.state == ATTEntry::CLEAN);
 
   Addr phy_addr = att_.ToAddr(entry.phy_tag);
-  mem_store_->OnATTFreeClean(phy_addr, move_data);
+  //mem_store_->OnATTFreeClean(phy_addr, move_data); //TODO
  
   if (in_checkpointing()) {
-    SwapNVM(phy_addr, entry.mach_base, att_.block_size());
+    SwapBlock(phy_addr, entry.mach_base, Profiler::Null); //TODO
   } else { // in running
+#ifdef MEMCK
     assert(!IsDRAM(phy_addr));
-    MoveToNVM(phy_addr, entry.mach_base, att_.block_size());
+#endif
+    CopyBlockIntra(phy_addr, entry.mach_base, Profiler::Null); //TODO
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base,
       (VersionBuffer::State)in_checkpointing());
@@ -384,7 +394,7 @@ Addr AddrTransController::DirtyStained(int index, bool move_data) {
 
   const Addr mach_base = VBNewBlock(nvm_buffer_);
   if (move_data) {
-    MoveToNVM(mach_base, entry.mach_base, att_.block_size());
+    CopyBlockInter(mach_base, entry.mach_base, Profiler::Null); //TODO
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
   ATTReset(att_, index, mach_base, ATTEntry::DIRTY);
@@ -401,7 +411,7 @@ void AddrTransController::FreeLoan(int index, bool move_data) {
 
   if (move_data) {
     assert(IsDRAM(phy_addr));
-    MoveToDRAM(phy_addr, entry.mach_base, att_.block_size());
+    CopyBlockIntra(phy_addr, entry.mach_base, Profiler::Null); //TODO
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
   ATTShiftState(att_, index, ATTEntry::FREE);
@@ -415,7 +425,7 @@ void AddrTransController::HideTemp(int index, bool move_data) {
   const Addr phy_addr = att_.ToAddr(entry.phy_tag);
   if (move_data) {
     assert(!IsDRAM(phy_addr));
-    MoveToNVM(phy_addr, entry.mach_base, att_.block_size());
+    CopyBlockInter(phy_addr, entry.mach_base, Profiler::Null); //TODO
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
   ATTReset(att_, index, phy_addr, ATTEntry::HIDDEN);
