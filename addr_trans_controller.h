@@ -69,16 +69,6 @@ class AddrTransController {
   /// Move a NVM page out
   void MigrateNVM(const NVMPageStats& stats, Profiler& profiler);
 
-  /// VersionBuffer
-  uint64_t VBNewBlock(VersionBuffer& vb);
-  void VBFreeBlock(VersionBuffer& vb,
-      uint64_t mach_addr, VersionBuffer::State state);
-  void FreeBlock(VersionBuffer& vb,
-      uint64_t mach_addr, VersionBuffer::State state, Profiler& profiler);
-  void VBBackupBlock(VersionBuffer& vb,
-      uint64_t mach_addr, VersionBuffer::State state);
-  void VBClearBackup(VersionBuffer& vb);
-
   void CopyBlockIntra(Addr dest_addr, Addr src_addr, Profiler& profiler);
   void CopyBlockInter(Addr dest_addr, Addr src_addr, Profiler& profiler);
   void SwapBlock(Addr direct_addr, Addr mach_addr, Profiler& profiler);
@@ -140,37 +130,6 @@ inline void AddrTransController::SwapBlock(
     Addr direct_addr, Addr mach_addr, Profiler& profiler) {
   mem_store_->MemSwap(direct_addr, mach_addr, att_.block_size());
 
-}
-
-// Wrapper functions for VersionBuffer
-inline uint64_t AddrTransController::VBNewBlock(VersionBuffer& vb) {
-  mem_store_->OnBufferOp();
-  return vb.NewBlock();
-}
-
-inline void AddrTransController::VBFreeBlock(VersionBuffer& vb,
-    uint64_t mach_addr, VersionBuffer::State state) {
-  mem_store_->OnBufferOp();
-  vb.FreeBlock(mach_addr, state);
-}
-
-inline void AddrTransController::FreeBlock(VersionBuffer& vb,
-    uint64_t mach_addr, VersionBuffer::State state, Profiler& profiler) {
-  vb.FreeBlock(mach_addr, state);
-  profiler.AddTableOp();
-}
-
-inline void AddrTransController::VBBackupBlock(VersionBuffer& vb,
-    uint64_t mach_addr, VersionBuffer::State state) {
-  mem_store_->OnBufferOp();
-  vb.BackupBlock(mach_addr, state);
-}
-
-inline void AddrTransController::VBClearBackup(VersionBuffer& vb) {
-  int num = vb.ClearBackup();
-  while (num--) {
-    mem_store_->OnBufferOp();
-  }
 }
 
 #endif // SEXAIN_ADDR_TRANS_CONTROLLER_H_

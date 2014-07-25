@@ -9,6 +9,7 @@
 #include <limits>
 #include <cstdint>
 #include <cassert>
+#include "profiler.h"
 
 #define INVAL_ADDR std::numeric_limits<uint64_t>::max()
 
@@ -23,18 +24,16 @@ class VersionBuffer {
 
   VersionBuffer(int length, int block_bits);
 
-  uint64_t NewBlock();
-  void FreeBlock(uint64_t mach_addr, State state);
-  void BackupBlock(uint64_t mach_addr, State state);
-  int ClearBackup();
+  uint64_t SlotAlloc(Profiler& pf);
+  void FreeSlot(uint64_t mach_addr, State state, Profiler& pf);
+  void SlotBackup(uint64_t mach_addr, State state, Profiler& pf);
+  void ClearBackup(Profiler& pf);
 
   uint64_t addr_base() const { return addr_base_; }
   void set_addr_base(uint64_t base) { addr_base_ = base; }
   int length() const { return length_; }
   int block_size() const { return 1 << block_bits_; }
-  ///
   /// The total address space size that this buffer area covers in bytes
-  ///
   uint64_t Size() const;
   bool Contains(uint64_t addr) const;
  private:
