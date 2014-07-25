@@ -220,6 +220,21 @@ AbstractMemory::regStats()
         .desc("Average write ratio of DRAM pages")
         .prereq(numDirtyDRAMPages);
 
+    numPagesToDRAM
+        .name(name() + ".num_pages_to_dram")
+        .desc("Total number of pages ever migrated from NVM to DRAM");
+    numPagesToNVM
+        .name(name() + ".num_pages_to_nvm")
+        .desc("Total number of pages ever migrated from DRAM to NVM");
+    avgPagesToDRAM
+        .name(name() + ".avg_pages_to_dram")
+        .desc("Number of pages migrated to DRAM per epoch")
+        .prereq(numPagesToDRAM);
+    avgPagesToNVM
+        .name(name() + ".avg_pages_to_nvm")
+        .desc("Number of pages migrated to NVM per epoch")
+        .prereq(numPagesToNVM);
+
     numRegCaches
         .name(name() + ".num_reg_caches")
         .desc("Number of caches registered to the THNVM cache controller");
@@ -234,6 +249,8 @@ AbstractMemory::regStats()
         constant(addrController.migrator().page_blocks());
     avgDRAMWriteRatio = numDRAMWrites / numDirtyDRAMPages /
         constant(addrController.migrator().page_blocks());
+    avgPagesToDRAM = numPagesToDRAM / numEpochs;
+    avgPagesToNVM = numPagesToNVM / numEpochs;
 }
 
 AddrRange

@@ -217,6 +217,15 @@ class AbstractMemory : public MemObject, public MemStore
     /** Average write ratio of DRAM pages */
     Stats::Formula avgDRAMWriteRatio;
 
+    /** Total number of pages migrated from NVM to DRAM */
+    Stats::Scalar numPagesToDRAM;
+    /** Total number of pages migrated from DRAM to NVM */
+    Stats::Scalar numPagesToNVM;
+    /** Average number of pages migrated to DRAM per epoch */
+    Stats::Formula avgPagesToDRAM;
+    /** Average number of pages migrated to NVM per epoch */
+    Stats::Formula avgPagesToNVM;
+
     int regCaches;
     Stats::Formula numRegCaches;
 

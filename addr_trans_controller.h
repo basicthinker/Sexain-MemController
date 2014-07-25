@@ -47,6 +47,9 @@ class AddrTransController {
   bool in_checkpointing() const { return in_checkpointing_; }
   const MigrationController& migrator() const { return migrator_; }
 
+  uint64_t pages_to_dram() const { return pages_to_dram_; }
+  uint64_t pages_to_nvm() const { return pages_to_nvm_; }
+
   virtual bool IsDRAM(Addr phy_addr, bool isTiming = true);
 #ifdef MEMCK
   std::pair<AddrInfo, AddrInfo> GetAddrInfo(Addr phy_addr);
@@ -88,6 +91,9 @@ class AddrTransController {
   const uint64_t dram_size_; ///< Size of DRAM cache region
   MemStore* mem_store_;
   bool in_checkpointing_;
+
+  uint64_t pages_to_dram_; ///< Sum number of pages migrated from NVM to DRAM
+  uint64_t pages_to_nvm_; ///< Sum number of pages migrated from DRAM to NVM
 
   class DirtyCleaner : public QueueVisitor { // inc. TEMP and HIDDEN
    public:

@@ -15,7 +15,8 @@ AddrTransController::AddrTransController(
     att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
     dram_buffer_(att_len, block_bits),
     migrator_(block_bits, page_bits, dram_size >> page_bits),
-    phy_range_(phy_range), dram_size_(dram_size) {
+    phy_range_(phy_range), dram_size_(dram_size),
+    pages_to_dram_(0), pages_to_nvm_(0) {
 
   assert(phy_range >= dram_size);
   mem_store_ = ms;
@@ -261,6 +262,7 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
   } else {
     migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, pf);
   }
+  ++pages_to_dram_;
 }
 
 void AddrTransController::MigratePages(Profiler& profiler,
@@ -293,6 +295,7 @@ void AddrTransController::MigratePages(Profiler& profiler,
   do {
     if (d.write_ratio > wr) break;
     MigrateDRAM(d, profiler);
+    ++pages_to_nvm_; // excluding clean DRAM pages exchanged with NVM pages
   } while (migrator_.ExtractDRAMPage(d, profiler));
 }
 

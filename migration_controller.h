@@ -87,11 +87,11 @@ class MigrationController {
   int num_entries() const { return entries_.size(); }
   int num_dirty_entries() const { return dirty_entries_; }
 
-  int total_nvm_writes() const { return total_nvm_writes_; }
-  int total_dram_writes() const { return total_dram_writes_; }
-  int dirty_nvm_blocks() const { return dirty_nvm_blocks_; }
-  int dirty_nvm_pages() const { return dirty_nvm_pages_; }
-  int dirty_dram_pages() const { return dirty_dram_pages_; }
+  uint64_t total_nvm_writes() const { return total_nvm_writes_; }
+  uint64_t total_dram_writes() const { return total_dram_writes_; }
+  uint64_t dirty_nvm_blocks() const { return dirty_nvm_blocks_; }
+  uint64_t dirty_nvm_pages() const { return dirty_nvm_pages_; }
+  uint64_t dirty_dram_pages() const { return dirty_dram_pages_; }
 
  private:
   typedef std::unordered_map<uint64_t, PTTEntry>::iterator PTTEntryIterator;
@@ -114,11 +114,11 @@ class MigrationController {
 
   int dirty_entries_; ///< Number of dirty pages each epoch
 
-  int total_nvm_writes_; ///< Sum number of NVM writes, for verification
-  int total_dram_writes_; ///< Sum number of DRAM writes, for verification
-  int dirty_nvm_blocks_; ///< Sum number of dirty NVM blocks
-  int dirty_nvm_pages_; ///< Sum number of dirty NVM pages
-  int dirty_dram_pages_; ///< Sum number of dirty DRAM pages
+  uint64_t total_nvm_writes_; ///< Sum number of NVM writes, for verification
+  uint64_t total_dram_writes_; ///< Sum number of DRAM writes, for verification
+  uint64_t dirty_nvm_blocks_; ///< Sum number of dirty NVM blocks
+  uint64_t dirty_nvm_pages_; ///< Sum number of dirty NVM pages
+  uint64_t dirty_dram_pages_; ///< Sum number of dirty DRAM pages
 
   std::unordered_map<uint64_t, PTTEntry> entries_;
   std::unordered_map<uint64_t, NVMPage> nvm_pages_;

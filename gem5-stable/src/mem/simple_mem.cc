@@ -243,6 +243,8 @@ SimpleMemory::freeze()
     numDirtyNVMBlocks = addrController.migrator().dirty_nvm_blocks();
     numDirtyNVMPages = addrController.migrator().dirty_nvm_pages();
     numDirtyDRAMPages = addrController.migrator().dirty_dram_pages();
+    numPagesToDRAM = addrController.pages_to_dram();
+    numPagesToNVM = addrController.pages_to_nvm();
 
     uint64_t bytes = getBusUtil(); // migration
 
