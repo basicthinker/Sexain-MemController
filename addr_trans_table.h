@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <initializer_list>
 #include "index_queue.h"
+#include "profiler.h"
 
 typedef int64_t Tag; // never negative
 typedef uint64_t Addr;
@@ -45,10 +46,10 @@ class AddrTransTable : public IndexArray {
  public:
   AddrTransTable(int length, int block_bits);
 
-  std::pair<int, Addr> Lookup(Tag phy_tag);
-  int Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state);
-  void ShiftState(int index, ATTEntry::State state);
-  void Reset(int index, Addr new_base, ATTEntry::State new_state);
+  int Lookup(Tag phy_tag, Profiler& pf);
+  int Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state, Profiler& pf);
+  void ShiftState(int index, ATTEntry::State state, Profiler& pf);
+  void Reset(int index, Addr new_base, ATTEntry::State new_state, Profiler& pf);
   int VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
 
   const ATTEntry& At(int i) const;
@@ -67,7 +68,7 @@ class AddrTransTable : public IndexArray {
 
   void AddBlockRead(int index) { ++entries_[index].epoch_reads; }
   void AddBlockWrite(int index) { ++entries_[index].epoch_writes; }
-  void ClearStats();
+  void ClearStats(Profiler& pf);
   const std::vector<ATTEntry>& entries() const { return entries_; }
 
   IndexNode& operator[](int i) { return entries_[i].queue_node; }

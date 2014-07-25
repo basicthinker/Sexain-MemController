@@ -62,7 +62,6 @@ class AddrTransController {
 
   Addr NVMStore(Addr phy_addr, int size);
   Addr DRAMStore(Addr phy_addr, int size);
-  bool PseudoPageStore(Addr phy_addr);
 
   void Discard(int index, VersionBuffer& vb, Profiler& profiler);
   /// Move a DRAM page out
@@ -70,19 +69,6 @@ class AddrTransController {
   /// Move a NVM page out
   void MigrateNVM(const NVMPageStats& stats, Profiler& profiler);
 
-  ///
-  /// Wrappers with timings
-  ///
-  std::pair<int, Addr> ATTLookup(AddrTransTable& att, Tag phy_tag);
-  int ATTSetup(AddrTransTable& att,
-      Tag phy_tag, Addr mach_base, ATTEntry::State state);
-  void ATTShiftState(AddrTransTable& att, int index, ATTEntry::State state);
-  void ShiftState(int index, ATTEntry::State state, Profiler& profiler);
-  void ATTReset(AddrTransTable& att,
-      int index, Addr new_base, ATTEntry::State new_state);
-  void ATTVisit(AddrTransTable& att,
-      ATTEntry::State state, QueueVisitor* visitor);
-  int ATTFront(AddrTransTable& att, ATTEntry::State state);
   /// VersionBuffer
   uint64_t VBNewBlock(VersionBuffer& vb);
   void VBFreeBlock(VersionBuffer& vb,
@@ -154,50 +140,6 @@ inline void AddrTransController::SwapBlock(
     Addr direct_addr, Addr mach_addr, Profiler& profiler) {
   mem_store_->MemSwap(direct_addr, mach_addr, att_.block_size());
 
-}
-
-inline std::pair<int, Addr> AddrTransController::ATTLookup(AddrTransTable& att,
-    Tag phy_tag) {
-  mem_store_->OnATTOp();
-  return att.Lookup(phy_tag);
-}
-
-inline int AddrTransController::ATTSetup(AddrTransTable& att,
-    Tag phy_tag, Addr mach_base, ATTEntry::State state) {
-  mem_store_->OnATTOp();
-  return att.Setup(phy_tag, mach_base, state);
-}
-
-inline void AddrTransController::ATTShiftState(AddrTransTable& att,
-    int index, ATTEntry::State state) {
-  mem_store_->OnATTOp();
-  att.ShiftState(index, state);
-}
-
-inline void AddrTransController::ShiftState(int index, ATTEntry::State state,
-    Profiler& profiler) {
-  profiler.AddTableOp();
-  att_.ShiftState(index, state);
-}
-
-inline void AddrTransController::ATTReset(AddrTransTable& att,
-    int index, Addr new_base, ATTEntry::State new_state) {
-  mem_store_->OnATTOp();
-  att.Reset(index, new_base, new_state);
-}
-
-inline int AddrTransController::ATTFront(AddrTransTable& att,
-    ATTEntry::State state) {
-  mem_store_->OnATTOp();
-  return att.GetFront(state);
-}
-
-inline void AddrTransController::ATTVisit(AddrTransTable& att,
-    ATTEntry::State state, QueueVisitor* visitor) {
-  int num = att.VisitQueue(state, visitor);
-  while (num--) {
-    mem_store_->OnATTOp();
-  }
 }
 
 // Wrapper functions for VersionBuffer

@@ -26,13 +26,13 @@ AddrTransController::AddrTransController(
 }
 
 Addr AddrTransController::LoadAddr(Addr phy_addr) {
-  int index = ATTLookup(att_, att_.ToTag(phy_addr)).first;
+  int index = att_.Lookup(att_.ToTag(phy_addr), Profiler::Null); //TODO
   if (index != -EINVAL) {
     const ATTEntry& entry = att_.At(index);
     att_.AddBlockRead(index);
     return att_.Translate(phy_addr, entry.mach_base);
   } else {
-    PTTEntry* page = migrator_.LookupPage(phy_addr, Profiler::Null);
+    PTTEntry* page = migrator_.LookupPage(phy_addr, Profiler::Null); //TODO
     if (page) {
       migrator_.AddDRAMPageRead(*page);
       return migrator_.Translate(phy_addr, page->mach_base);
@@ -43,7 +43,7 @@ Addr AddrTransController::LoadAddr(Addr phy_addr) {
 }
 
 Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
-  int index = ATTLookup(att_, att_.ToTag(phy_addr)).first;
+  int index = att_.Lookup(att_.ToTag(phy_addr), Profiler::Null); //TODO
   if (index != -EINVAL) { // found
     const ATTEntry& entry = att_.At(index);
     if (in_checkpointing()) {
@@ -56,7 +56,7 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
     if (in_checkpointing()) {
       if (att_.IsEmpty(ATTEntry::FREE)) {
         assert(!att_.IsEmpty(ATTEntry::CLEAN));
-        FreeClean(ATTFront(att_, ATTEntry::CLEAN));
+        FreeClean(att_.GetFront(ATTEntry::CLEAN));
       } else {
         mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::LOAN);
       }
@@ -71,7 +71,7 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size) {
 
 Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
   const Tag phy_tag = att_.ToTag(phy_addr);
-  int index = ATTLookup(att_, phy_tag).first;
+  int index = att_.Lookup(phy_tag, Profiler::Null); //TODO
   Addr mach_addr;
   if (!in_checkpointing()) {
     if (index != -EINVAL) { // found
@@ -95,11 +95,11 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
     } else { // not found
       if (att_.IsEmpty(ATTEntry::FREE)) {
         if (!att_.IsEmpty(ATTEntry::LOAN)) {
-          int li = ATTFront(att_, ATTEntry::LOAN);
+          int li = att_.GetFront(ATTEntry::LOAN);
           FreeLoan(li);
         } else {
           assert(!att_.IsEmpty(ATTEntry::CLEAN));
-          int ci = ATTFront(att_, ATTEntry::CLEAN);
+          int ci = att_.GetFront(ATTEntry::CLEAN);
           FreeClean(ci);
         }
       } else {
@@ -124,7 +124,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
     } else { // not found
       if (att_.IsEmpty(ATTEntry::FREE)) {
         assert(!att_.IsEmpty(ATTEntry::CLEAN));
-        FreeClean(ATTFront(att_, ATTEntry::CLEAN));
+        FreeClean(att_.GetFront(ATTEntry::CLEAN));
       } else {
         mem_store_->OnATTFreeSetup(phy_addr, ATTEntry::STAINED);
       }
@@ -187,10 +187,10 @@ void AddrTransController::DirtyCleaner::Visit(int i) {
   }
 
   if (entry.state == ATTEntry::DIRTY) {
-    atc_->ATTShiftState(atc_->att_, i, ATTEntry::CLEAN);
+    atc_->att_.ShiftState(i, ATTEntry::CLEAN, Profiler::Null); //TODO
     ++num_flushed_entries_;
   } else if (entry.state == ATTEntry::HIDDEN) {
-    atc_->ATTShiftState(atc_->att_, i, ATTEntry::FREE);
+    atc_->att_.ShiftState(i, ATTEntry::FREE, Profiler::Null); //TODO
     ++num_flushed_entries_;
   }
 }
@@ -201,15 +201,14 @@ void AddrTransController::LoanRevoker::Visit(int i) {
   atc_->FreeLoan(i);
 }
 
-void AddrTransController::MigrateDRAM(const DRAMPageStats& stats,
-    Profiler& profiler) {
+void AddrTransController::MigrateDRAM(const DRAMPageStats& stats, Profiler& pf) {
   if (stats.state == PTTEntry::CLEAN_STATIC) {
-    profiler.AddPageMoveIntra();
+    pf.AddPageMoveIntra();
   } else if (stats.state == PTTEntry::DIRTY_DIRECT) {
-    profiler.AddPageMoveInter(); // for write back
+    pf.AddPageMoveInter(); // for write back
   } else if (stats.state == PTTEntry::DIRTY_STATIC) {
-    profiler.AddPageMoveIntra();
-    profiler.AddPageMoveInter();
+    pf.AddPageMoveIntra();
+    pf.AddPageMoveInter();
   }
 #ifdef MEMCK
   Tag tag = att_.ToTag(stats.phy_addr);
@@ -217,20 +216,19 @@ void AddrTransController::MigrateDRAM(const DRAMPageStats& stats,
     assert(!att_.Contains(tag + i));
   }
 #endif
-  migrator_.Free(stats.phy_addr, profiler);
-  profiler.AddTableOp();
+  migrator_.Free(stats.phy_addr, pf);
+  pf.AddTableOp();
 }
 
-void AddrTransController::MigrateNVM(const NVMPageStats& stats,
-    Profiler& profiler) {
+void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
   Tag phy_tag = att_.ToTag(stats.phy_addr);
   Tag limit = att_.ToTag(stats.phy_addr + migrator_.page_size());
   assert(limit - phy_tag == migrator_.page_blocks());
 
   for (Tag tag = phy_tag; tag < limit; ++tag) {
-    int index = ATTLookup(att_, tag).first;
+    int index = att_.Lookup(tag, pf);
     if (index == -EINVAL) {
-      profiler.AddBlockMoveInter(); // for copying data to DRAM
+      pf.AddBlockMoveInter(); // for copying data to DRAM
       continue;
     }
     const ATTEntry& entry = att_.At(index);
@@ -238,30 +236,30 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats,
     switch (entry.state) {
       case ATTEntry::CLEAN:
       case ATTEntry::DIRTY:
-        profiler.AddBlockMoveInter(); // for copying data to DRAM
-        CopyBlockIntra(stats.phy_addr, entry.mach_base, profiler);
-        Discard(index, nvm_buffer_, profiler);
+        pf.AddBlockMoveInter(); // for copying data to DRAM
+        CopyBlockIntra(stats.phy_addr, entry.mach_base, pf);
+        Discard(index, nvm_buffer_, pf);
         break;
       case ATTEntry::STAINED:
       case ATTEntry::TEMP:
-        profiler.AddBlockMoveIntra(); // for copying data to DRAM
-        CopyBlockInter(stats.phy_addr, entry.mach_base, profiler);
-        Discard(index, dram_buffer_, profiler);
+        pf.AddBlockMoveIntra(); // for copying data to DRAM
+        CopyBlockInter(stats.phy_addr, entry.mach_base, pf);
+        Discard(index, dram_buffer_, pf);
         break;
       case ATTEntry::LOAN:
         assert(entry.state != ATTEntry::LOAN);
       case ATTEntry::FREE:
         assert(entry.state != ATTEntry::FREE);
       case ATTEntry::HIDDEN:
-        profiler.AddBlockMoveInter();
-        ShiftState(index, ATTEntry::FREE, profiler);
+        pf.AddBlockMoveInter();
+        att_.ShiftState(index, ATTEntry::FREE, pf);
         break;
     }
   }
   if (stats.dirty_ratio > 0.5) {
-    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_STATIC, profiler);
+    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_STATIC, pf);
   } else {
-    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, profiler);
+    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, pf);
   }
 }
 
@@ -270,7 +268,7 @@ void AddrTransController::MigratePages(Profiler& profiler,
   assert(!in_checkpointing());
 
   LoanRevoker loan_revoker(this);
-  ATTVisit(att_, ATTEntry::LOAN, &loan_revoker);
+  att_.VisitQueue(ATTEntry::LOAN, &loan_revoker);
   assert(att_.IsEmpty(ATTEntry::LOAN));
 
   migrator_.InputBlocks(att_.entries());
@@ -298,20 +296,20 @@ void AddrTransController::MigratePages(Profiler& profiler,
   } while (migrator_.ExtractDRAMPage(d, profiler));
 }
 
-void AddrTransController::BeginCheckpointing(Profiler& profiler) {
+void AddrTransController::BeginCheckpointing(Profiler& pf) {
   assert(!in_checkpointing());
 
   // ATT flush
   DirtyCleaner att_cleaner(this);
-  ATTVisit(att_, ATTEntry::DIRTY, &att_cleaner);
+  att_.VisitQueue(ATTEntry::DIRTY, &att_cleaner);
   assert(att_.GetLength(ATTEntry::CLEAN) +
       att_.GetLength(ATTEntry::FREE) == att_.length());
-  profiler.AddTableOp(); // suppose in parallel
+  pf.AddTableOp(); // assumed in parallel
 
   in_checkpointing_ = true;
 
-  att_.ClearStats();
-  migrator_.Clear(profiler);
+  att_.ClearStats(pf);
+  migrator_.Clear(pf);
 }
 
 void AddrTransController::FinishCheckpointing() {
@@ -330,7 +328,7 @@ int AddrTransController::Setup(Addr phy_addr, Addr mach_base,
   if (move_data) {
     CopyBlockIntra(mach_base, att_.ToAddr(phy_tag), Profiler::Null); //TODO
   }
-  return ATTSetup(att_, phy_tag, mach_base, state);
+  return att_.Setup(phy_tag, mach_base, state, Profiler::Null); //TODO
 }
 
 void AddrTransController::HideClean(int index, bool move_data) {
@@ -348,7 +346,7 @@ void AddrTransController::HideClean(int index, bool move_data) {
     CopyBlockIntra(phy_addr, entry.mach_base, Profiler::Null); //TODO
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base, VersionBuffer::BACKUP0);
-  ATTReset(att_, index, phy_addr, ATTEntry::HIDDEN);
+  att_.Reset(index, phy_addr, ATTEntry::HIDDEN, Profiler::Null); //TODO
 }
 
 Addr AddrTransController::ResetClean(int index, bool move_data) {
@@ -363,7 +361,7 @@ Addr AddrTransController::ResetClean(int index, bool move_data) {
     CopyBlockInter(mach_base, entry.mach_base, Profiler::Null); //TODO
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base, VersionBuffer::BACKUP1);
-  ATTReset(att_, index, mach_base, ATTEntry::TEMP);
+  att_.Reset(index, mach_base, ATTEntry::TEMP, Profiler::Null); //TODO
   return mach_base;
 }
 
@@ -384,7 +382,7 @@ void AddrTransController::FreeClean(int index) {
   }
   VBBackupBlock(nvm_buffer_, entry.mach_base,
       (VersionBuffer::State)in_checkpointing());
-  ATTShiftState(att_, index, ATTEntry::FREE);
+  att_.ShiftState(index, ATTEntry::FREE, Profiler::Null); //TODO
 }
 
 Addr AddrTransController::DirtyStained(int index, bool move_data) {
@@ -397,7 +395,7 @@ Addr AddrTransController::DirtyStained(int index, bool move_data) {
     CopyBlockInter(mach_base, entry.mach_base, Profiler::Null); //TODO
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
-  ATTReset(att_, index, mach_base, ATTEntry::DIRTY);
+  att_.Reset(index, mach_base, ATTEntry::DIRTY, Profiler::Null); //TODO
   return mach_base;
 }
 
@@ -414,7 +412,7 @@ void AddrTransController::FreeLoan(int index, bool move_data) {
     CopyBlockIntra(phy_addr, entry.mach_base, Profiler::Null); //TODO
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
-  ATTShiftState(att_, index, ATTEntry::FREE);
+  att_.ShiftState(index, ATTEntry::FREE, Profiler::Null); //TODO
 }
 
 void AddrTransController::HideTemp(int index, bool move_data) {
@@ -428,14 +426,13 @@ void AddrTransController::HideTemp(int index, bool move_data) {
     CopyBlockInter(phy_addr, entry.mach_base, Profiler::Null); //TODO
   }
   VBFreeBlock(dram_buffer_, entry.mach_base, VersionBuffer::IN_USE);
-  ATTReset(att_, index, phy_addr, ATTEntry::HIDDEN);
+  att_.Reset(index, phy_addr, ATTEntry::HIDDEN, Profiler::Null); //TODO
 }
 
-void AddrTransController::Discard(int index, VersionBuffer& vb,
-    Profiler& profiler) {
+void AddrTransController::Discard(int index, VersionBuffer& vb, Profiler& pf) {
   assert(!in_checkpointing());
   const ATTEntry& entry = att_.At(index);
-  FreeBlock(vb, entry.mach_base, VersionBuffer::IN_USE, profiler);
-  ShiftState(index, ATTEntry::FREE, profiler);
+  FreeBlock(vb, entry.mach_base, VersionBuffer::IN_USE, pf);
+  att_.ShiftState(index, ATTEntry::FREE, pf);
 }
 
