@@ -57,9 +57,9 @@ class AddrTransTable : public IndexArray {
   void ShiftState(int index, ATTEntry::State state, Profiler& pf);
   void Reset(int index, Addr new_base, ATTEntry::State new_state, Profiler& pf);
   int VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
+  bool Contains(Addr phy_addr, Profiler& pf) const;
 
   const ATTEntry& At(int i) const;
-  bool Contains(Addr phy_addr) const;
   bool IsEmpty(ATTEntry::State state) const;
   int GetLength(ATTEntry::State state) const;
   int GetFront(ATTEntry::State state) const;
@@ -104,7 +104,8 @@ inline const ATTEntry& AddrTransTable::At(int i) const {
   return entries_[i];
 }
 
-inline bool AddrTransTable::Contains(Addr phy_addr) const {
+inline bool AddrTransTable::Contains(Addr phy_addr, Profiler& pf) const {
+  pf.AddTableOp();
   return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
 }
 

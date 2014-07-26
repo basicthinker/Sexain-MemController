@@ -62,9 +62,10 @@ class MigrationController {
 
   PTTEntry* LookupPage(uint64_t phy_addr, Profiler& profiler);
   bool Contains(uint64_t phy_addr, Profiler& profiler);
-  void ShiftState(PTTEntry& entry, PTTEntry::State state, Profiler& profiler);
+  void ShiftState(PTTEntry& entry, PTTEntry::State state, Profiler& pf);
   void Free(uint64_t page_addr, Profiler& profiler);
   void Setup(uint64_t page_addr, PTTEntry::State state, Profiler& profiler);
+
   uint64_t Translate(uint64_t phy_addr, uint64_t page_base) const;
   void AddDRAMPageRead(PTTEntry& entry);
   void AddDRAMPageWrite(PTTEntry& entry);
@@ -142,16 +143,15 @@ inline MigrationController::MigrationController(
 }
 
 inline PTTEntry* MigrationController::LookupPage(uint64_t phy_addr,
-    Profiler& profiler) {
-  profiler.AddTableOp();
+    Profiler& pf) {
+  pf.AddTableOp();
   PTTEntryIterator it = entries_.find(PageAlign(phy_addr));
   if (it == entries_.end()) return NULL;
   return &it->second;
 }
 
-inline bool MigrationController::Contains(uint64_t phy_addr,
-    Profiler& profiler) {
-  profiler.AddTableOp();
+inline bool MigrationController::Contains(uint64_t phy_addr, Profiler& pf) {
+  pf.AddTableOp();
   return entries_.find(PageAlign(phy_addr)) != entries_.end();
 }
 
@@ -163,16 +163,16 @@ inline void MigrationController::AddDRAMPageWrite(PTTEntry& entry) {
   ++entry.epoch_writes;
 }
 
-inline void MigrationController::ShiftState(
-    PTTEntry& entry, PTTEntry::State state, Profiler& profiler) {
+inline void MigrationController::ShiftState(PTTEntry& entry,
+    PTTEntry::State state, Profiler& pf) {
   entry.state = state;
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_entries_;
   }
-  profiler.AddTableOp();
+  pf.AddTableOp();
 }
 
-inline void MigrationController::Free(uint64_t page_addr, Profiler& profiler) {
+inline void MigrationController::Free(uint64_t page_addr, Profiler& pf) {
   PTTEntry* page = LookupPage(page_addr, Profiler::Overlap);
   assert(page);
   if (page->state == PTTEntry::DIRTY_DIRECT ||
@@ -180,11 +180,11 @@ inline void MigrationController::Free(uint64_t page_addr, Profiler& profiler) {
     --dirty_entries_;
   }
   assert(entries_.erase(page_addr) == 1);
-  profiler.AddTableOp();
+  pf.AddTableOp();
 }
 
 inline void MigrationController::Setup(
-    uint64_t page_addr, PTTEntry::State state, Profiler& profiler) {
+    uint64_t page_addr, PTTEntry::State state, Profiler& pf) {
   assert((page_addr & page_mask_) == 0);
   PTTEntry& entry = entries_[page_addr];
   entry.state = state;
@@ -193,7 +193,7 @@ inline void MigrationController::Setup(
     ++dirty_entries_;
   }
   assert(entries_.size() <= ptt_length_);
-  profiler.AddTableOp();
+  pf.AddTableOp();
 }
 
 inline uint64_t MigrationController::Translate(uint64_t phy_addr,

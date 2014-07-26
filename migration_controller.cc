@@ -40,8 +40,7 @@ void MigrationController::FillDRAMPageHeap() {
   dram_heap_filled_ = true;
 }
 
-void MigrationController::InputBlocks(
-    const vector<ATTEntry>& blocks) {
+void MigrationController::InputBlocks(const vector<ATTEntry>& blocks) {
   assert(nvm_pages_.empty());
   for (vector<ATTEntry>::const_iterator it = blocks.begin();
       it != blocks.end(); ++it) {
@@ -65,8 +64,7 @@ void MigrationController::InputBlocks(
   FillDRAMPageHeap();
 }
 
-bool MigrationController::ExtractNVMPage(NVMPageStats& stats,
-    Profiler& profiler) {
+bool MigrationController::ExtractNVMPage(NVMPageStats& stats, Profiler& pf) {
   assert(nvm_heap_filled_);
 
   if (nvm_heap_.empty()) return false;
@@ -75,14 +73,12 @@ bool MigrationController::ExtractNVMPage(NVMPageStats& stats,
   pop_heap(nvm_heap_.begin(), nvm_heap_.end());
   nvm_heap_.pop_back();
 
-  profiler.AddTableOp();
+  pf.AddTableOp();
   return true;
 }
 
-bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats,
-    Profiler& profiler) {
+bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats, Profiler& pf) {
   assert(dram_heap_filled_);
-  profiler.AddTableOp();
 
   if (dram_heap_.empty()) return false;
 
@@ -90,24 +86,23 @@ bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats,
   pop_heap(dram_heap_.begin(), dram_heap_.end());
   dram_heap_.pop_back();
 
-  profiler.AddTableOp();
+  pf.AddTableOp();
   return true;
 }
 
-void MigrationController::Clear(Profiler& profiler) {
-  profiler.AddPageMoveInter(dirty_entries_); // epoch write-backs
+void MigrationController::Clear(Profiler& pf) {
+  pf.AddPageMoveInter(dirty_entries_); // epoch write-backs
   for (PTTEntryIterator it = entries_.begin(); it != entries_.end(); ++it) {
     it->second.epoch_reads = 0;
     it->second.epoch_writes = 0;
     if (it->second.state == PTTEntry::DIRTY_DIRECT) {
-      ShiftState(it->second, PTTEntry::CLEAN_DIRECT, Profiler::Overlap);
+      ShiftState(it->second, PTTEntry::CLEAN_DIRECT, pf);
       --dirty_entries_;
     } else if (it->second.state == PTTEntry::DIRTY_STATIC) {
-      ShiftState(it->second, PTTEntry::CLEAN_STATIC, Profiler::Overlap);
+      ShiftState(it->second, PTTEntry::CLEAN_STATIC, pf);
       --dirty_entries_;
     }
   }
-  profiler.AddTableOp();
   assert(dirty_entries_ == 0);
 
   nvm_pages_.clear();

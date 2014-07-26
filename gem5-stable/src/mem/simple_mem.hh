@@ -120,8 +120,6 @@ class SimpleMemory : public AbstractMemory
     const Tick tNVMRead;
     const Tick tNVMWrite;
 
-    Tick sumLatency;
-
     uint64_t sumSize;
     uint64_t getBusUtil()
     {
@@ -254,38 +252,6 @@ class SimpleMemory : public AbstractMemory
     bool recvTimingReq(PacketPtr pkt);
 
     void recvRetry();
-
-    void OnATTOp()
-    {
-        sumLatency += tATTOp;
-    }
-
-    void OnBufferOp()
-    {
-        sumLatency += tBufferOp;
-    }
-
-    void OnNVMRead(uint64_t mach_addr, int size)
-    {
-        sumLatency += tNVMRead;
-        sumSize += size;
-    }
-
-    void OnNVMStore(uint64_t phy_addr, int size)
-    {
-        ++numNVMWrites;
-    }
-
-    void OnDRAMRead(uint64_t mach_addr, int size)
-    {
-        sumLatency += getLatency();
-        sumSize += size;
-    }
-
-    void OnDRAMStore(uint64_t phy_addr, int size)
-    {
-        ++numDRAMWrites;
-    }
 };
 
 #endif //__SIMPLE_MEMORY_HH__

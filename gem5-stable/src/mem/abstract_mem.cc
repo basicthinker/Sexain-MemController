@@ -424,7 +424,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 #endif
 
 void
-AbstractMemory::access(PacketPtr pkt)
+AbstractMemory::access(PacketPtr pkt, Profiler& pf)
 {
     assert(AddrRange(pkt->getAddr(),
                      pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
@@ -449,7 +449,8 @@ AbstractMemory::access(PacketPtr pkt)
         // keep a copy of our possible write value, and copy what is at the
         // memory address into the packet
         memcpy(&overwrite_val, pkt->getPtr<uint8_t>(), pkt->getSize());
-        uint8_t* host_addr = hostAddr(addrController.LoadAddr(localAddr(pkt)));
+        uint8_t* host_addr = hostAddr(
+            addrController.LoadAddr(localAddr(pkt), pf));
         MEMCK_BEFORE_READ(host_addr, pkt);
         memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
 
@@ -468,7 +469,7 @@ AbstractMemory::access(PacketPtr pkt)
 
         if (overwrite_mem) {
             Addr local_addr = addrController.StoreAddr(
-                    localAddr(pkt), pkt->getSize());
+                    localAddr(pkt), pkt->getSize(), pf);
             memcpy(hostAddr(local_addr), &overwrite_val, pkt->getSize());
             MEMCK_AFTER_WRITE(local_addr, pkt);
         }
@@ -484,7 +485,7 @@ AbstractMemory::access(PacketPtr pkt)
         if (pmemAddr) {
             assert(pkt->getSize() == addrController.block_size());
             uint8_t* host_addr = 
-                    hostAddr(addrController.LoadAddr(localAddr(pkt)));
+                    hostAddr(addrController.LoadAddr(localAddr(pkt), pf));
             MEMCK_BEFORE_READ(host_addr, pkt);
             memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());
         }
@@ -498,7 +499,7 @@ AbstractMemory::access(PacketPtr pkt)
             if (pmemAddr) {
                 assert(pkt->getSize() == addrController.block_size());
                 Addr local_addr = addrController.StoreAddr(
-                        localAddr(pkt), pkt->getSize());
+                        localAddr(pkt), pkt->getSize(), pf);
                 memcpy(hostAddr(local_addr), pkt->getPtr<uint8_t>(),
                         pkt->getSize());
                 MEMCK_AFTER_WRITE(local_addr, pkt);
@@ -526,7 +527,7 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
                      pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
-    Addr local_addr = addrController.LoadAddr(localAddr(pkt));
+    Addr local_addr = addrController.LoadAddr(localAddr(pkt), Profiler::Null);
     uint8_t *host_addr = hostAddr(local_addr);
 
     if (pkt->isRead()) {

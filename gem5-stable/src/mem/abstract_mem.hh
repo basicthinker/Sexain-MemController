@@ -350,9 +350,9 @@ class AbstractMemory : public MemObject, public MemStore
      * is turned into a response if required.
      *
      * @param pkt Packet performing the access
-     * @return if this packet is serviced in THNVM schemes
+     * @param pf Profiler counting internal behaviors
      */
-    void access(PacketPtr pkt);
+    void access(PacketPtr pkt, Profiler& pf = Profiler::Null);
 
     /**
      * Perform an untimed memory read or write without changing
@@ -371,7 +371,7 @@ class AbstractMemory : public MemObject, public MemStore
 
     virtual bool isDRAM(Addr phy_addr)
     {
-        return addrController.IsDRAM(phy_addr, false);
+        return addrController.IsDRAM(phy_addr, Profiler::Null);
     }
 
     virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size);

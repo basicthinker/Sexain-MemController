@@ -58,7 +58,6 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     releaseEvent(this), freezeEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
 {
-    sumLatency = 0;
     sumSize = 0;
     profBase.set_op_latency(p->lat_att_operate);
     profBase.set_exclude_intra(false);
@@ -97,7 +96,7 @@ SimpleMemory::regStats()
 Tick
 SimpleMemory::recvAtomic(PacketPtr pkt)
 {
-    access(pkt);
+    access(pkt, Profiler::Null);
     return pkt->memInhibitAsserted() ? 0 : getLatency();
 }
 
@@ -106,9 +105,7 @@ SimpleMemory::recvFunctional(PacketPtr pkt)
 {
     pkt->pushLabel(name());
 
-    assert(sumLatency == 0 && sumSize == 0);
     functionalAccess(pkt);
-    sumLatency = sumSize = 0;
 
     // potentially update the packets in our packet queue as well
     for (auto i = packetQueue.begin(); i != packetQueue.end(); ++i)
@@ -185,10 +182,10 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
-    assert(sumLatency == 0 && sumSize == 0);
-    recvAtomic(pkt);
+    Profiler pf(profBase);
+    access(pkt, pf);
     // turn packet around to go back to requester if response expected
-    Tick lat = isTimingATT ? sumLatency : getLatency();
+    Tick lat = isTimingATT ? pf.SumLatency() : getLatency();
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
@@ -205,15 +202,14 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         pendingDelete.push_back(pkt);
     }
     totalAccessLatency += lat;
-    sumLatency = 0;
 
     // only consider ourselves busy if there is any need to wait
     // to avoid extra events being scheduled for (infinitely) fast
     // memories
     if (duration != 0) {
         if (isTimingATT) {
-            duration = sumSize * bandwidth;
-            totalThroughput += sumSize;
+            duration = pf.SumBusUtil() * bandwidth;
+            totalThroughput += pf.SumBusUtil();
         }
         schedule(releaseEvent, curTick() + duration);
         isBusy = true;
@@ -238,8 +234,8 @@ SimpleMemory::freeze()
 {
     assert(isBusy);
     isBusy = false;
-    assert(numNVMWrites.value() == addrController.migrator().total_nvm_writes());
-    assert(numDRAMWrites.value() == addrController.migrator().total_dram_writes());
+    numNVMWrites = addrController.migrator().total_nvm_writes();
+    numDRAMWrites = addrController.migrator().total_dram_writes();
     numDirtyNVMBlocks = addrController.migrator().dirty_nvm_blocks();
     numDirtyNVMPages = addrController.migrator().dirty_nvm_pages();
     numDirtyDRAMPages = addrController.migrator().dirty_dram_pages();
@@ -253,17 +249,14 @@ SimpleMemory::freeze()
     bytes += profiler.SumBusUtil();
 
     Tick ckpt_duration = bytes * bandwidth;
-    if (ckpt_duration) {
+    if (isTimingATT && ckpt_duration) {
         schedule(unfreezeEvent, curTick() + ckpt_duration);
-        if (isTimingATT) {
-            totalThroughput += bytes;
-            totalChkptTime += ckpt_duration;
-        }
+        totalThroughput += bytes;
+        totalChkptTime += ckpt_duration;
     } else {
-      addrController.FinishCheckpointing();
+        addrController.FinishCheckpointing();
     }
 
-    sumLatency = 0;
     if (retryReq) {
         retryReq = false;
         port.sendRetry();
@@ -274,7 +267,6 @@ void
 SimpleMemory::unfreeze()
 {
     addrController.FinishCheckpointing();
-    sumLatency = sumSize = 0;
     if (isWaiting) {
         isWaiting = false;
         port.sendRetry();
