@@ -24,6 +24,8 @@ AddrTransController::AddrTransController(
 
   nvm_buffer_.set_addr_base(phy_range_);
   dram_buffer_.set_addr_base(nvm_buffer_.addr_base() + nvm_buffer_.Size());
+
+  ptt_reserved_ = migrator_.ptt_length() >> 3;
 }
 
 Addr AddrTransController::LoadAddr(Addr phy_addr) {
@@ -140,7 +142,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size) {
 }
 
 Control AddrTransController::Probe(Addr phy_addr) {
-  static int ptt_limit = migrator_.ptt_length() - (migrator_.ptt_length() >> 3);
+  static int ptt_limit = migrator_.ptt_length() - ptt_reserved_;
   if (migrator_.Contains(phy_addr, Profiler::Null)) { // DRAM
     if (in_checkpointing()) {
       if (!att_.Contains(phy_addr) &&
@@ -154,7 +156,7 @@ Control AddrTransController::Probe(Addr phy_addr) {
         return WAIT_CKPT;
       }
     } else if (att_.GetLength(ATTEntry::DIRTY) == att_.length() ||
-        migrator_.num_dirty_entries() > ptt_limit) {
+         migrator_.num_dirty_entries() >= ptt_limit ) {
       return NEW_EPOCH;
     }
   }
@@ -274,6 +276,8 @@ void AddrTransController::MigratePages(Profiler& profiler,
   assert(att_.IsEmpty(ATTEntry::LOAN));
 
   migrator_.InputBlocks(att_.entries());
+  bool push = migrator_.ptt_length() - migrator_.num_dirty_entries() <=
+      ptt_reserved_;
 
   NVMPageStats n;
   DRAMPageStats d;
@@ -291,12 +295,13 @@ void AddrTransController::MigratePages(Profiler& profiler,
     }
     MigrateNVM(n, profiler);
   }
-  if (!d_ready && !migrator_.ExtractDRAMPage(d, profiler)) return;
-  do {
+  if ((!d_ready && !migrator_.ExtractDRAMPage(d, profiler)) || !push) return;
+  for (int i = 0; i < ptt_reserved_; ++i) {
     if (d.write_ratio > wr) break;
     MigrateDRAM(d, profiler);
     ++pages_to_nvm_; // excluding clean DRAM pages exchanged with NVM pages
-  } while (migrator_.ExtractDRAMPage(d, profiler));
+    if (!migrator_.ExtractDRAMPage(d, profiler)) break;
+  }
 }
 
 void AddrTransController::BeginCheckpointing(Profiler& pf) {

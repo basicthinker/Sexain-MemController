@@ -39,10 +39,11 @@ struct DRAMPageStats {
   uint64_t phy_addr;
   PTTEntry::State state;
   double write_ratio;
+
   bool operator<(const DRAMPageStats& p) {
-    if (write_ratio == p.write_ratio) {
-      return state > p.state;
-    } else return write_ratio > p.write_ratio;
+    if (state == p.state) {
+      return write_ratio > p.write_ratio;
+    } else return state > p.state;
   }
 };
 
