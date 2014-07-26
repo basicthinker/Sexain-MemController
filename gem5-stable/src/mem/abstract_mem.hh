@@ -125,8 +125,6 @@ class AbstractMemory : public MemObject, public MemStore
 
     std::list<LockedAddr> lockedAddrList;
 
-    int epochPages;
-
     // helper function for checkLockedAddrs(): we really want to
     // inline a quick check for an empty locked addr list (hopefully
     // the common case), and do the full list search (if necessary) in

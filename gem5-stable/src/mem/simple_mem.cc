@@ -52,9 +52,8 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     port(name() + ".port", *this), latency(p->latency),
     tATTOp(p->lat_att_operate), tBufferOp(p->lat_buffer_operate),
     tNVMRead(p->lat_nvm_read), tNVMWrite(p->lat_nvm_write),
-    isTimingATT(p->is_timing_att), latency_var(p->latency_var),
-    bandwidth(p->bandwidth), isBusy(false), isWaiting(false),
-    retryReq(false), retryResp(false),
+    latency_var(p->latency_var), bandwidth(p->bandwidth),
+    isBusy(false), isWaiting(false), retryReq(false), retryResp(false),
     releaseEvent(this), freezeEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
 {
@@ -79,18 +78,18 @@ SimpleMemory::regStats()
     using namespace Stats;
     AbstractMemory::regStats();
 
-    totalRespLatency
-        .name(name() + ".total_resp_latency")
-        .desc("Total latency of memory responses");
-    totalAccessLatency
-        .name(name() + ".total_access_latency")
-        .desc("Total latency of memory accesses");
+    extraRespLatency
+        .name(name() + ".extra_resp_latency")
+        .desc("Incremental latency of individual access");
     totalThroughput
         .name(name() + ".total_throughput")
         .desc("Total throughput of memory accesses");
-    totalChkptTime
-        .name(name() + ".total_chkpt_time")
+    totalCkptTime
+        .name(name() + ".total_ckpt_time")
         .desc("Total time in checkpointing frames");
+    //totalWaitTime
+    //    .name(name() + ".total_wait_time")
+    //    .desc("Total waiting time in checkpointing frames");
 }
 
 Tick
@@ -148,6 +147,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
             Profiler profiler(profBase);
+            assert(sumSize == 0);
             addrController.MigratePages(profiler);
             sumSize = profiler.SumBusUtil(); // pass to freeze()
             schedule(freezeEvent, curTick() + profiler.SumLatency());
@@ -172,11 +172,13 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // and for how long, as it is not clear what to regulate for the
     // other types of commands
     Tick duration = 0;
+    Tick lat = 0;
     if (pkt->isRead() || pkt->isWrite()) {
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
         duration = pkt->getSize() * bandwidth;
-        if (!isTimingATT) totalThroughput += pkt->getSize();
+        lat = pkt->isRead() ? tNVMRead : tNVMWrite;
+        // totalThroughput += pkt->getSize(); //TODO
     }
 
     // go ahead and deal with the packet and put the response in the
@@ -184,8 +186,8 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     bool needsResponse = pkt->needsResponse();
     Profiler pf(profBase);
     access(pkt, pf);
+    lat += pf.SumLatency();
     // turn packet around to go back to requester if response expected
-    Tick lat = isTimingATT ? pf.SumLatency() : getLatency();
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
@@ -193,28 +195,25 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
         // before the packet(s) before it
+        if (!lat) lat = latency;
         packetQueue.push_back(
                 DeferredPacket(pkt, curTick() + lat));
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
-        totalRespLatency += lat;
+        extraRespLatency += lat - latency;
     } else {
         pendingDelete.push_back(pkt);
     }
-    totalAccessLatency += lat;
 
     // only consider ourselves busy if there is any need to wait
     // to avoid extra events being scheduled for (infinitely) fast
     // memories
     if (duration != 0) {
-        if (isTimingATT) {
-            duration = pf.SumBusUtil() * bandwidth;
-            totalThroughput += pf.SumBusUtil();
-        }
+        duration += lat + pf.SumBusUtil() * bandwidth;
+        totalThroughput += pf.SumBusUtil();
         schedule(releaseEvent, curTick() + duration);
         isBusy = true;
     }
-    sumSize = 0;
     return true;
 }
 
@@ -249,10 +248,10 @@ SimpleMemory::freeze()
     bytes += profiler.SumBusUtil();
 
     Tick ckpt_duration = bytes * bandwidth;
-    if (isTimingATT && ckpt_duration) {
+    if (ckpt_duration) {
         schedule(unfreezeEvent, curTick() + ckpt_duration);
         totalThroughput += bytes;
-        totalChkptTime += ckpt_duration;
+        totalCkptTime += ckpt_duration;
     } else {
         addrController.FinishCheckpointing();
     }

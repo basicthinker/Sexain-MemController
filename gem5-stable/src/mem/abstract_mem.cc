@@ -65,7 +65,6 @@ AbstractMemory::AbstractMemory(const Params *p) :
 {
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
-    epochPages = 0;
     regCaches = 0;
 #ifdef MEMCK
     ckmem = (uint8_t*) mmap(NULL, hostSize(), PROT_READ | PROT_WRITE,

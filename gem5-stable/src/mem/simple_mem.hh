@@ -128,8 +128,6 @@ class SimpleMemory : public AbstractMemory
         return v;
     }
 
-    bool isTimingATT;
-
     /**
      * Fudge factor added to the latency.
      */
@@ -236,14 +234,14 @@ class SimpleMemory : public AbstractMemory
 
   protected:
 
-    /** Total latency of memory responses */
-    Stats::Scalar totalRespLatency;
-    /** Total latency of memory accesses */
-    Stats::Scalar totalAccessLatency;
+    /** Incremental latency of individual access */
+    Stats::Scalar extraRespLatency;
     /** Total throughput of memory accesses */
     Stats::Scalar totalThroughput;
     /** Total time in checkpointing frames */
-    Stats::Scalar totalChkptTime;
+    Stats::Scalar totalCkptTime;
+    /** Total waiting time in checkpointing frames */
+    //Stats::Scalar totalWaitTime;
 
     Tick recvAtomic(PacketPtr pkt);
 
