@@ -178,7 +178,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // the bandwidth limit
         duration = pkt->getSize() * bandwidth;
         lat = pkt->isRead() ? tNVMRead : tNVMWrite;
-        // totalThroughput += pkt->getSize(); //TODO
+        totalThroughput += pkt->getSize();
     }
 
     // go ahead and deal with the packet and put the response in the

@@ -55,7 +55,6 @@ class SimpleMemory(AbstractMemory):
     lat_att_operate = Param.Latency('3ns', "ATT operation latency")
     lat_buffer_operate = Param.Latency('3ns',
             "Version buffer operation latency")
-    lat_nvm_read = Param.Latency('40ns', "Latency for NVM read")
-    lat_nvm_write = Param.Latency('500ns', "Latency for NVM write")
+    lat_nvm_read = Param.Latency('50ns', "Latency for NVM read")
+    lat_nvm_write = Param.Latency('400ns', "Latency for NVM write")
     is_timing_att = Param.Bool(True, "If ATT latency is timed")
-

@@ -52,6 +52,6 @@ for bench in results.keys():
             if stat in results[bench][dir]:
                 sys.stdout.write('\t' + results[bench][dir][stat])
             else:
-                sys.stdout.write('\t')
+                sys.stdout.write('\tnone')
     print    
 

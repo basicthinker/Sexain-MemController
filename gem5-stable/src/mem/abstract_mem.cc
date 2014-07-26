@@ -69,6 +69,7 @@ AbstractMemory::AbstractMemory(const Params *p) :
 #ifdef MEMCK
     ckmem = (uint8_t*) mmap(NULL, hostSize(), PROT_READ | PROT_WRITE,
             MAP_ANON | MAP_PRIVATE, -1, 0);
+    inform("THNVM runs with memory check.\n");
 #endif
 }
 
@@ -405,7 +406,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 
 #define MEMCK_AFTER_WRITE(LA, PKT)                                             \
     do {                                                                       \
-        Addr post_addr = addrController.LoadAddr(localAddr(PKT));              \
+        Addr post_addr = addrController.LoadAddr(localAddr(PKT), Profiler::Null);\
     	if (post_addr != (LA)) {                                               \
     	    warn("File %s, line %d: Memory write meets corrupted address: "    \
     	         "%lx => %lx for physical %lx\n",                              \

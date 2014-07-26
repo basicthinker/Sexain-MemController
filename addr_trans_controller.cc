@@ -214,7 +214,7 @@ void AddrTransController::MigrateDRAM(const DRAMPageStats& stats, Profiler& pf) 
 #ifdef MEMCK
   Tag tag = att_.ToTag(stats.phy_addr);
   for (int i = 0; i < migrator_.page_blocks(); ++i) {
-    assert(!att_.Contains(tag + i));
+    assert(!att_.Contains(tag + i, Profiler::Null));
   }
 #endif
   migrator_.Free(stats.phy_addr, pf);
@@ -346,7 +346,7 @@ void AddrTransController::HideClean(int index, bool move_data, Profiler& pf) {
 
   if (move_data) {
 #ifdef MEMCK
-    assert(!IsDRAM(phy_addr));
+    assert(!IsDRAM(phy_addr, Profiler::Null));
 #endif
     CopyBlockIntra(phy_addr, entry.mach_base, pf);
   }
@@ -381,7 +381,7 @@ void AddrTransController::FreeClean(int index, Profiler& pf) {
     SwapBlock(phy_addr, entry.mach_base, pf);
   } else { // in running
 #ifdef MEMCK
-    assert(!IsDRAM(phy_addr));
+    assert(!IsDRAM(phy_addr, Profiler::Null));
 #endif
     CopyBlockIntra(phy_addr, entry.mach_base, pf);
   }
