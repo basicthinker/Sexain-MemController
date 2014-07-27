@@ -45,6 +45,7 @@
 import optparse
 import sys
 import os
+import time
 import shutil
 import filecmp
 from difflib import unified_diff
@@ -128,8 +129,8 @@ parser.add_option("--page-bits", type="int", default=12,
 parser.add_option("--reserved-writes", type="int",
         help="Number of reserved writeback buffers in caches")
 
-parser.add_option("--att-latency", action="store_true", default=False,
-        help="Whether to enable ATT latency")
+parser.add_option("--disable-timing", action="store_true", default=False,
+        help="Whether to avoid timing THNVM")
 
 parser.add_option("--cpu-2006", default="", type="string",
         help="The CPU 2006 benchmark to be loaded.")
@@ -155,8 +156,9 @@ numThreads = 1
 def config_fingerprint(options):
     fp = 'a' + str(options.att_length)
     fp += '-d' + options.dram_size
-    if options.att_latency:
-        fp += '-lat'
+    if options.disable_timing:
+        fp += '-dsbl'
+    fp += '-' + str(int(time.time()))
     return fp
 
 fp = config_fingerprint(options)

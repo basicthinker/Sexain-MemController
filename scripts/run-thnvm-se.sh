@@ -54,9 +54,9 @@ while getopts "hc:o:b:g:a:t:l" opt; do
       to_run=1
       to_test=1
       ;;
-    l)
-      OUT_DIR+="-lat"
-      OPTIONS+=" --att-latency"
+    d)
+      OUT_DIR+="-dsbl"
+      OPTIONS+=" --disable-timing"
       ;;
     t)
       ALIAS=$OPTARG

@@ -57,6 +57,7 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     releaseEvent(this), freezeEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
 {
+    isTiming = !p->disable_timing;
     sumSize = 0;
     profBase.set_op_latency(p->lat_att_operate);
     profBase.set_exclude_intra(false);
@@ -178,6 +179,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // the bandwidth limit
         duration = pkt->getSize() * bandwidth;
         lat = pkt->isRead() ? tNVMRead : tNVMWrite;
+        extraRespLatency += lat - latency;
         totalThroughput += pkt->getSize();
     }
 
@@ -187,6 +189,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     Profiler pf(profBase);
     access(pkt, pf);
     lat += pf.SumLatency();
+    extraRespLatency += pf.SumLatency();
     // turn packet around to go back to requester if response expected
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
@@ -195,12 +198,11 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
         // before the packet(s) before it
-        if (!lat) lat = latency;
+        if (!lat) lat = getLatency();
         packetQueue.push_back(
                 DeferredPacket(pkt, curTick() + lat));
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
-        extraRespLatency += lat - latency;
     } else {
         pendingDelete.push_back(pkt);
     }

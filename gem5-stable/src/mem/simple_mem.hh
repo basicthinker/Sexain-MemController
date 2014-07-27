@@ -120,6 +120,8 @@ class SimpleMemory : public AbstractMemory
     const Tick tNVMRead;
     const Tick tNVMWrite;
 
+    bool isTiming;
+
     uint64_t sumSize;
     uint64_t getBusUtil()
     {
