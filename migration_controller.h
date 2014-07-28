@@ -86,6 +86,7 @@ class MigrationController {
   uint64_t PageAlign(uint64_t addr) { return addr & ~page_mask_; }
 
   int ptt_length() const { return ptt_length_; }
+  int ptt_capacity() const { return ptt_capacity_; }
   int num_entries() const { return entries_.size(); }
   int num_dirty_entries() const { return dirty_entries_; }
 
@@ -113,6 +114,7 @@ class MigrationController {
   const uint64_t page_mask_;
   const int page_blocks_;
   const int ptt_length_;
+  const int ptt_capacity_;
 
   int dirty_entries_; ///< Number of dirty pages each epoch
 
@@ -136,7 +138,8 @@ inline MigrationController::MigrationController(
     block_bits_(block_bits), block_mask_((1 << block_bits) - 1),
     page_bits_(page_bits), page_mask_((1 << page_bits) - 1),
     page_blocks_(1 << (page_bits - block_bits)),
-    ptt_length_(ptt_length), dirty_entries_(0),
+    ptt_length_(ptt_length), ptt_capacity_(ptt_length + (ptt_length >> 4)),
+    dirty_entries_(0),
     total_nvm_writes_(0), total_dram_writes_(0),
     dirty_nvm_blocks_(0), dirty_dram_pages_(0),
     dram_heap_filled_(false), nvm_heap_filled_(false) {
@@ -192,7 +195,7 @@ inline void MigrationController::Setup(
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_entries_;
   }
-  assert(entries_.size() <= ptt_length_);
+  assert(entries_.size() <= ptt_capacity_);
   pf.AddTableOp();
 }
 

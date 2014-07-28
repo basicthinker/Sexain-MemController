@@ -24,8 +24,6 @@ AddrTransController::AddrTransController(
 
   nvm_buffer_.set_addr_base(phy_range_);
   dram_buffer_.set_addr_base(nvm_buffer_.addr_base() + nvm_buffer_.Size());
-
-  ptt_reserved_ = migrator_.ptt_length() >> 3;
 }
 
 Addr AddrTransController::LoadAddr(Addr phy_addr, Profiler& pf) {
@@ -149,7 +147,6 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size, Profiler& pf) {
 }
 
 Control AddrTransController::Probe(Addr phy_addr) {
-  static int ptt_limit = migrator_.ptt_length() - ptt_reserved_;
   if (migrator_.Contains(phy_addr, Profiler::Null)) { // DRAM
     if (in_checkpointing()) {
       if (!att_.Contains(phy_addr, Profiler::Null) &&
@@ -163,7 +160,7 @@ Control AddrTransController::Probe(Addr phy_addr) {
         return WAIT_CKPT;
       }
     } else if (att_.GetLength(ATTEntry::DIRTY) == att_.length() ||
-         migrator_.num_dirty_entries() >= ptt_limit ) {
+         migrator_.num_dirty_entries() >= migrator_.ptt_length() ) {
       return NEW_EPOCH;
     }
   }
@@ -286,8 +283,6 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
   assert(att_.IsEmpty(ATTEntry::LOAN));
 
   migrator_.InputBlocks(att_.entries());
-  bool push = migrator_.ptt_length() - migrator_.num_dirty_entries() <=
-      ptt_reserved_;
 
   NVMPageStats n;
   DRAMPageStats d;
@@ -295,7 +290,7 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
   while (migrator_.ExtractNVMPage(n, pf)) {
     if (n.dirty_ratio < dr) break;
     // Find a DRAM page for exchange
-    if (migrator_.num_entries() == migrator_.ptt_length()) {
+    if (migrator_.num_entries() == migrator_.ptt_capacity()) {
       if (!migrator_.ExtractDRAMPage(d, Profiler::Overlap)) return;
       if (d.write_ratio > 0) {
         d_ready = true;
@@ -305,8 +300,8 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
     }
     MigrateNVM(n, pf);
   }
-  if ((!d_ready && !migrator_.ExtractDRAMPage(d, pf)) || !push) return;
-  for (int i = 0; i < ptt_reserved_; ++i) {
+  if ((!d_ready && !migrator_.ExtractDRAMPage(d, pf))) return;
+  for (int i = 0; i < migrator_.ptt_capacity() - migrator_.ptt_length(); ++i) {
     if (d.write_ratio > wr) break;
     MigrateDRAM(d, pf);
     ++pages_to_nvm_; // excluding clean DRAM pages exchanged with NVM pages

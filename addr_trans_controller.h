@@ -88,7 +88,6 @@ class AddrTransController {
 
   const uint64_t phy_range_; ///< Size of physical address space
   const uint64_t dram_size_; ///< Size of DRAM cache region
-  int ptt_reserved_; ///< Number of clean PTT entries reserved for migration
   MemStore* mem_store_;
   bool in_checkpointing_;
 
