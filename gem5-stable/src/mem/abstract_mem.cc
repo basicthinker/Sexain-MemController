@@ -66,6 +66,7 @@ AbstractMemory::AbstractMemory(const Params *p) :
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
     ckBusUtil = 0;
+    ckDRAMWriteHits = 0;
     regCaches = 0;
 #ifdef MEMCK
     ckmem = (uint8_t*) mmap(NULL, hostSize(), PROT_READ | PROT_WRITE,
@@ -186,15 +187,12 @@ AbstractMemory::regStats()
     numEpochs
         .name(name() + ".num_epochs")
         .desc("Total number of epochs");
-    numFreeWrites
-        .name(name() + ".num_free_writes")
-        .desc("Total number of writes that directly have free entries");
-    numShrinkWrites
-        .name(name() + ".num_shrink_writes")
-        .desc("Total number of shrinking writes that hit clean entries");
-    numReplWrites
-        .name(name() + ".num_repl_writes")
-        .desc("Total number of writes that replace existent entries");
+    numATTWriteHits
+        .name(name() + ".att_write_hits")
+        .desc("Total number of write hits on ATT");
+    numATTWriteMisses
+        .name(name() + ".att_write_misses")
+        .desc("Total number of write misses on ATT");
 
     numNVMWrites
         .name(name() + ".num_nvm_writes")

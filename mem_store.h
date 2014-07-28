@@ -21,20 +21,15 @@ class MemStore {
   virtual void OnDRAMRead(uint64_t mach_addr, int size) { }
   virtual void OnDRAMStore(uint64_t phy_addr, int size) { }
 
-  ///
-  /// Behavioral events in THNVM schemes
-  ///
   virtual void OnEpochEnd() { }
-  virtual void OnATTFreeSetup(uint64_t phy_addr, int state) { } 
-  virtual void OnATTHideClean(uint64_t phy_addr, bool move_data) { } 
-  virtual void OnATTResetClean(uint64_t phy_addr, bool move_data) { } 
-  virtual void OnATTFreeClean(uint64_t phy_addr, bool move_data) { } 
-  virtual void OnATTFreeLoan(uint64_t phy_addr, bool move_data) { }
+  virtual void OnATTWriteHit(int state) { }
+  virtual void OnATTWriteMiss(int state) { }
 
   virtual void OnCacheRegister() { }
   virtual void ckBusUtilAdd(uint64_t bytes) { }
   virtual void ckNVMWrite() { }
   virtual void ckDRAMWrite() { }
+  virtual void ckDRAMWriteHit() { }
 };
 
 class TraceMemStore : public MemStore {

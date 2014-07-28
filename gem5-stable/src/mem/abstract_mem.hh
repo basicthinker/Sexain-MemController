@@ -192,12 +192,10 @@ class AbstractMemory : public MemObject, public MemStore
 
     /** Number of epochs */
     Stats::Scalar numEpochs;
-    /** Number of free-writes */
-    Stats::Scalar numFreeWrites;
-    /** Number of shrink-writes */
-    Stats::Scalar numShrinkWrites;
-    /** Number of replace-writes */
-    Stats::Scalar numReplWrites;
+    /** Number of write hits on ATT */
+    Stats::Scalar numATTWriteHits;
+    /** Number of write misses on ATT */
+    Stats::Scalar numATTWriteMisses;
 
     /** Number of writes on NVM pages */
     Stats::Scalar numNVMWrites;
@@ -239,6 +237,7 @@ class AbstractMemory : public MemObject, public MemStore
     System *_system;
 
     uint64_t ckBusUtil;
+    uint64_t ckDRAMWriteHits; ///< Number of writes on DRAM without hitting ATT
 
   private:
 
@@ -391,29 +390,14 @@ class AbstractMemory : public MemObject, public MemStore
         ++numEpochs;
     }
 
-    virtual void OnATTFreeSetup(uint64_t phy_addr, int state)
+    virtual void OnATTWriteHit(int state)
     {
-        ++numFreeWrites;
+        ++numATTWriteHits;
     }
 
-    virtual void OnATTHideClean(uint64_t phy_addr, bool move_data)
+    virtual void OnATTWriteMiss(int state)
     {
-        ++numShrinkWrites;
-    }
-
-    virtual void OnATTResetClean(uint64_t phy_addr, bool move_data)
-    {
-        ++numShrinkWrites;
-    }
-
-    virtual void OnATTFreeClean(uint64_t phy_addr, bool move_data)
-    {
-        ++numReplWrites;
-    }
-
-    virtual void OnATTFreeLoan(uint64_t phy_addr, bool move_data)
-    {
-        ++numReplWrites;
+        ++numATTWriteMisses;
     }
 
     virtual void OnCacheRegister()
@@ -426,12 +410,19 @@ class AbstractMemory : public MemObject, public MemStore
         ckBusUtil += bytes;
     }
 
-    virtual void ckNVMWrite() {
+    virtual void ckNVMWrite()
+    {
         ++numNVMWrites;
     }
 
-    virtual void ckDRAMWrite() {
+    virtual void ckDRAMWrite()
+    {
         ++numDRAMWrites;
+    }
+
+    virtual void ckDRAMWriteHit()
+    {
+        ++ckDRAMWriteHits;
     }
 };
 
