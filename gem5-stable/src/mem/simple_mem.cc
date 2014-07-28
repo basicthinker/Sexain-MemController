@@ -60,7 +60,6 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     isTiming = !p->disable_timing;
     sumSize = 0;
     profBase.set_op_latency(p->lat_att_operate);
-    profBase.set_exclude_intra(false);
 }
 
 void
@@ -82,15 +81,9 @@ SimpleMemory::regStats()
     extraRespLatency
         .name(name() + ".extra_resp_latency")
         .desc("Incremental latency of individual access");
-    totalThroughput
-        .name(name() + ".total_throughput")
-        .desc("Total throughput of memory accesses");
     totalCkptTime
         .name(name() + ".total_ckpt_time")
         .desc("Total time in checkpointing frames");
-    //totalWaitTime
-    //    .name(name() + ".total_wait_time")
-    //    .desc("Total waiting time in checkpointing frames");
 }
 
 Tick
@@ -147,11 +140,15 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     if (pkt->cmd == MemCmd::SwapReq || pkt->isWrite()) {
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
-            Profiler profiler(profBase);
+            Profiler pf(profBase);
             assert(sumSize == 0);
-            addrController.MigratePages(profiler);
-            sumSize = profiler.SumBusUtil(); // pass to freeze()
-            schedule(freezeEvent, curTick() + profiler.SumLatency());
+            addrController.MigratePages(pf);
+
+            sumSize = pf.SumBusUtil(); // pass to freeze()
+            bytesChannel += sumSize;
+            bytesInterChannel += pf.SumBusUtil(true);
+
+            schedule(freezeEvent, curTick() + pf.SumLatency());
             isBusy = true;
             retryReq = true;
             return false;
@@ -180,7 +177,6 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         duration = pkt->getSize() * bandwidth;
         lat = pkt->isRead() ? tNVMRead : tNVMWrite;
         extraRespLatency += lat - latency;
-        totalThroughput += pkt->getSize();
     }
 
     // go ahead and deal with the packet and put the response in the
@@ -212,7 +208,8 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // memories
     if (duration != 0) {
         duration += lat + pf.SumBusUtil() * bandwidth;
-        totalThroughput += pf.SumBusUtil();
+        bytesChannel += pf.SumBusUtil();
+        bytesInterChannel += pf.SumBusUtil(true);
         schedule(releaseEvent, curTick() + duration);
         isBusy = true;
     }
@@ -235,8 +232,8 @@ SimpleMemory::freeze()
 {
     assert(isBusy);
     isBusy = false;
-    numNVMWrites = addrController.migrator().total_nvm_writes();
-    numDRAMWrites = addrController.migrator().total_dram_writes();
+    assert(numNVMWrites.value() == addrController.migrator().total_nvm_writes());
+    assert(numDRAMWrites.value() == addrController.migrator().total_dram_writes());
     numDirtyNVMBlocks = addrController.migrator().dirty_nvm_blocks();
     numDirtyNVMPages = addrController.migrator().dirty_nvm_pages();
     numDirtyDRAMPages = addrController.migrator().dirty_dram_pages();
@@ -245,14 +242,16 @@ SimpleMemory::freeze()
 
     uint64_t bytes = getBusUtil(); // migration
 
-    Profiler profiler(profBase);
-    addrController.BeginCheckpointing(profiler);
-    bytes += profiler.SumBusUtil();
+    Profiler pf(profBase);
+    addrController.BeginCheckpointing(pf);
+    bytes += pf.SumBusUtil();
+    bytesChannel += pf.SumBusUtil();
+    bytesInterChannel += pf.SumBusUtil(true);
 
     Tick ckpt_duration = bytes * bandwidth;
     if (ckpt_duration) {
         schedule(unfreezeEvent, curTick() + ckpt_duration);
-        totalThroughput += bytes;
+        assert(ckBusUtil == bytesChannel.value());
         totalCkptTime += ckpt_duration;
     } else {
         addrController.FinishCheckpointing();

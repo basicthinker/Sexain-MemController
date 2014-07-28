@@ -167,6 +167,7 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
   assert(CheckValid(phy_addr, size) && phy_addr < phy_range_);
   PTTEntry* page = migrator_.LookupPage(phy_addr, pf);
   if (!page) {
+    mem_store_->ckNVMWrite();
     return NVMStore(phy_addr, size, pf);
   } else {
     migrator_.AddDRAMPageWrite(*page);
@@ -175,6 +176,7 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
     } else if (page->state == PTTEntry::CLEAN_DIRECT) {
       migrator_.ShiftState(*page, PTTEntry::DIRTY_STATIC, pf);
     }
+    mem_store_->ckDRAMWrite();
     return DRAMStore(phy_addr, size, pf);
   }
 }
@@ -205,11 +207,14 @@ void AddrTransController::LoanRevoker::Visit(int i) {
 void AddrTransController::MigrateDRAM(const DRAMPageStats& stats, Profiler& pf) {
   if (stats.state == PTTEntry::CLEAN_STATIC) {
     pf.AddPageMoveIntra();
+    mem_store_->ckBusUtilAdd(page_size());
   } else if (stats.state == PTTEntry::DIRTY_DIRECT) {
     pf.AddPageMoveInter(); // for write back
+    mem_store_->ckBusUtilAdd(page_size());
   } else if (stats.state == PTTEntry::DIRTY_STATIC) {
     pf.AddPageMoveIntra();
     pf.AddPageMoveInter();
+    mem_store_->ckBusUtilAdd(page_size() * 2);
   }
 #ifdef MEMCK
   Tag tag = att_.ToTag(stats.phy_addr);
@@ -262,6 +267,7 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
   } else {
     migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, pf);
   }
+  mem_store_->ckBusUtilAdd(page_size());
   ++pages_to_dram_;
 }
 
@@ -314,6 +320,7 @@ void AddrTransController::BeginCheckpointing(Profiler& pf) {
   in_checkpointing_ = true;
 
   att_.ClearStats(pf);
+  mem_store_->ckBusUtilAdd(migrator_.num_dirty_entries() * migrator_.page_size());
   migrator_.Clear(pf); // page write-back bytes
 }
 

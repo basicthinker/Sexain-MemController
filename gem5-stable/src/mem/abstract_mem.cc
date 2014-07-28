@@ -65,6 +65,7 @@ AbstractMemory::AbstractMemory(const Params *p) :
 {
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
+    ckBusUtil = 0;
     regCaches = 0;
 #ifdef MEMCK
     ckmem = (uint8_t*) mmap(NULL, hostSize(), PROT_READ | PROT_WRITE,
@@ -210,6 +211,13 @@ AbstractMemory::regStats()
     numDirtyDRAMPages
         .name(name() + ".dirty_dram_pages")
         .desc("Total number of dirty DRAM pages");
+
+    bytesChannel
+        .name(name() + ".bytes_channel")
+        .desc("Data transfer through channel");
+    bytesInterChannel
+        .name(name() + ".bytes_inter_channel")
+        .desc("Data transfer through channel excluding intra");
 
     avgNVMDirtyRatio
         .name(name() + ".avg_nvm_dirty_ratio")
@@ -472,6 +480,8 @@ AbstractMemory::access(PacketPtr pkt, Profiler& pf)
                     localAddr(pkt), pkt->getSize(), pf);
             memcpy(hostAddr(local_addr), &overwrite_val, pkt->getSize());
             MEMCK_AFTER_WRITE(local_addr, pkt);
+            pf.AddBlockMoveInter();
+            ckBusUtilAdd(addrController.block_size());
         }
 
         assert(!pkt->req->isInstFetch());
@@ -503,6 +513,8 @@ AbstractMemory::access(PacketPtr pkt, Profiler& pf)
                 memcpy(hostAddr(local_addr), pkt->getPtr<uint8_t>(),
                         pkt->getSize());
                 MEMCK_AFTER_WRITE(local_addr, pkt);
+                pf.AddBlockMoveInter();
+                ckBusUtilAdd(addrController.block_size());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
             }
@@ -564,6 +576,7 @@ AbstractMemory::MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size)
 {
     assert(direct_addr != mach_addr);
     memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
+    ckBusUtilAdd(size);
 }
 
 void
@@ -574,5 +587,6 @@ AbstractMemory::MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size)
     memcpy(data, hostAddr(direct_addr), size);
     memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
     memcpy(hostAddr(mach_addr), data, size);
+    ckBusUtilAdd(size * 3);
 }
 

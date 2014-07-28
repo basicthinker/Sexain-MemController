@@ -238,8 +238,6 @@ class SimpleMemory : public AbstractMemory
 
     /** Incremental latency of individual access */
     Stats::Scalar extraRespLatency;
-    /** Total throughput of memory accesses */
-    Stats::Scalar totalThroughput;
     /** Total time in checkpointing frames */
     Stats::Scalar totalCkptTime;
     /** Total waiting time in checkpointing frames */

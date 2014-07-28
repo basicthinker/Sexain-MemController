@@ -1,1 +1,1 @@
--p system.mem_ctrls -s num_epochs num_nvm_writes num_dram_writes avg_nvm_dirty_ratio avg_dram_write_ratio avg_pages_to_dram avg_pages_to_nvm extra_resp_latency total_ckpt_time
+-p system.mem_ctrls -s num_epochs num_nvm_writes num_dram_writes avg_nvm_dirty_ratio avg_dram_write_ratio avg_pages_to_dram avg_pages_to_nvm bytes_channel bytes_inter_channel extra_resp_latency total_ckpt_time

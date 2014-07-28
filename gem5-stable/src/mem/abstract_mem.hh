@@ -210,6 +210,11 @@ class AbstractMemory : public MemObject, public MemStore
     /** Number of dirty DRAM pages */
     Stats::Scalar numDirtyDRAMPages;
 
+    /** Data transfer through channel in bytes */
+    Stats::Scalar bytesChannel;
+    /** Data transfer excluding intra-channel in bytes */
+    Stats::Scalar bytesInterChannel;
+
     /** Average dirty ratio of NVM pages */
     Stats::Formula avgNVMDirtyRatio;
     /** Average write ratio of DRAM pages */
@@ -233,6 +238,7 @@ class AbstractMemory : public MemObject, public MemStore
      */
     System *_system;
 
+    uint64_t ckBusUtil;
 
   private:
 
@@ -375,11 +381,6 @@ class AbstractMemory : public MemObject, public MemStore
     virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size);
     virtual void MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size);
 
-    virtual void OnCheckpointing(int num_new_att, int num_new_ptt)
-    {
-        addrController.FinishCheckpointing();
-    }
-
     virtual void OnWaiting()
     {
         panic("AbstractMemory should never have write waiting\n");
@@ -418,6 +419,19 @@ class AbstractMemory : public MemObject, public MemStore
     virtual void OnCacheRegister()
     {
         ++regCaches;
+    }
+
+    virtual void ckBusUtilAdd(uint64_t bytes)
+    {
+        ckBusUtil += bytes;
+    }
+
+    virtual void ckNVMWrite() {
+        ++numNVMWrites;
+    }
+
+    virtual void ckDRAMWrite() {
+        ++numDRAMWrites;
     }
 };
 

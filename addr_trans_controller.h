@@ -148,8 +148,7 @@ inline void AddrTransController::CopyBlockInter(
 inline void AddrTransController::SwapBlock(
     Addr direct_addr, Addr mach_addr, Profiler& pf) {
   mem_store_->MemSwap(direct_addr, mach_addr, att_.block_size());
-  pf.AddBlockMoveInter(2);
-  pf.AddBlockMoveIntra();
+  pf.AddBlockMoveIntra(3);
 }
 
 #endif // SEXAIN_ADDR_TRANS_CONTROLLER_H_

@@ -22,11 +22,6 @@ class MemStore {
   virtual void OnDRAMStore(uint64_t phy_addr, int size) { }
 
   ///
-  /// Before the checkpointing frame begins
-  ///
-  virtual void OnCheckpointing(int num_new_at, int num_new_pt) = 0;
-
-  ///
   /// Behavioral events in THNVM schemes
   ///
   virtual void OnEpochEnd() { }
@@ -37,6 +32,9 @@ class MemStore {
   virtual void OnATTFreeLoan(uint64_t phy_addr, bool move_data) { }
 
   virtual void OnCacheRegister() { }
+  virtual void ckBusUtilAdd(uint64_t bytes) { }
+  virtual void ckNVMWrite() { }
+  virtual void ckDRAMWrite() { }
 };
 
 class TraceMemStore : public MemStore {

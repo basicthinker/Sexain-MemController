@@ -20,7 +20,7 @@ class Profiler {
   void AddPageMoveInter(int num = 1);
 
   uint64_t SumLatency();
-  uint64_t SumBusUtil();
+  uint64_t SumBusUtil(bool exc_intra = false);
 
   uint64_t num_table_ops() const { return num_table_ops_; }
   uint64_t num_buffer_ops() const { return num_buffer_ops_; }
@@ -28,7 +28,6 @@ class Profiler {
   uint64_t bytes_inter_channel() const { return bytes_inter_channel_; }
 
   void set_op_latency(int64_t lat) { op_latency_ = lat; }
-  void set_exclude_intra(bool b = true) { exclude_intra_ = b; }
 
   static Profiler Null;
   static Profiler Overlap;
@@ -43,7 +42,6 @@ class Profiler {
   uint64_t bytes_inter_channel_;
 
   int64_t op_latency_;
-  bool exclude_intra_;
 };
 
 inline Profiler::Profiler(int block_bits, int page_bits) :
@@ -51,13 +49,11 @@ inline Profiler::Profiler(int block_bits, int page_bits) :
     num_table_ops_(0), num_buffer_ops_(0),
     bytes_intra_channel_(0), bytes_inter_channel_(0) {
   op_latency_ = -1;
-  exclude_intra_ = false;
 }
 
 inline Profiler::Profiler(const Profiler& p) :
     Profiler(p.block_bits_, p.page_bits_) {
   op_latency_ = p.op_latency_;
-  exclude_intra_ = p.exclude_intra_;
 }
 
 inline void Profiler::AddBlockMoveIntra(int num) {
@@ -81,8 +77,8 @@ inline uint64_t Profiler::SumLatency() {
   return op_latency_ * (num_table_ops_ + num_buffer_ops_);
 }
 
-inline uint64_t Profiler::SumBusUtil() {
-  return (exclude_intra_ ? 0 : bytes_intra_channel_) + bytes_inter_channel_;
+inline uint64_t Profiler::SumBusUtil(bool exc_intra) {
+  return (exc_intra ? 0 : bytes_intra_channel_) + bytes_inter_channel_;
 }
 
 #endif // SEXAIN_PROFILER_H_
