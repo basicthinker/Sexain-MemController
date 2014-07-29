@@ -11,8 +11,8 @@ CPU_CLOCK=3GHz
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
-DRAM_SIZE=4MB
-ATT_LEN=1024
+DRAM_SIZE=16MB
+ATT_LEN=2048
 
 L1D_SIZE=32kB
 L1D_ASSOC=8
@@ -34,7 +34,7 @@ BUILD_NAME=build_base_none.0000
 to_run=0
 to_test=0
 
-while getopts "hc:o:b:g:a:t:l" opt; do
+while getopts "hc:o:b:g:a:t:d" opt; do
   case $opt in
     h)
       $GEM5 -h
@@ -46,7 +46,7 @@ while getopts "hc:o:b:g:a:t:l" opt; do
       to_run=1
       ;;
     o)
-      COMMAND+=" -o $OPTARG"
+      ARGS=$OPTARG
       ;;
     b)
       COMMAND="--cpu-2006=$OPTARG"
@@ -98,7 +98,11 @@ OPTIONS+=" --cpu-2006-root=$CPU2006ROOT"
 OPTIONS+=" --cpu-2006-build-name=$BUILD_NAME"
 
 if [ $to_run = 1 ]; then
-  $GEM5 -d $OUT_DIR/$ALIAS $GEM5OPT $SE_SCRIPT $OPTIONS $COMMAND
+  if [ -z "$ARGS" ]; then
+    $GEM5 -d $OUT_DIR/$ALIAS $GEM5OPT $SE_SCRIPT $OPTIONS $COMMAND
+  else
+    $GEM5 -d $OUT_DIR/$ALIAS $GEM5OPT $SE_SCRIPT $OPTIONS $COMMAND -o "$ARGS"
+  fi
 fi
 
 if [ $? -eq 0 ] && [ $to_test = 1 ]; then

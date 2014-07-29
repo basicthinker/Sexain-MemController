@@ -12,8 +12,8 @@ const char* PTTEntry::state_strings[] = {
 void MigrationController::FillNVMPageHeap() {
   for (unordered_map<uint64_t, NVMPage>::iterator it = nvm_pages_.begin();
       it != nvm_pages_.end(); ++it) {
-    double dr = it->second.blocks.size() / page_blocks_;
-    double wr = it->second.epoch_writes / page_blocks_;
+    double dr = it->second.blocks.size() / (double)page_blocks_;
+    double wr = it->second.epoch_writes / (double)page_blocks_;
     nvm_heap_.push_back({it->first, dr, wr});
 
     total_nvm_writes_ += it->second.epoch_writes;
@@ -27,7 +27,7 @@ void MigrationController::FillDRAMPageHeap() {
   int dirts = 0;
   for (unordered_map<uint64_t, PTTEntry>::iterator it = entries_.begin();
        it != entries_.end(); ++it) {
-    double wr = it->second.epoch_writes / page_blocks_;
+    double wr = it->second.epoch_writes / (double)page_blocks_;
     dram_heap_.push_back({it->first, it->second.state, wr});
 
     total_dram_writes_ += it->second.epoch_writes;
