@@ -53,11 +53,12 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     tATTOp(p->lat_att_operate), tBufferOp(p->lat_buffer_operate),
     tNVMRead(p->lat_nvm_read), tNVMWrite(p->lat_nvm_write),
     latency_var(p->latency_var), bandwidth(p->bandwidth),
-    isBusy(false), isWaiting(false), retryReq(false), retryResp(false),
+    isBusy(false), retryReq(false), retryResp(false),
     releaseEvent(this), freezeEvent(this), unfreezeEvent(this),
     dequeueEvent(this), drainManager(NULL)
 {
     isTiming = !p->disable_timing;
+    waitStart = 0;
     sumSize = 0;
     profBase.set_op_latency(p->lat_att_operate);
 }
@@ -84,6 +85,9 @@ SimpleMemory::regStats()
     totalCkptTime
         .name(name() + ".total_ckpt_time")
         .desc("Total time in checkpointing frames");
+    totalWaitTime
+        .name(name() + ".total_wait_time")
+        .desc("Total wait time in checkpointing frames");
 }
 
 Tick
@@ -105,6 +109,28 @@ SimpleMemory::recvFunctional(PacketPtr pkt)
         pkt->checkFunctional(i->pkt);
 
     pkt->popLabel();
+}
+
+bool
+SimpleMemory::isWait()
+{
+    return waitStart;
+}
+
+void
+SimpleMemory::setWait()
+{
+    if (!waitStart) {
+        waitStart = curTick();
+    }
+}
+
+void
+SimpleMemory::clearWait()
+{
+    assert(isWait());
+    totalWaitTime += curTick() - waitStart;
+    waitStart = 0;
 }
 
 bool
@@ -153,7 +179,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
             retryReq = true;
             return false;
         } else if (ctrl == WAIT_CKPT) {
-            isWaiting = true;
+            setWait();
             return false;
         } else assert(ctrl == REG_WRITE);
     }
@@ -176,7 +202,6 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // the bandwidth limit
         duration = pkt->getSize() * bandwidth;
         lat = pkt->isRead() ? tNVMRead : tNVMWrite;
-        extraRespLatency += lat - latency;
     }
 
     // go ahead and deal with the packet and put the response in the
@@ -194,7 +219,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
         // before the packet(s) before it
-        if (!lat) lat = getLatency();
+        extraRespLatency += (double)lat - getLatency();
         packetQueue.push_back(
                 DeferredPacket(pkt, curTick() + lat));
         if (!retryResp && !dequeueEvent.scheduled())
@@ -207,7 +232,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // to avoid extra events being scheduled for (infinitely) fast
     // memories
     if (duration != 0) {
-        duration += lat + pf.SumBusUtil() * bandwidth;
+        duration += pf.SumBusUtil() * bandwidth;
         bytesChannel += pf.SumBusUtil();
         bytesInterChannel += pf.SumBusUtil(true);
         schedule(releaseEvent, curTick() + duration);
@@ -269,8 +294,8 @@ void
 SimpleMemory::unfreeze()
 {
     addrController.FinishCheckpointing();
-    if (isWaiting) {
-        isWaiting = false;
+    if (isWait()) {
+        clearWait();
         port.sendRetry();
     }
 }

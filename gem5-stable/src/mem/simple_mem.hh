@@ -156,7 +156,10 @@ class SimpleMemory : public AbstractMemory
     bool isBusy;
 
     /** Track THNVM waiting state */
-    bool isWaiting;
+    Tick waitStart;
+    bool isWait();
+    void setWait();
+    void clearWait();
 
     /**
      * Remember if we have to retry an outstanding request that
@@ -240,6 +243,8 @@ class SimpleMemory : public AbstractMemory
     Stats::Scalar extraRespLatency;
     /** Total time in checkpointing frames */
     Stats::Scalar totalCkptTime;
+    /** Total wait time in checkpointing frames */
+    Stats::Scalar totalWaitTime;
     /** Total waiting time in checkpointing frames */
     //Stats::Scalar totalWaitTime;
 
