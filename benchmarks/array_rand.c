@@ -15,17 +15,16 @@ typedef struct block {
 
 int main(int argc, const char* argv[]) {
   if (argc != 4) {
-     printf("Usage: %s [SIZE in MBs] [NUM of steps] [FACTOR]\n", argv[0]);
+     printf("Usage: %s [SIZE in MBs] [NUM of steps] [WRITES per step]\n", argv[0]);
      return 1;
   }
 
   const unsigned int size = atoi(argv[1]);
   const unsigned int step = atoi(argv[2]);
-  const unsigned int factor = atoi(argv[3]); // 1 / write_ratio 
+  const unsigned int writes = atoi(argv[3]);
 
   const size_t bytes = size * M * step;
   const int blocks = size * M / sizeof(block_t); // per step
-  const int writes = blocks / factor; // divided by expected ratio
 
   printf("size=%d, step=%d, bytes=%lu, blocks=%d, writes=%d\n",
       size, step, bytes, blocks, writes);
