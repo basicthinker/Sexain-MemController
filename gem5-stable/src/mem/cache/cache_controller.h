@@ -24,6 +24,8 @@ class CacheController : public SimObject {
   int att_length() const { return att_length_; }
 
  private:
+  void Flush();
+
   AbstractMemory* memory_;
   BaseCache* cache_;
 
@@ -49,6 +51,11 @@ inline void CacheController::RegisterCache(BaseCache* const cache) {
   assert(!cache_);
   cache_ = cache;
   memory_->OnCacheRegister();
+}
+
+inline void CacheController::Flush() {
+  cache_->writebackAllTiming();
+  blocks_.clear();
 }
 
 #endif // SEXAIN_CACHE_CONTROLLER_H_

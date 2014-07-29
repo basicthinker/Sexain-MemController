@@ -12,8 +12,8 @@ class Profiler {
   Profiler(int block_bits, int page_bits);
   Profiler(const Profiler& p);
 
-  void AddTableOp(int num = 1) { num_table_ops_ += num; }
-  void AddBufferOp(int num = 1) { num_buffer_ops_ += num; }
+  void AddTableOp(int num = 1);
+  void AddBufferOp(int num = 1);
   void AddBlockMoveIntra(int num = 1);
   void AddBlockMoveInter(int num = 1);
   void AddPageMoveIntra(int num = 1);
@@ -26,6 +26,8 @@ class Profiler {
   uint64_t num_buffer_ops() const { return num_buffer_ops_; }
   uint64_t bytes_intra_channel() const { return bytes_intra_channel_; }
   uint64_t bytes_inter_channel() const { return bytes_inter_channel_; }
+  void set_ignore_latency();
+  void clear_ignore_latency();
 
   void set_op_latency(int64_t lat) { op_latency_ = lat; }
 
@@ -42,6 +44,7 @@ class Profiler {
   uint64_t bytes_inter_channel_;
 
   int64_t op_latency_;
+  bool ignore_latency_;
 };
 
 inline Profiler::Profiler(int block_bits, int page_bits) :
@@ -49,11 +52,31 @@ inline Profiler::Profiler(int block_bits, int page_bits) :
     num_table_ops_(0), num_buffer_ops_(0),
     bytes_intra_channel_(0), bytes_inter_channel_(0) {
   op_latency_ = -1;
+  ignore_latency_ = false;
 }
 
 inline Profiler::Profiler(const Profiler& p) :
     Profiler(p.block_bits_, p.page_bits_) {
   op_latency_ = p.op_latency_;
+}
+
+inline void Profiler::set_ignore_latency() {
+  assert(!ignore_latency_);
+  ignore_latency_ = true;
+}
+
+inline void Profiler::clear_ignore_latency() {
+  assert(ignore_latency_);
+  ignore_latency_ = false;
+}
+
+inline void Profiler::AddTableOp(int num) {
+  if (ignore_latency_) return;
+  num_table_ops_ += num;
+}
+inline void Profiler::AddBufferOp(int num) {
+  if (ignore_latency_) return;
+  num_buffer_ops_ += num;
 }
 
 inline void Profiler::AddBlockMoveIntra(int num) {
@@ -74,6 +97,7 @@ inline void Profiler::AddPageMoveInter(int num) {
 
 inline uint64_t Profiler::SumLatency() {
   assert(op_latency_ >= 0);
+  assert(!ignore_latency_);
   return op_latency_ * (num_table_ops_ + num_buffer_ops_);
 }
 
