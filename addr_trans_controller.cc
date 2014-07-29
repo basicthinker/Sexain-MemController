@@ -1,8 +1,10 @@
 // addr_trans_controller.cc
 // Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
 
-#include "addr_trans_controller.h"
 #include <vector>
+#include "addr_trans_controller.h"
+#include "base/trace.hh"
+#include "debug/Migration.hh"
 
 using namespace std;
 
@@ -209,6 +211,8 @@ void AddrTransController::LoanRevoker::Visit(int i) {
 }
 
 void AddrTransController::MigrateDRAM(const DRAMPageStats& stats, Profiler& pf) {
+  DPRINTF(Migration, "Migrate DRAM page WR=%f, from %s.\n",
+      stats.write_ratio, PTTEntry::state_strings[stats.state]);
   if (stats.state == PTTEntry::CLEAN_STATIC) {
     pf.AddPageMoveIntra();
     mem_store_->ckBusUtilAdd(page_size());
@@ -236,13 +240,13 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
 
   for (Tag tag = phy_tag; tag < limit; ++tag) {
     int index = att_.Lookup(tag, pf);
-    pf.set_ignore_latency();
     if (index == -EINVAL) {
       pf.AddBlockMoveInter(); // for copying data to DRAM
       continue;
     }
     const ATTEntry& entry = att_.At(index);
 
+    pf.set_ignore_latency();
     switch (entry.state) {
       case ATTEntry::CLEAN:
       case ATTEntry::DIRTY:
@@ -269,8 +273,10 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
   }
   if (stats.dirty_ratio > 0.5) {
     migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_STATIC, pf);
+    DPRINTF(Migration, "Migrate NVM page to CLEAN_STATIC.\n");
   } else {
     migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, pf);
+    DPRINTF(Migration, "Migrate NVM page to CLEAN_DIRECT.\n");
   }
   mem_store_->ckBusUtilAdd(page_size());
   ++pages_to_dram_;
@@ -289,10 +295,13 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
   DRAMPageStats d;
   bool d_ready = false;
   while (migrator_.ExtractNVMPage(n, pf)) {
+    DPRINTF(Migration, "Extract NVM page DR=%f/%f, PTT #=%d/%d\n",
+        n.dirty_ratio, dr, migrator_.num_entries(), migrator_.ptt_capacity());
     if (n.dirty_ratio < dr) break;
     // Find a DRAM page for exchange
     if (migrator_.num_entries() == migrator_.ptt_capacity()) {
       if (!migrator_.ExtractDRAMPage(d, Profiler::Overlap)) return;
+      DPRINTF(Migration, "\tExtract DRAM page WR=%f\n", d.write_ratio);
       if (d.write_ratio > 0) {
         d_ready = true;
         break;
@@ -306,6 +315,8 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
   if ((!d_ready && !migrator_.ExtractDRAMPage(d, pf))) return;
   int limit = migrator_.ptt_capacity() - migrator_.ptt_length();
   do {
+    DPRINTF(Migration, "Extract DRAM page WR=%f, S=%d\n",
+        d.write_ratio, d.state);
     if (d.write_ratio == 0) continue;
     if (d.write_ratio > wr) break;
     pf.set_ignore_latency();
