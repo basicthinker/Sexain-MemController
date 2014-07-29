@@ -201,7 +201,11 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
         duration = pkt->getSize() * bandwidth;
-        lat = pkt->isRead() ? tNVMRead : tNVMWrite;
+        if (addrController.IsDRAM(pkt->getAddr(), Profiler::Null)) {
+            lat = getLatency();
+        } else {
+            lat = pkt->isRead() ? tNVMRead : tNVMWrite;
+        }
     }
 
     // go ahead and deal with the packet and put the response in the

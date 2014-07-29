@@ -26,14 +26,11 @@ int main(int argc, const char* argv[]) {
   const int entries = atoi(argv[4]);
 
   const int blocks = M / sizeof(block_t) * size; // per step
-  const int writes = blocks * ratio;
   const int swift = entries;
   const size_t bytes = size * M + step * swift * sizeof(block_t);
 
-  const int swift_writes = swift * ratio;
-  printf("size=%d, step=%d, bytes=%lu, blocks=%d, writes=%d, swift=%d\n, "
-      "swift_writes=%d\n",
-      size, step, bytes, blocks, writes, swift, swift_writes);
+  printf("size=%d, step=%d, bytes=%lu, blocks=%d, swift=%d\n",
+      size, step, bytes, blocks, swift);
 
   int num = 0;
   block_t* const bmem = (block_t*)malloc(bytes);
@@ -41,13 +38,15 @@ int main(int argc, const char* argv[]) {
 
   block_t* mem = bmem;
   for (int init = swift; init <= blocks; init += swift) {
-    for (int j = 0; j < swift_writes; ++j) {
-      int off = rand() % swift;
-      if (mem[off].values[4] == 'R') {
-        ++num;
+    for (int i = 0; i < ratio; ++i) {
+      for (int j = 0; j < swift; ++j) {
+        mem[j].values[4] = 'R'; 
       }
-      off = rand() % swift;
-      mem[off].values[4] = 'R'; 
+      for (int j = 0; j < swift; ++j) {
+        if (mem[j].values[4] == 'R') {
+          ++num;
+        }
+      }
     }
     mem += swift;
   }
@@ -55,13 +54,15 @@ int main(int argc, const char* argv[]) {
   mem = bmem;
   for (int i = 0; i < step; ++i) {
     mem += swift; // do not bother to free
-    for (int j = 0; j < writes; ++j) {
-      int off = rand() % blocks;
-      if (mem[off].values[4] == 'R') {
-        ++num;
+    for (int i = 0; i < ratio; ++i) {
+      for (int j = 0; j < blocks; ++j) {
+        mem[j].values[4] = 'R'; 
       }
-      off = rand() % blocks;
-      mem[off].values[4] = 'R';
+      for (int j = 0; j < blocks; ++j) {
+        if (mem[j].values[4] == 'R') {
+          ++num;
+        }
+      }
     }
   }
   
