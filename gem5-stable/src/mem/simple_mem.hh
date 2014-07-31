@@ -149,6 +149,9 @@ class SimpleMemory : public AbstractMemory
      */
     const double bandwidth;
 
+    /** Effective bandwidth to estimate writeback duration */
+    double wbBandwidth;
+
     /**
      * Track the state of the memory as either idle or busy, no need
      * for an enum with only two states.
@@ -245,8 +248,6 @@ class SimpleMemory : public AbstractMemory
     Stats::Scalar totalCkptTime;
     /** Total wait time in checkpointing frames */
     Stats::Scalar totalWaitTime;
-    /** Total waiting time in checkpointing frames */
-    //Stats::Scalar totalWaitTime;
 
     Tick recvAtomic(PacketPtr pkt);
 
@@ -258,3 +259,4 @@ class SimpleMemory : public AbstractMemory
 };
 
 #endif //__SIMPLE_MEMORY_HH__
+

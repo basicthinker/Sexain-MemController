@@ -58,6 +58,7 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     dequeueEvent(this), drainManager(NULL)
 {
     isTiming = !p->disable_timing;
+    wbBandwidth = (double)latency / 64;
     waitStart = 0;
     sumSize = 0;
     profBase.set_op_latency(p->lat_att_operate);
@@ -279,7 +280,7 @@ SimpleMemory::freeze()
     bytesChannel += pf.SumBusUtil();
     bytesInterChannel += pf.SumBusUtil(true);
 
-    Tick ckpt_duration = bytes * bandwidth;
+    Tick ckpt_duration = bytes * wbBandwidth;
     if (ckpt_duration) {
         schedule(unfreezeEvent, curTick() + ckpt_duration);
         assert(ckBusUtil == bytesChannel.value());
