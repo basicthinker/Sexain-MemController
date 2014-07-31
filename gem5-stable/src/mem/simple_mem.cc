@@ -196,52 +196,50 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // only look at reads and writes when determining if we are busy,
     // and for how long, as it is not clear what to regulate for the
     // other types of commands
-    Tick duration = 0;
-    Tick lat = 0;
     if (pkt->isRead() || pkt->isWrite()) {
         // calculate an appropriate tick to release to not exceed
         // the bandwidth limit
-        duration = pkt->getSize() * bandwidth;
-        if (addrController.IsDRAM(pkt->getAddr(), Profiler::Null)) {
-            lat = getLatency();
-        } else {
-            lat = pkt->isRead() ? tNVMRead : tNVMWrite;
+        Tick duration = pkt->getSize() * bandwidth;
+
+        // only consider ourselves busy if there is any need to wait
+        // to avoid extra events being scheduled for (infinitely) fast
+        // memories
+        if (duration != 0) {
+            schedule(releaseEvent, curTick() + duration);
+            isBusy = true;
         }
     }
 
     // go ahead and deal with the packet and put the response in the
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
+
     Profiler pf(profBase);
     access(pkt, pf);
-    lat += pf.SumLatency();
-    extraRespLatency += pf.SumLatency();
+    bytesChannel += pf.SumBusUtil();
+    bytesInterChannel += pf.SumBusUtil(true);
+
     // turn packet around to go back to requester if response expected
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
         assert(pkt->isResponse());
+        Tick lat = pf.SumLatency();
+        if (addrController.IsDRAM(pkt->getAddr(), Profiler::Null)) {
+            lat += getLatency();
+        } else {
+            lat += pkt->isRead() ? tNVMRead : tNVMWrite;
+        }
+        extraRespLatency += (double)lat - getLatency();
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
         // before the packet(s) before it
-        extraRespLatency += (double)lat - getLatency();
         packetQueue.push_back(
                 DeferredPacket(pkt, curTick() + lat));
         if (!retryResp && !dequeueEvent.scheduled())
             schedule(dequeueEvent, packetQueue.back().tick);
     } else {
         pendingDelete.push_back(pkt);
-    }
-
-    // only consider ourselves busy if there is any need to wait
-    // to avoid extra events being scheduled for (infinitely) fast
-    // memories
-    if (duration != 0) {
-        duration += pf.SumBusUtil() * bandwidth;
-        bytesChannel += pf.SumBusUtil();
-        bytesInterChannel += pf.SumBusUtil(true);
-        schedule(releaseEvent, curTick() + duration);
-        isBusy = true;
     }
     return true;
 }

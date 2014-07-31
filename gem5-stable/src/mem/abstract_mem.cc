@@ -56,7 +56,7 @@
 using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
-    MemObject(p), range(p->range),
+    MemObject(p), range(params()->range),
     profBase(p->block_bits, p->page_bits),
     addrController(range.size(), p->dram_size,
             p->att_length, p->block_bits, p->page_bits, this),

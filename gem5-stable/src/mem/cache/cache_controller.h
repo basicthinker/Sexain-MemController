@@ -5,7 +5,7 @@
 #define SEXAIN_CACHE_CONTROLLER_H_
 
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include <cassert>
 
 #include "mem/cache/base.hh"
@@ -29,7 +29,7 @@ class CacheController : public SimObject {
   AbstractMemory* memory_;
   BaseCache* cache_;
 
-  std::map<uint64_t, int> blocks_;
+  std::unordered_map<uint64_t, int> blocks_;
   const int block_bits_;
   const int att_length_;
   int block_size_;

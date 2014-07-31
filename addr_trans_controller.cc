@@ -324,7 +324,8 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
     pf.clear_ignore_latency();
     ++pages_to_nvm_; // excluding clean DRAM pages exchanged with NVM pages
     --limit;
-  } while (limit && migrator_.ExtractDRAMPage(d, pf));
+  } while (limit && migrator_.ExtractDRAMPage(d,
+      d.write_ratio == 0 ? Profiler::Null : pf));
 }
 
 void AddrTransController::BeginCheckpointing(Profiler& pf) {
