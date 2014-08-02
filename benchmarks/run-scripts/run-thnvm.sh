@@ -47,6 +47,7 @@ while getopts "hc:o:b:g:a:t:d" opt; do
       ;;
     o)
       ARGS=$OPTARG
+      ALIAS+="-"`echo $ARGS | tr ' ' '-'`
       ;;
     b)
       COMMAND="--cpu-2006=$OPTARG"
