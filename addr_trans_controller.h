@@ -43,6 +43,7 @@ class AddrTransController {
   uint64_t Size() const;
   int block_size() const { return att_.block_size(); }
   int page_size() const { return migrator_.page_size(); }
+  int att_length() const { return att_.length(); }
   bool in_checkpointing() const { return in_checkpointing_; }
   const MigrationController& migrator() const { return migrator_; }
 

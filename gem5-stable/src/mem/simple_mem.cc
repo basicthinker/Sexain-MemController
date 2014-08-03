@@ -192,7 +192,13 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
             bytesChannel += sumSize;
             bytesInterChannel += pf.SumBusUtil(true);
 
-            schedule(freezeEvent, curTick() + pf.SumLatency());
+            // ATT and PTT flushes
+            uint64_t area = addrController.att_length() * 8;
+            area += addrController.migrator().ptt_length() * 8;
+            Tick duration = area * wbBandwidth;
+            duration += pf.SumLatency();
+            totalWaitTime += duration;
+            schedule(freezeEvent, curTick() + duration);
             isBusy = true;
             retryReq = true;
             return false;
