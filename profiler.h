@@ -14,6 +14,7 @@ class Profiler {
 
   void AddTableOp(int num = 1);
   void AddBufferOp(int num = 1);
+  void AddLatency(int lat);
   void AddBlockMoveIntra(int num = 1);
   void AddBlockMoveInter(int num = 1);
   void AddPageMoveIntra(int num = 1);
@@ -40,6 +41,8 @@ class Profiler {
 
   uint64_t num_table_ops_;
   uint64_t num_buffer_ops_;
+  uint64_t latency_;
+
   uint64_t bytes_intra_channel_;
   uint64_t bytes_inter_channel_;
 
@@ -49,7 +52,7 @@ class Profiler {
 
 inline Profiler::Profiler(int block_bits, int page_bits) :
     block_bits_(block_bits), page_bits_(page_bits),
-    num_table_ops_(0), num_buffer_ops_(0),
+    num_table_ops_(0), num_buffer_ops_(0), latency_(0),
     bytes_intra_channel_(0), bytes_inter_channel_(0) {
   op_latency_ = -1;
   ignore_latency_ = false;
@@ -74,9 +77,15 @@ inline void Profiler::AddTableOp(int num) {
   if (ignore_latency_) return;
   num_table_ops_ += num;
 }
+
 inline void Profiler::AddBufferOp(int num) {
   if (ignore_latency_) return;
   num_buffer_ops_ += num;
+}
+
+inline void Profiler::AddLatency(int lat) {
+  assert(lat > 0 && !ignore_latency_);
+  latency_ += lat;
 }
 
 inline void Profiler::AddBlockMoveIntra(int num) {
@@ -98,7 +107,7 @@ inline void Profiler::AddPageMoveInter(int num) {
 inline uint64_t Profiler::SumLatency() {
   assert(op_latency_ >= 0);
   assert(!ignore_latency_);
-  return op_latency_ * (num_table_ops_ + num_buffer_ops_);
+  return latency_ + op_latency_ * (num_table_ops_ + num_buffer_ops_);
 }
 
 inline uint64_t Profiler::SumBusUtil(bool exc_intra) {
