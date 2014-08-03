@@ -33,15 +33,24 @@ Addr AddrTransController::LoadAddr(Addr phy_addr, Profiler& pf) {
   if (index != -EINVAL) {
     const ATTEntry& entry = att_.At(index);
     att_.AddBlockRead(index);
-    return att_.Translate(phy_addr, entry.mach_base);
+    Addr mach_addr = att_.Translate(phy_addr, entry.mach_base);
+    bool is_dram = (entry.state == ATTEntry::TEMP ||
+        entry.state == ATTEntry::LOAN ||
+        entry.state == ATTEntry::STAINED);
+    pf.AddLatency(mem_store_->GetReadLatency(mach_addr, is_dram));
+    return mach_addr;
   } else {
     PTTEntry* page = migrator_.LookupPage(phy_addr, pf);
+    Addr mach_addr;
     if (page) {
       migrator_.AddDRAMPageRead(*page);
-      return migrator_.Translate(phy_addr, page->mach_base);
+      mach_addr = migrator_.Translate(phy_addr, page->mach_base);
+      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, true));
     } else {
-      return phy_addr;
+      mach_addr = phy_addr;
+      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, false));
     }
+    return mach_addr;
   }
 }
 
@@ -174,7 +183,9 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
   PTTEntry* page = migrator_.LookupPage(phy_addr, pf);
   if (!page) {
     mem_store_->ckNVMWrite();
-    return NVMStore(phy_addr, size, pf);
+    Addr mach_addr = NVMStore(phy_addr, size, pf);
+    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, false));
+    return mach_addr;
   } else {
     migrator_.AddDRAMPageWrite(*page);
     if (page->state == PTTEntry::CLEAN_STATIC) {
@@ -183,7 +194,9 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
       migrator_.ShiftState(*page, PTTEntry::DIRTY_STATIC, pf);
     }
     mem_store_->ckDRAMWrite();
-    return DRAMStore(phy_addr, size, pf);
+    Addr mach_addr = DRAMStore(phy_addr, size, pf);
+    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, true));
+    return mach_addr;
   }
 }
 

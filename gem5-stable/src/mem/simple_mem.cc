@@ -50,6 +50,7 @@ using namespace std;
 SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     AbstractMemory(p),
     port(name() + ".port", *this), latency(p->latency),
+    latency_miss(p->latency_miss), banks(uint64_t(1) << ceilLog2(hostSize())),
     tATTOp(p->lat_att_operate), tBufferOp(p->lat_buffer_operate),
     tNVMRead(p->lat_nvm_read), tNVMWrite(p->lat_nvm_write),
     latency_var(p->latency_var), bandwidth(p->bandwidth),
@@ -164,7 +165,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         return false;
     }
 
-    if (pkt->cmd == MemCmd::SwapReq || pkt->isWrite()) {
+    if (pkt->cmd != MemCmd::SwapReq && pkt->isWrite()) {
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
             Profiler pf(profBase);
@@ -225,11 +226,6 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         // atomic response
         assert(pkt->isResponse());
         Tick lat = pf.SumLatency();
-        if (addrController.IsDRAM(pkt->getAddr(), Profiler::Null)) {
-            lat += getLatency();
-        } else {
-            lat += pkt->isRead() ? tNVMRead : tNVMWrite;
-        }
         extraRespLatency += (double)lat - getLatency();
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
@@ -333,6 +329,28 @@ SimpleMemory::getLatency()
 {
     return latency +
         (latency_var ? random_mt.random<Tick>(0, latency_var) : 0);
+}
+
+uint64_t
+SimpleMemory::GetReadLatency(Addr mach_addr, bool is_dram)
+{
+    bool hit = banks.access(mach_addr);
+    if (is_dram) {
+        return hit ? latency : latency_miss;
+    } else {
+        return hit ? latency : tNVMRead;
+    }
+}
+
+uint64_t
+SimpleMemory::GetWriteLatency(Addr mach_addr, bool is_dram)
+{
+    bool hit = banks.access(mach_addr);
+    if (is_dram) {
+        return hit ? latency : latency_miss;
+    } else {
+        return hit ? latency : tNVMWrite;
+    }
 }
 
 void

@@ -474,12 +474,9 @@ AbstractMemory::access(PacketPtr pkt, Profiler& pf)
         }
 
         if (overwrite_mem) {
-            Addr local_addr = addrController.StoreAddr(
-                    localAddr(pkt), pkt->getSize(), pf);
+            Addr local_addr = addrController.LoadAddr(localAddr(pkt), pf);
             memcpy(hostAddr(local_addr), &overwrite_val, pkt->getSize());
             MEMCK_AFTER_WRITE(local_addr, pkt);
-            pf.AddBlockMoveInter();
-            ckBusUtilAdd(addrController.block_size());
         }
 
         assert(!pkt->req->isInstFetch());
@@ -492,7 +489,7 @@ AbstractMemory::access(PacketPtr pkt, Profiler& pf)
         }
         if (pmemAddr) {
             assert(pkt->getSize() == addrController.block_size());
-            uint8_t* host_addr = 
+            uint8_t* host_addr =
                     hostAddr(addrController.LoadAddr(localAddr(pkt), pf));
             MEMCK_BEFORE_READ(host_addr, pkt);
             memcpy(pkt->getPtr<uint8_t>(), host_addr, pkt->getSize());

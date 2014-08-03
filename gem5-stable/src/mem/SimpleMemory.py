@@ -46,7 +46,8 @@ class SimpleMemory(AbstractMemory):
     type = 'SimpleMemory'
     cxx_header = "mem/simple_mem.hh"
     port = SlavePort("Slave ports")
-    latency = Param.Latency('30ns', "Request to response latency")
+    latency = Param.Latency('40ns', "Latency on row buffer hit")
+    latency_miss = Param.Latency('80ns', "Latency on row buffer miss")
     latency_var = Param.Latency('0ns', "Request to response latency variance")
     # The memory bandwidth limit default is set to 12.8GB/s which is
     # representative of a x64 DDR3-1600 channel.
@@ -55,6 +56,7 @@ class SimpleMemory(AbstractMemory):
     lat_att_operate = Param.Latency('3ns', "ATT operation latency")
     lat_buffer_operate = Param.Latency('3ns',
             "Version buffer operation latency")
-    lat_nvm_read = Param.Latency('50ns', "Latency for NVM read")
-    lat_nvm_write = Param.Latency('400ns', "Latency for NVM write")
+    lat_nvm_read = Param.Latency('128ns', "NVM read latency")
+    lat_nvm_write = Param.Latency('368ns', "NVM write latency")
     disable_timing = Param.Bool(True, "If THNVM is not timed")
+

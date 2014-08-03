@@ -53,6 +53,7 @@
 
 #include "mem/abstract_mem.hh"
 #include "mem/port.hh"
+#include "mem/dram_banks.h"
 #include "params/SimpleMemory.hh"
 
 /**
@@ -114,6 +115,10 @@ class SimpleMemory : public AbstractMemory
      * ready to be sent.
      */
     const Tick latency;
+
+    const Tick latency_miss;
+
+    DDR3Banks banks;
 
     const Tick tATTOp;
     const Tick tBufferOp;
@@ -212,6 +217,9 @@ class SimpleMemory : public AbstractMemory
      * @return the latency seen by the current packet
      */
     Tick getLatency();
+
+    uint64_t GetReadLatency(Addr mach_addr, bool is_dram);
+    uint64_t GetWriteLatency(Addr mach_addr, bool is_dram);
 
     /** @todo this is a temporary workaround until the 4-phase code is
      * committed. upstream caches needs this packet until true is returned, so
