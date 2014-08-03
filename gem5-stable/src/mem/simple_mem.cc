@@ -90,6 +90,22 @@ SimpleMemory::regStats()
     totalWaitTime
         .name(name() + ".total_wait_time")
         .desc("Total wait time in checkpointing frames");
+
+    readRowHits
+        .name(name() + ".readRowHits")
+        .desc("Number of row buffer hits during reads");
+
+    writeRowHits
+        .name(name() + ".writeRowHits")
+        .desc("Number of row buffer hits during writes");
+
+    readRowMisses
+        .name(name() + ".readRowMisses")
+        .desc("Number of row buffer misses during reads");
+
+    writeRowMisses
+        .name(name() + ".writeRowMisses")
+        .desc("Number of row buffer misses during writes");
 }
 
 Tick
@@ -334,22 +350,24 @@ SimpleMemory::getLatency()
 uint64_t
 SimpleMemory::GetReadLatency(Addr mach_addr, bool is_dram)
 {
-    bool hit = banks.access(mach_addr);
-    if (is_dram) {
-        return hit ? latency : latency_miss;
+    if (banks.access(mach_addr)) {
+        ++readRowHits;
+        return latency;
     } else {
-        return hit ? latency : tNVMRead;
+        ++readRowMisses;
+        return is_dram ? latency_miss : tNVMRead;
     }
 }
 
 uint64_t
 SimpleMemory::GetWriteLatency(Addr mach_addr, bool is_dram)
 {
-    bool hit = banks.access(mach_addr);
-    if (is_dram) {
-        return hit ? latency : latency_miss;
+    if (banks.access(mach_addr)) {
+        ++writeRowHits;
+        return latency;
     } else {
-        return hit ? latency : tNVMWrite;
+        ++writeRowMisses;
+        return is_dram ? latency_miss : tNVMWrite;
     }
 }
 

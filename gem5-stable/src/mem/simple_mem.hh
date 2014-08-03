@@ -257,6 +257,12 @@ class SimpleMemory : public AbstractMemory
     /** Total wait time in checkpointing frames */
     Stats::Scalar totalWaitTime;
 
+    // Row hit/miss count and rate
+    Stats::Scalar readRowHits;
+    Stats::Scalar writeRowHits;
+    Stats::Scalar readRowMisses;
+    Stats::Scalar writeRowMisses;
+
     Tick recvAtomic(PacketPtr pkt);
 
     void recvFunctional(PacketPtr pkt);
