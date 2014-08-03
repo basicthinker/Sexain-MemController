@@ -4,6 +4,7 @@ GEM5ROOT=~/Projects/Sexain-MemController/gem5-stable
 ARCH=X86 #X86_MESI_CMP_directory # in ./build_opts
 GEM5=$GEM5ROOT/build/$ARCH/gem5.opt
 SE_SCRIPT=$GEM5ROOT/configs/thnvm-se.py
+MAXINSTS=104857600
 
 CPU_TYPE=timing # atomic, detailed
 NUM_CPUS=1
@@ -78,6 +79,7 @@ done
 
 OUT_DIR+='-'`date +%m%d`
 
+OPTIONS+=" -I $MAXINSTS"
 OPTIONS+=" --caches --l2cache --l3cache"
 OPTIONS+=" --cpu-type=$CPU_TYPE"
 OPTIONS+=" --num-cpus=$NUM_CPUS"
