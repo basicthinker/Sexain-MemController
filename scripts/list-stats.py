@@ -29,6 +29,8 @@ for stats in args.stats:
     metrics.append(prefix + stats)
 
 for dir in args.dirs:
+    if not os.path.exists(dir):
+        continue
     for bench in os.listdir(dir):
         if not re.match(args.reg, bench):
             continue
