@@ -32,9 +32,9 @@ int main(int argc, const char* argv[]) {
   }
 
   for (int i = 0; i < num_keys; ++i) {
-    int key = rand() % num_keys;
+    int k = rand() % num_keys;
     struct entry *e;
-    HASH_FIND_INT(store, &key, e);
+    HASH_FIND_INT(store, &k, e);
     if (e) {
       assert(strncmp(e->value, R, value_size) == 0);
       HASH_DEL(store, e);
@@ -43,6 +43,7 @@ int main(int argc, const char* argv[]) {
     } else {
       struct entry* e = malloc(sizeof(struct entry));
       e->value = malloc(value_size);
+      e->key = k;
       strncpy(e->value, R, value_size);
       HASH_ADD_INT(store, key, e);
     }

@@ -141,7 +141,7 @@ inline MigrationController::MigrationController(
     ptt_length_(ptt_length), ptt_capacity_(ptt_length + (ptt_length >> 4)),
     dirty_entries_(0),
     total_nvm_writes_(0), total_dram_writes_(0),
-    dirty_nvm_blocks_(0), dirty_dram_pages_(0),
+    dirty_nvm_blocks_(0), dirty_nvm_pages_(0), dirty_dram_pages_(0),
     dram_heap_filled_(false), nvm_heap_filled_(false) {
 }
 
