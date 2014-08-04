@@ -2,12 +2,13 @@
 
 #!/bin/bash
 
-if [ $# != 1 ]; then
-  echo "Usage: #0 [POSTFIX]"
+if [ $# -lt 1 ]; then
+  echo "Usage: #0 [POSTFIX] [PATTERN]"
   exit 1
 fi
 
 post=$1
+pattern=$2
 
 stats=~/Projects/Sexain-MemController/scripts/list-stats.py
 root=~/Documents
@@ -19,7 +20,7 @@ dirs=($root/gem5out-a0-p0-d0GB-$post \
     $root/gem5out-a2048-d16MB-$post)
 
 for dir in ${dirs[@]}; do
-  $stats -d $dir -s sim_seconds system.mem_ctrls.total_ckpt_time \
+  $stats -d $dir -r "$pattern" -s sim_seconds system.mem_ctrls.total_ckpt_time \
       system.mem_ctrls.bytes_written::writebacks \
       system.mem_ctrls.bytes_channel \
       system.mem_ctrls.readRowHits system.mem_ctrls.readRowMisses \
@@ -27,7 +28,7 @@ for dir in ${dirs[@]}; do
       system.l3cache.cache_flushes system.mem_ctrls.num_epochs
 done
 
-$stats -d $root/gem5out-a2048-d16MB-$post -p system.mem_ctrls -s \
+$stats -d $root/gem5out-a2048-d16MB-$post -r "$pattern" -p system.mem_ctrls -s \
     total_wait_time bytes_inter_channel \
     att_write_hits att_write_misses num_nvm_writes \
     num_dram_writes avg_nvm_dirty_ratio avg_dram_write_ratio \

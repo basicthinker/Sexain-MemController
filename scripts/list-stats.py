@@ -3,9 +3,12 @@
 import argparse
 import os
 import sys
+import re
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--dirs", nargs='*', help="list of gem5out dirs")
+parser.add_argument("-r", "--reg", nargs='?', const='\S', default='\S',
+        help="reg for target benchmarks")
 parser.add_argument("-s", "--stats", nargs='*', help="list of stats items")
 parser.add_argument("-p", "--prefix", help="prefix of stats items")
 
@@ -27,6 +30,8 @@ for stats in args.stats:
 
 for dir in args.dirs:
     for bench in os.listdir(dir):
+        if not re.match(args.reg, bench):
+            continue
         if bench not in results:
             results[bench] = { }
         results[bench][dir] = { }
