@@ -16,8 +16,8 @@
 #)
 
 BENCHMARKS=(
+403.gcc
 410.bwaves
-429.mcf
 433.milc
 437.leslie3d
 450.soplex
