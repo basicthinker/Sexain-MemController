@@ -17,7 +17,16 @@ dirs=($root/gem5out-a0-p0-d0GB-$post \
     $root/gem5out-a0-p0-d2GB-$post \
     $root/gem5out-a6144-p4128-d0GB-$post \
     $root/gem5out-a6144-p4128-d2GB-$post \
-    $root/gem5out-a2048-d16MB-$post)
+    $root/gem5out-a256-d16MB-$post \
+    $root/gem5out-a512-d16MB-$post \
+    $root/gem5out-a1024-d16MB-$post \
+    $root/gem5out-a2048-d16MB-$post \
+    $root/gem5out-a4096-d16MB-$post \
+    $root/gem5out-a8192-d16MB-$post \
+    $root/gem5out-a2048-d4MB-$post \
+    $root/gem5out-a2048-d8MB-$post \
+    $root/gem5out-a2048-d32MB-$post \
+    $root/gem5out-a2048-d64MB-$post)
 
 for dir in ${dirs[@]}; do
   $stats -d $dir -r "$pattern" -s sim_seconds system.mem_ctrls.total_ckpt_time \
