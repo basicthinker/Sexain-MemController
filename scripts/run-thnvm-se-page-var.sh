@@ -12,8 +12,12 @@ CPU_CLOCK=3GHz
 
 MEM_TYPE=simple_mem # ddr3_1600_x64
 MEM_SIZE=2GB # for whole physical address space
-PAGE_BITS=12
-DRAM_SIZE=16MB
+PAGE_BITS=10
+if [ $PAGE_BITS -gt 12 ]; then
+  DRAM_SIZE=$((16*2**($PAGE_BITS-12)))MB
+else
+  DRAM_SIZE=$((16/2**(12-$PAGE_BITS)))MB
+fi
 ATT_LEN=2048
 
 L1D_SIZE=32kB
