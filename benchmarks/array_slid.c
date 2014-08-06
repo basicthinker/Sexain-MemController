@@ -52,7 +52,7 @@ int main(int argc, const char* argv[]) {
   }
   
   mem = bmem;
-  for (int i = 0; i < step; ++i) {
+  for (int k = 0; k < step; ++k) {
     mem += swift; // do not bother to free
     for (int i = 0; i < ratio; ++i) {
       for (int j = 0; j < blocks; ++j) {
