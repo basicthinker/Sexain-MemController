@@ -355,11 +355,12 @@ void AddrTransController::BeginCheckpointing(Profiler& pf) {
 
   att_.ClearStats(pf);
   mem_store_->ckBusUtilAdd(migrator_.num_dirty_entries() * migrator_.page_size());
-  migrator_.Clear(pf); // page write-back bytes
+  migrator_.Clear(pf, ckpt_queue_); // page write-back
 }
 
 void AddrTransController::FinishCheckpointing() {
   assert(in_checkpointing());
+  assert(ckpt_queue_.empty());
   nvm_buffer_.ClearBackup(Profiler::Null); //TODO
   in_checkpointing_ = false;
   mem_store_->OnEpochEnd();

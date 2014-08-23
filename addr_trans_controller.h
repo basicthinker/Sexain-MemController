@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <vector>
+#include <list>
 #include "mem_store.h"
 #include "version_buffer.h"
 #include "addr_trans_table.h"
@@ -51,6 +52,8 @@ class AddrTransController {
   uint64_t pages_to_nvm() const { return pages_to_nvm_; }
 
   virtual bool IsDRAM(Addr phy_addr, Profiler& pf);
+  Addr NextCheckpointBlock(); ///< Returns -EINVAL if none.
+  void InsertCheckpointBlock(Addr block); ///< To the queue head.
 #ifdef MEMCK
   std::pair<AddrInfo, AddrInfo> GetAddrInfo(Addr phy_addr);
 #endif
@@ -92,6 +95,8 @@ class AddrTransController {
   MemStore* mem_store_;
   bool in_checkpointing_;
 
+  std::list<Addr> ckpt_queue_;
+
   uint64_t pages_to_dram_; ///< Sum number of pages migrated from NVM to DRAM
   uint64_t pages_to_nvm_; ///< Sum number of pages migrated from DRAM to NVM
 
@@ -123,6 +128,19 @@ inline uint64_t AddrTransController::Size() const {
 
 inline bool AddrTransController::IsDRAM(Addr phy_addr, Profiler& pf) {
   return migrator_.Contains(phy_addr, pf);
+}
+
+inline Addr AddrTransController::NextCheckpointBlock() {
+  assert(in_checkpointing_);
+  if (ckpt_queue_.empty()) return -EINVAL;
+  Addr a = ckpt_queue_.front();
+  ckpt_queue_.pop_front();
+  return a;
+}
+
+inline void AddrTransController::InsertCheckpointBlock(Addr block) {
+  assert(in_checkpointing_ && (block & (block_size() - 1)) == 0);
+  ckpt_queue_.push_front(block);
 }
 
 inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
