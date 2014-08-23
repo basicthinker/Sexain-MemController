@@ -44,6 +44,7 @@
 
 #include "base/random.hh"
 #include "mem/simple_mem.hh"
+#include "debug/RowBuffer.hh"
 
 using namespace std;
 
@@ -356,7 +357,9 @@ SimpleMemory::getLatency()
 uint64_t
 SimpleMemory::GetReadLatency(Addr mach_addr, bool is_dram)
 {
-    if (banks.access(mach_addr)) {
+    bool hit = banks.access(mach_addr);
+    DPRINTF(RowBuffer, "RowBuffer: Read addr=%lx %d\n", mach_addr, hit);
+    if (hit) {
         ++readRowHits;
         return latency;
     } else {
@@ -368,7 +371,9 @@ SimpleMemory::GetReadLatency(Addr mach_addr, bool is_dram)
 uint64_t
 SimpleMemory::GetWriteLatency(Addr mach_addr, bool is_dram)
 {
-    if (banks.access(mach_addr)) {
+    bool hit = banks.access(mach_addr);
+    DPRINTF(RowBuffer, "RowBuffer: Write addr=%lx %d\n", mach_addr, hit);
+    if (hit) {
         ++writeRowHits;
         return latency;
     } else {

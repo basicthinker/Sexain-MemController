@@ -105,6 +105,7 @@ DebugFlag('RubyStats')
 DebugFlag('RubyResourceStalls')
 
 DebugFlag('Migration')
+DebugFlag('RowBuffer')
 
 CompoundFlag('Ruby', [ 'RubyQueue', 'RubyNetwork', 'RubyTester',
     'RubyGenerated', 'RubySlicc', 'RubySystem', 'RubyCache',
