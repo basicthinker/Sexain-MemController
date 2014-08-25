@@ -62,7 +62,6 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     isTiming = !p->disable_timing;
     wbBandwidth = (double)latency / 64;
     waitStart = 0;
-    sumSize = 0;
     profBase.set_op_latency(p->lat_att_operate);
 }
 
@@ -186,11 +185,8 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
             Profiler pf(profBase);
-            assert(sumSize == 0);
             addrController.MigratePages(pf);
-
-            sumSize = pf.SumBusUtil(); // pass to freeze()
-            bytesChannel += sumSize;
+            bytesChannel += pf.SumBusUtil();
             bytesInterChannel += pf.SumBusUtil(true);
 
             // ATT and PTT flushes
@@ -289,19 +285,16 @@ SimpleMemory::freeze()
     numPagesToDRAM = addrController.pages_to_dram();
     numPagesToNVM = addrController.pages_to_nvm();
 
-    uint64_t bytes = getBusUtil(); // migration
-
     Profiler pf(profBase);
     addrController.BeginCheckpointing(pf);
-    bytes += pf.SumBusUtil();
     bytesChannel += pf.SumBusUtil();
     bytesInterChannel += pf.SumBusUtil(true);
 
-    Tick ckpt_duration = bytes * wbBandwidth;
-    if (ckpt_duration) {
-        schedule(unfreezeEvent, curTick() + ckpt_duration);
+    Addr block = addrController.NextCheckpointBlock();
+    if (block != -EINVAL) {
+        schedule(unfreezeEvent, curTick() + latency); //TODO
         assert(ckBusUtil == bytesChannel.value());
-        totalCkptTime += ckpt_duration;
+        totalCkptTime += latency;
     } else {
         addrController.FinishCheckpointing();
     }
@@ -315,10 +308,16 @@ SimpleMemory::freeze()
 void
 SimpleMemory::unfreeze()
 {
-    addrController.FinishCheckpointing();
-    if (isWait()) {
-        clearWait();
-        port.sendRetry();
+    Addr block = addrController.NextCheckpointBlock();
+    if (block != -EINVAL) {
+        schedule(unfreezeEvent, curTick() + latency); //GetWriteLatency(block, false));
+        totalCkptTime += latency;
+    } else {
+        addrController.FinishCheckpointing();
+        if (isWait()) {
+            clearWait();
+            port.sendRetry();
+        }
     }
 }
 

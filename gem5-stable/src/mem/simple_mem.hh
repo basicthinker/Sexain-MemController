@@ -127,14 +127,6 @@ class SimpleMemory : public AbstractMemory
 
     bool isTiming;
 
-    uint64_t sumSize;
-    uint64_t getBusUtil()
-    {
-        uint64_t v = sumSize;
-        sumSize = 0;
-        return v;
-    }
-
     /**
      * Fudge factor added to the latency.
      */

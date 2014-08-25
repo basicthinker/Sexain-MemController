@@ -90,7 +90,15 @@ bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats, Profiler& pf) {
   return true;
 }
 
-void MigrationController::Clear(Profiler& pf) {
+void MigrationController::AddToBlockList(Addr page, std::list<Addr>* list) {
+  assert((page & page_mask_) == 0 && list);
+  Addr next_page = page + page_size();
+  for (Addr a = page; a < next_page; a += (1 << block_bits_)) {
+    list->push_back(a);
+  }
+}
+
+void MigrationController::Clear(Profiler& pf, std::list<Addr>* ckpt_blocks) {
   pf.AddPageMoveInter(dirty_entries_); // epoch write-backs
   for (PTTEntryIterator it = entries_.begin(); it != entries_.end(); ++it) {
     it->second.epoch_reads = 0;
@@ -98,9 +106,11 @@ void MigrationController::Clear(Profiler& pf) {
     if (it->second.state == PTTEntry::DIRTY_DIRECT) {
       ShiftState(it->second, PTTEntry::CLEAN_DIRECT, pf);
       --dirty_entries_;
+      AddToBlockList(it->second.mach_base, ckpt_blocks);
     } else if (it->second.state == PTTEntry::DIRTY_STATIC) {
       ShiftState(it->second, PTTEntry::CLEAN_STATIC, pf);
       --dirty_entries_;
+      AddToBlockList(it->second.mach_base, ckpt_blocks);
     }
   }
   assert(dirty_entries_ == 0);
