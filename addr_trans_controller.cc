@@ -227,17 +227,14 @@ void AddrTransController::MigrateDRAM(const DRAMPageStats& stats, Profiler& pf) 
   if (stats.state == PTTEntry::CLEAN_STATIC) {
     pf.AddPageMoveIntra();
     migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue_);
-    mem_store_->ckBusUtilAdd(page_size());
   } else if (stats.state == PTTEntry::DIRTY_DIRECT) {
     pf.AddPageMoveInter(); // for write back
     migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue_);
-    mem_store_->ckBusUtilAdd(page_size());
   } else if (stats.state == PTTEntry::DIRTY_STATIC) {
     pf.AddPageMoveIntra();
     pf.AddPageMoveInter();
     migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue_);
     migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue_);
-    mem_store_->ckBusUtilAdd(page_size() * 2);
   }
 #ifdef MEMCK
   Tag tag = att_.ToTag(stats.phy_addr);
@@ -296,7 +293,6 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
     DPRINTF(Migration, "Migrate NVM page to CLEAN_DIRECT.\n");
   }
   migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue_);
-  mem_store_->ckBusUtilAdd(page_size());
   ++pages_to_dram_;
 }
 
@@ -359,7 +355,6 @@ void AddrTransController::BeginCheckpointing(Profiler& pf) {
   in_checkpointing_ = true;
 
   att_.ClearStats(pf);
-  mem_store_->ckBusUtilAdd(migrator_.num_dirty_entries() * migrator_.page_size());
   migrator_.Clear(pf, &ckpt_queue_); // page write-back
 }
 

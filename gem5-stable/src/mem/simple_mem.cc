@@ -238,6 +238,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     access(pkt, pf);
     bytesChannel += pf.SumBusUtil();
     bytesInterChannel += pf.SumBusUtil(true);
+    ckBusUtil += pf.SumBusUtil();
 
     // turn packet around to go back to requester if response expected
     if (needsResponse) {
@@ -293,8 +294,8 @@ SimpleMemory::freeze()
     Addr block = addrController.NextCheckpointBlock();
     if (block != -EINVAL) {
         schedule(unfreezeEvent, curTick() + latency); //TODO
-        assert(ckBusUtil == bytesChannel.value());
         totalCkptTime += latency;
+        ckBusUtil += addrController.block_size();
     } else {
         addrController.FinishCheckpointing();
     }
@@ -312,8 +313,10 @@ SimpleMemory::unfreeze()
     if (block != -EINVAL) {
         schedule(unfreezeEvent, curTick() + latency); //GetWriteLatency(block, false));
         totalCkptTime += latency;
+        ckBusUtil += addrController.block_size();
     } else {
         addrController.FinishCheckpointing();
+        assert(ckBusUtil == bytesChannel.value());
         if (isWait()) {
             clearWait();
             port.sendRetry();

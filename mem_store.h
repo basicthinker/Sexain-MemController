@@ -27,7 +27,6 @@ class MemStore {
   virtual void OnATTWriteMiss(int state) { }
 
   virtual void OnCacheRegister() { }
-  virtual void ckBusUtilAdd(uint64_t bytes) { }
   virtual void ckNVMWrite() { }
   virtual void ckDRAMWrite() { }
   virtual void ckDRAMWriteHit() { }

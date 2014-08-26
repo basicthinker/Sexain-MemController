@@ -509,7 +509,6 @@ AbstractMemory::access(PacketPtr pkt, Profiler& pf)
                         pkt->getSize());
                 MEMCK_AFTER_WRITE(local_addr, pkt);
                 pf.AddBlockMoveInter();
-                ckBusUtilAdd(addrController.block_size());
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
             }
@@ -571,7 +570,6 @@ AbstractMemory::MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size)
 {
     assert(direct_addr != mach_addr);
     memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
-    ckBusUtilAdd(size);
 }
 
 void
@@ -582,6 +580,5 @@ AbstractMemory::MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size)
     memcpy(data, hostAddr(direct_addr), size);
     memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
     memcpy(hostAddr(mach_addr), data, size);
-    ckBusUtilAdd(size * 3);
 }
 

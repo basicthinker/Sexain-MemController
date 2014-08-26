@@ -405,11 +405,6 @@ class AbstractMemory : public MemObject, public MemStore
         ++regCaches;
     }
 
-    virtual void ckBusUtilAdd(uint64_t bytes)
-    {
-        ckBusUtil += bytes;
-    }
-
     virtual void ckNVMWrite()
     {
         ++numNVMWrites;
