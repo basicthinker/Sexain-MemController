@@ -25,11 +25,12 @@ struct PTTEntry {
   State state;
   int epoch_reads;
   int epoch_writes;
-  uint64_t mach_base;
+  int index;
+  Addr mach_base;
 
   static const char* state_strings[];
 
-  PTTEntry() : epoch_reads(0), epoch_writes(0) { }
+  PTTEntry() : epoch_reads(0), epoch_writes(0), index(-EINVAL) { }
 
   const char* StateString() const {
     return state_strings[state];
@@ -37,7 +38,7 @@ struct PTTEntry {
 };
 
 struct DRAMPageStats {
-  uint64_t phy_addr;
+  Addr phy_addr;
   PTTEntry::State state;
   double write_ratio;
 
@@ -49,7 +50,7 @@ struct DRAMPageStats {
 };
 
 struct NVMPageStats {
-  uint64_t phy_addr;
+  Addr phy_addr;
   double dirty_ratio;
   double write_ratio;
   bool operator<(const NVMPageStats& p) {
@@ -61,15 +62,15 @@ class MigrationController {
  public:
   MigrationController(int block_bits, int page_bits, int ptt_length);
 
-  PTTEntry* LookupPage(uint64_t phy_addr, Profiler& profiler);
-  bool Contains(uint64_t phy_addr, Profiler& profiler);
-  void ShiftState(PTTEntry& entry, PTTEntry::State state, Profiler& pf);
-  void Free(uint64_t page_addr, Profiler& profiler);
-  void Setup(uint64_t page_addr, PTTEntry::State state, Profiler& profiler);
+  PTTEntry LookupPage(Addr phy_addr, Profiler& profiler);
+  bool Contains(Addr phy_addr, Profiler& profiler);
+  void ShiftState(Addr phy_addr, PTTEntry::State state, Profiler& pf);
+  void Free(Addr page_addr, Profiler& profiler);
+  void Setup(Addr page_addr, PTTEntry::State state, Profiler& profiler);
 
-  uint64_t Translate(uint64_t phy_addr, uint64_t page_base) const;
-  void AddDRAMPageRead(PTTEntry& entry);
-  void AddDRAMPageWrite(PTTEntry& entry);
+  Addr Translate(Addr phy_addr, Addr page_base) const;
+  void AddDRAMPageRead(Addr phy_addr);
+  void AddDRAMPageWrite(Addr phy_addr);
 
   /// Calculate statistics over the blocks from ATT
   void InputBlocks(const std::vector<ATTEntry>& blocks);
@@ -85,8 +86,8 @@ class MigrationController {
   int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }
   int page_blocks() const { return page_blocks_; }
-  uint64_t BlockAlign(uint64_t addr) { return addr & ~block_mask_; }
-  uint64_t PageAlign(uint64_t addr) { return addr & ~page_mask_; }
+  Addr BlockAlign(Addr addr) { return addr & ~block_mask_; }
+  Addr PageAlign(Addr addr) { return addr & ~page_mask_; }
 
   int ptt_length() const { return ptt_length_; }
   int ptt_capacity() const { return ptt_capacity_; }
@@ -100,21 +101,22 @@ class MigrationController {
   uint64_t dirty_dram_pages() const { return dirty_dram_pages_; }
 
  private:
-  typedef std::unordered_map<uint64_t, PTTEntry>::iterator PTTEntryIterator;
+  typedef std::unordered_map<Addr, PTTEntry>::iterator PTTEntryIterator;
 
   struct NVMPage {
     int epoch_reads;
     int epoch_writes;
-    std::set<uint64_t> blocks;
+    std::set<Addr> blocks;
   };
 
   void FillNVMPageHeap();
   void FillDRAMPageHeap();
+  void ShiftState(PTTEntryIterator it, PTTEntry::State state, Profiler& pf);
 
   const int block_bits_;
-  const uint64_t block_mask_;
+  const Addr block_mask_;
   const int page_bits_;
-  const uint64_t page_mask_;
+  const Addr page_mask_;
   const int page_blocks_;
   const int ptt_length_;
   const int ptt_capacity_;
@@ -127,8 +129,9 @@ class MigrationController {
   uint64_t dirty_nvm_pages_; ///< Sum number of dirty NVM pages
   uint64_t dirty_dram_pages_; ///< Sum number of dirty DRAM pages
 
-  std::unordered_map<uint64_t, PTTEntry> entries_;
-  std::unordered_map<uint64_t, NVMPage> nvm_pages_;
+  std::vector<int> free_slots_;
+  std::unordered_map<Addr, PTTEntry> entries_;
+  std::unordered_map<Addr, NVMPage> nvm_pages_;
   std::vector<DRAMPageStats> dram_heap_;
   std::vector<NVMPageStats> nvm_heap_;
   bool dram_heap_filled_;
@@ -146,64 +149,88 @@ inline MigrationController::MigrationController(
     total_nvm_writes_(0), total_dram_writes_(0),
     dirty_nvm_blocks_(0), dirty_nvm_pages_(0), dirty_dram_pages_(0),
     dram_heap_filled_(false), nvm_heap_filled_(false) {
+
+  for (int i = 0; i < ptt_capacity_; ++i) {
+    free_slots_.push_back(i);
+  }
+  assert(free_slots_.size() + entries_.size() == ptt_capacity_);
 }
 
-inline PTTEntry* MigrationController::LookupPage(uint64_t phy_addr,
-    Profiler& pf) {
+inline PTTEntry MigrationController::LookupPage(Addr phy_addr, Profiler& pf) {
   pf.AddTableOp();
   PTTEntryIterator it = entries_.find(PageAlign(phy_addr));
-  if (it == entries_.end()) return NULL;
-  return &it->second;
+  if (it == entries_.end()) return PTTEntry();
+  return it->second;
 }
 
-inline bool MigrationController::Contains(uint64_t phy_addr, Profiler& pf) {
+inline bool MigrationController::Contains(Addr phy_addr, Profiler& pf) {
   pf.AddTableOp();
   return entries_.find(PageAlign(phy_addr)) != entries_.end();
 }
 
-inline void MigrationController::AddDRAMPageRead(PTTEntry& entry) {
-  ++entry.epoch_reads;
+inline void MigrationController::AddDRAMPageRead(Addr phy_addr) {
+  PTTEntryIterator it = entries_.find(PageAlign(phy_addr));
+  assert(it != entries_.end());
+  ++it->second.epoch_reads;
 }
 
-inline void MigrationController::AddDRAMPageWrite(PTTEntry& entry) {
-  ++entry.epoch_writes;
+inline void MigrationController::AddDRAMPageWrite(Addr phy_addr) {
+  PTTEntryIterator it = entries_.find(PageAlign(phy_addr));
+  assert(it != entries_.end());
+  ++it->second.epoch_writes;
 }
 
-inline void MigrationController::ShiftState(PTTEntry& entry,
+inline void MigrationController::ShiftState(PTTEntryIterator it,
     PTTEntry::State state, Profiler& pf) {
-  entry.state = state;
+  it->second.state = state;
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_entries_;
   }
   pf.AddTableOp();
 }
 
-inline void MigrationController::Free(uint64_t page_addr, Profiler& pf) {
-  PTTEntry* page = LookupPage(page_addr, Profiler::Overlap);
-  assert(page);
-  if (page->state == PTTEntry::DIRTY_DIRECT ||
-      page->state == PTTEntry::DIRTY_STATIC) {
+inline void MigrationController::ShiftState(Addr page_addr,
+    PTTEntry::State state, Profiler& pf) {
+  assert(PageAlign(page_addr) == page_addr);
+  PTTEntryIterator it = entries_.find(page_addr);
+  assert(it != entries_.end());
+  ShiftState(it, state, pf);
+}
+
+inline void MigrationController::Free(Addr page_addr, Profiler& pf) {
+  assert(PageAlign(page_addr) == page_addr);
+  const PTTEntry entry = LookupPage(page_addr, Profiler::Overlap);
+  assert(entry.index >= 0 && entry.index < ptt_capacity_);
+  if (entry.state == PTTEntry::DIRTY_DIRECT ||
+      entry.state == PTTEntry::DIRTY_STATIC) {
     --dirty_entries_;
   }
-  assert(entries_.erase(page_addr) == 1);
+  entries_.erase(entry.mach_base);
+  free_slots_.push_back(entry.index);
+  assert(free_slots_.size() + entries_.size() == ptt_capacity_);
   pf.AddTableOp();
 }
 
 inline void MigrationController::Setup(
-    uint64_t page_addr, PTTEntry::State state, Profiler& pf) {
-  assert((page_addr & page_mask_) == 0);
+    Addr page_addr, PTTEntry::State state, Profiler& pf) {
+  assert(PageAlign(page_addr) == page_addr);
+  assert(!Contains(page_addr, Profiler::Overlap));
+
   PTTEntry& entry = entries_[page_addr];
+  entry.index = free_slots_.back();
+  free_slots_.pop_back();
+  assert(free_slots_.size() + entries_.size() == ptt_capacity_);
   entry.state = state;
-  entry.mach_base = page_addr; // simulate direct/static page allocation
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_entries_;
   }
+  entry.mach_base = page_addr; // simulate direct/static page allocation
   assert(entries_.size() <= ptt_capacity_);
   pf.AddTableOp();
 }
 
-inline uint64_t MigrationController::Translate(uint64_t phy_addr,
-    uint64_t page_base) const {
+inline Addr MigrationController::Translate(Addr phy_addr,
+    Addr page_base) const {
   assert((page_base & page_mask_) == 0);
   return page_base + (phy_addr & page_mask_);
 }

@@ -10,7 +10,7 @@ const char* PTTEntry::state_strings[] = {
 };
 
 void MigrationController::FillNVMPageHeap() {
-  for (unordered_map<uint64_t, NVMPage>::iterator it = nvm_pages_.begin();
+  for (unordered_map<Addr, NVMPage>::iterator it = nvm_pages_.begin();
       it != nvm_pages_.end(); ++it) {
     double dr = it->second.blocks.size() / (double)page_blocks_;
     double wr = it->second.epoch_writes / (double)page_blocks_;
@@ -25,7 +25,7 @@ void MigrationController::FillNVMPageHeap() {
 
 void MigrationController::FillDRAMPageHeap() {
   int dirts = 0;
-  for (unordered_map<uint64_t, PTTEntry>::iterator it = entries_.begin();
+  for (unordered_map<Addr, PTTEntry>::iterator it = entries_.begin();
        it != entries_.end(); ++it) {
     double wr = it->second.epoch_writes / (double)page_blocks_;
     dram_heap_.push_back({it->first, it->second.state, wr});
@@ -48,7 +48,7 @@ void MigrationController::InputBlocks(const vector<ATTEntry>& blocks) {
       assert(it->epoch_writes == 0);
       continue;
     }
-    uint64_t block_addr = it->phy_tag << block_bits_;
+    Addr block_addr = it->phy_tag << block_bits_;
     NVMPage& p = nvm_pages_[PageAlign(block_addr)];
     p.epoch_reads += it->epoch_reads;
     p.epoch_writes += it->epoch_writes;
@@ -104,11 +104,11 @@ void MigrationController::Clear(Profiler& pf, std::list<Addr>* ckpt_blocks) {
     it->second.epoch_reads = 0;
     it->second.epoch_writes = 0;
     if (it->second.state == PTTEntry::DIRTY_DIRECT) {
-      ShiftState(it->second, PTTEntry::CLEAN_DIRECT, pf);
+      ShiftState(it, PTTEntry::CLEAN_DIRECT, pf);
       --dirty_entries_;
       AddToBlockList(it->second.mach_base, ckpt_blocks);
     } else if (it->second.state == PTTEntry::DIRTY_STATIC) {
-      ShiftState(it->second, PTTEntry::CLEAN_STATIC, pf);
+      ShiftState(it, PTTEntry::CLEAN_STATIC, pf);
       --dirty_entries_;
       AddToBlockList(it->second.mach_base, ckpt_blocks);
     }

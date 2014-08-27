@@ -40,15 +40,15 @@ Addr AddrTransController::LoadAddr(Addr phy_addr, Profiler& pf) {
     pf.AddLatency(mem_store_->GetReadLatency(mach_addr, is_dram));
     return mach_addr;
   } else {
-    PTTEntry* page = migrator_.LookupPage(phy_addr, pf);
+    PTTEntry page = migrator_.LookupPage(phy_addr, pf);
     Addr mach_addr;
-    if (page) {
-      migrator_.AddDRAMPageRead(*page);
-      mach_addr = migrator_.Translate(phy_addr, page->mach_base);
-      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, true));
-    } else {
+    if (page.index < 0) {
       mach_addr = phy_addr;
       pf.AddLatency(mem_store_->GetReadLatency(mach_addr, false));
+    } else {
+      migrator_.AddDRAMPageRead(page.mach_base);
+      mach_addr = migrator_.Translate(phy_addr, page.mach_base);
+      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, true));
     }
     return mach_addr;
   }
@@ -180,18 +180,18 @@ Control AddrTransController::Probe(Addr phy_addr) {
 
 Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
   assert(CheckValid(phy_addr, size) && phy_addr < phy_range_);
-  PTTEntry* page = migrator_.LookupPage(phy_addr, pf);
-  if (!page) {
+  PTTEntry page = migrator_.LookupPage(phy_addr, pf);
+  if (page.index < 0) {
     mem_store_->ckNVMWrite();
     Addr mach_addr = NVMStore(phy_addr, size, pf);
     pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, false));
     return mach_addr;
   } else {
-    migrator_.AddDRAMPageWrite(*page);
-    if (page->state == PTTEntry::CLEAN_STATIC) {
-      migrator_.ShiftState(*page, PTTEntry::DIRTY_DIRECT, pf);
-    } else if (page->state == PTTEntry::CLEAN_DIRECT) {
-      migrator_.ShiftState(*page, PTTEntry::DIRTY_STATIC, pf);
+    migrator_.AddDRAMPageWrite(page.mach_base);
+    if (page.state == PTTEntry::CLEAN_STATIC) {
+      migrator_.ShiftState(page.mach_base, PTTEntry::DIRTY_DIRECT, pf);
+    } else if (page.state == PTTEntry::CLEAN_DIRECT) {
+      migrator_.ShiftState(page.mach_base, PTTEntry::DIRTY_STATIC, pf);
     }
     mem_store_->ckDRAMWrite();
     Addr mach_addr = DRAMStore(phy_addr, size, pf);
