@@ -91,6 +91,7 @@ class MigrationController {
 
   int ptt_length() const { return ptt_length_; }
   int ptt_capacity() const { return ptt_capacity_; }
+  uint64_t dram_capacity() const { return ptt_capacity_ << page_bits_; }
   int num_entries() const { return entries_.size(); }
   int num_dirty_entries() const { return dirty_entries_; }
 

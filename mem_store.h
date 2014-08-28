@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <cassert>
 
+#include "migration_controller.h"
+
 class MemStore {
  public:
   virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size) = 0;
@@ -14,8 +16,10 @@ class MemStore {
  
   virtual void OnATTOp() { }
   virtual void OnBufferOp() { }
-  virtual uint64_t GetReadLatency(uint64_t mach_addr, bool dram) { return -1; }
-  virtual uint64_t GetWriteLatency(uint64_t mach_addr, bool dram) { return -1; }
+  virtual int64_t GetReadLatency(uint64_t mach_addr, bool dram,
+      const PTTEntry* page) { return -1; }
+  virtual int64_t GetWriteLatency(uint64_t mach_addr, bool dram,
+      const PTTEntry* page) { return -1; }
 
   virtual void OnNVMRead(uint64_t mach_addr, int size) { }
   virtual void OnNVMStore(uint64_t phy_addr, int size) { }

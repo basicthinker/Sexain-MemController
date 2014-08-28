@@ -210,8 +210,20 @@ class SimpleMemory : public AbstractMemory
      */
     Tick getLatency();
 
-    uint64_t GetReadLatency(Addr mach_addr, bool is_dram);
-    uint64_t GetWriteLatency(Addr mach_addr, bool is_dram);
+    Addr GetVirtualRegionBase()
+    {
+        return ((addrController.Size() - 1) & ~(banks.row_buffer_size() - 1)) +
+                banks.row_buffer_size();
+    }
+
+    /**
+     * @page NULL denotes a request from a NVM physical address.
+     */
+    int64_t GetReadLatency(Addr mach_addr, bool is_dram, const PTTEntry* page);
+    /**
+     * @page NULL denotes a request from a NVM physical address.
+     */
+    int64_t GetWriteLatency(Addr mach_addr, bool is_dram, const PTTEntry* page);
 
     /** @todo this is a temporary workaround until the 4-phase code is
      * committed. upstream caches needs this packet until true is returned, so

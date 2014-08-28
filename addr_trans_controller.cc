@@ -10,6 +10,7 @@ using namespace std;
 
 // Space partition (low -> high):
 // phy_limit || NVM buffer || DRAM buffer
+// (virtual) DRAM backup || DRAM cache
 AddrTransController::AddrTransController(
     uint64_t phy_range, uint64_t dram_size,
     int att_len, int block_bits, int page_bits, MemStore* ms):
@@ -17,8 +18,7 @@ AddrTransController::AddrTransController(
     att_(att_len, block_bits), nvm_buffer_(2 * att_len, block_bits),
     dram_buffer_(att_len, block_bits),
     migrator_(block_bits, page_bits, dram_size >> page_bits),
-    phy_range_(phy_range), dram_size_(dram_size),
-    pages_to_dram_(0), pages_to_nvm_(0) {
+    phy_range_(phy_range), pages_to_dram_(0), pages_to_nvm_(0) {
 
   assert(phy_range >= dram_size);
   mem_store_ = ms;
@@ -37,18 +37,18 @@ Addr AddrTransController::LoadAddr(Addr phy_addr, Profiler& pf) {
     bool is_dram = (entry.state == ATTEntry::TEMP ||
         entry.state == ATTEntry::LOAN ||
         entry.state == ATTEntry::STAINED);
-    pf.AddLatency(mem_store_->GetReadLatency(mach_addr, is_dram));
+    pf.AddLatency(mem_store_->GetReadLatency(mach_addr, is_dram, NULL));
     return mach_addr;
   } else {
     PTTEntry page = migrator_.LookupPage(phy_addr, pf);
     Addr mach_addr;
     if (page.index < 0) {
       mach_addr = phy_addr;
-      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, false));
+      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, false, NULL));
     } else {
       migrator_.AddDRAMPageRead(page.mach_base);
       mach_addr = migrator_.Translate(phy_addr, page.mach_base);
-      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, true));
+      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, true, &page));
     }
     return mach_addr;
   }
@@ -184,18 +184,20 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
   if (page.index < 0) {
     mem_store_->ckNVMWrite();
     Addr mach_addr = NVMStore(phy_addr, size, pf);
-    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, false));
+    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, false, NULL));
     return mach_addr;
   } else {
     migrator_.AddDRAMPageWrite(page.mach_base);
     if (page.state == PTTEntry::CLEAN_STATIC) {
       migrator_.ShiftState(page.mach_base, PTTEntry::DIRTY_DIRECT, pf);
+      page.state = PTTEntry::DIRTY_DIRECT;
     } else if (page.state == PTTEntry::CLEAN_DIRECT) {
       migrator_.ShiftState(page.mach_base, PTTEntry::DIRTY_STATIC, pf);
+      page.state = PTTEntry::DIRTY_STATIC;
     }
     mem_store_->ckDRAMWrite();
     Addr mach_addr = DRAMStore(phy_addr, size, pf);
-    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, true));
+    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, true, &page));
     return mach_addr;
   }
 }

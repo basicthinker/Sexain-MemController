@@ -356,9 +356,18 @@ SimpleMemory::getLatency()
         (latency_var ? random_mt.random<Tick>(0, latency_var) : 0);
 }
 
-uint64_t
-SimpleMemory::GetReadLatency(Addr mach_addr, bool is_dram)
+int64_t
+SimpleMemory::GetReadLatency(Addr mach_addr,
+        bool is_dram, const PTTEntry* page)
 {
+    if (page) {
+        assert(is_dram);
+        Addr mach_base = GetVirtualRegionBase() +
+                addrController.migrator().dram_capacity() +
+                page->index * addrController.page_size();
+        mach_addr = addrController.migrator().Translate(mach_addr, mach_base);
+    }
+
     bool hit = banks.access(mach_addr);
     DPRINTF(RowBuffer, "RowBuffer: Read addr=%lx %d\n", mach_addr, hit);
     if (hit) {
@@ -370,9 +379,22 @@ SimpleMemory::GetReadLatency(Addr mach_addr, bool is_dram)
     }
 }
 
-uint64_t
-SimpleMemory::GetWriteLatency(Addr mach_addr, bool is_dram)
+int64_t
+SimpleMemory::GetWriteLatency(Addr mach_addr,
+        bool is_dram, const PTTEntry* page)
 {
+    if (page) {
+        Addr mach_base = GetVirtualRegionBase();
+        if (is_dram) {
+            mach_base += addrController.migrator().dram_capacity() +
+                    page->index * addrController.page_size();
+            mach_addr = addrController.migrator().Translate(mach_addr, mach_base);
+        } else if (page->state == PTTEntry::DIRTY_STATIC) {
+            mach_base += page->index * addrController.page_size();
+            mach_addr = addrController.migrator().Translate(mach_addr, mach_base);
+        } else assert(page->state == PTTEntry::DIRTY_DIRECT);
+    }
+
     bool hit = banks.access(mach_addr);
     DPRINTF(RowBuffer, "RowBuffer: Write addr=%lx %d\n", mach_addr, hit);
     if (hit) {

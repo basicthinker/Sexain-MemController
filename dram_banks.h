@@ -24,6 +24,7 @@ class DRAMBanks {
   DRAMBanks(uint64_t capacity, int burst_size, int row_buffer_size,
       int ranks_per_channel, int banks_per_rank);
   bool access(uint64_t addr);
+  int row_buffer_size() const { return row_buffer_size_; }
 
  protected:
   uint64_t capacity_;
