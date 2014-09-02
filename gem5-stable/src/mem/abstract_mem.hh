@@ -405,14 +405,14 @@ class AbstractMemory : public MemObject, public MemStore
         ++regCaches;
     }
 
-    virtual void ckNVMWrite()
+    virtual void statsNVMWrites(int n)
     {
-        ++numNVMWrites;
+        numNVMWrites += n;
     }
 
-    virtual void ckDRAMWrite()
+    virtual void statsDRAMWrites(int n)
     {
-        ++numDRAMWrites;
+        numDRAMWrites += n;
     }
 
     virtual void ckDRAMWriteHit()

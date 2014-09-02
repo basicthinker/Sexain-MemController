@@ -31,8 +31,8 @@ class MemStore {
   virtual void OnATTWriteMiss(int state) { }
 
   virtual void OnCacheRegister() { }
-  virtual void ckNVMWrite() { }
-  virtual void ckDRAMWrite() { }
+  virtual void statsNVMWrites(int n = 1) { }
+  virtual void statsDRAMWrites(int n = 1) { }
   virtual void ckDRAMWriteHit() { }
 };
 

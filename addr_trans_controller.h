@@ -41,11 +41,15 @@ class AddrTransController {
   virtual void FinishCheckpointing();
   virtual void MigratePages(Profiler& pf, double dr = 0.33, double wr = 0.67);
 
+  uint64_t phy_range() const { return phy_range_; }
   uint64_t Size() const;
   int block_size() const { return att_.block_size(); }
   int page_size() const { return migrator_.page_size(); }
   int att_length() const { return att_.length(); }
   bool in_checkpointing() const { return in_checkpointing_; }
+
+  const VersionBuffer& nvm_buffer() const { return nvm_buffer_; }
+  const VersionBuffer& dram_buffer() const { return dram_buffer_; }
   const MigrationController& migrator() const { return migrator_; }
 
   uint64_t pages_to_dram() const { return pages_to_dram_; }
@@ -82,7 +86,7 @@ class AddrTransController {
       Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
 
   Addr NVMStore(Addr phy_addr, int size, Profiler& pf);
-  Addr DRAMStore(Addr phy_addr, int size, Profiler& pf);
+  Addr DRAMStore(Addr phy_addr, int size, const PTTEntry& page, Profiler& pf);
 
   void Discard(int index, VersionBuffer& vb, Profiler& pf);
   /// Move a DRAM page out

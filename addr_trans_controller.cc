@@ -54,15 +54,18 @@ Addr AddrTransController::LoadAddr(Addr phy_addr, Profiler& pf) {
   }
 }
 
-Addr AddrTransController::DRAMStore(Addr phy_addr, int size, Profiler& pf) {
+Addr AddrTransController::DRAMStore(Addr phy_addr, int size,
+    const PTTEntry& page, Profiler& pf) {
   int index = att_.Lookup(att_.ToTag(phy_addr), pf);
   if (index != -EINVAL) { // found
     const ATTEntry& entry = att_.At(index);
     mem_store_->OnATTWriteHit(entry.state);
     if (in_checkpointing()) {
+      pf.AddLatency(mem_store_->GetWriteLatency(phy_addr, true, NULL));
       return att_.Translate(phy_addr, entry.mach_base);
     } else {
       FreeLoan(index, !FullBlock(phy_addr, size), pf);
+      pf.AddLatency(mem_store_->GetWriteLatency(phy_addr, true, &page));
       return phy_addr;
     }
   } else { // not found
@@ -76,9 +79,12 @@ Addr AddrTransController::DRAMStore(Addr phy_addr, int size, Profiler& pf) {
       }
       const Addr mach_base = dram_buffer_.SlotAlloc(Profiler::Overlap);
       Setup(phy_addr, mach_base, ATTEntry::LOAN, !FullBlock(phy_addr, size), pf);
-      return att_.Translate(phy_addr, mach_base);
+      Addr mach_addr = att_.Translate(phy_addr, mach_base);
+      pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, true, NULL));
+      return mach_addr;
     } else { // in running
       mem_store_->ckDRAMWriteHit();
+      pf.AddLatency(mem_store_->GetWriteLatency(phy_addr, true, &page));
       return phy_addr;
     }
   }
@@ -127,6 +133,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size, Profiler& pf) {
           !FullBlock(phy_addr, size), pf);
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
+    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, false, NULL));
     att_.AddBlockWrite(index);
     return mach_addr;
   } else { // in checkpointing
@@ -152,6 +159,7 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size, Profiler& pf) {
           !FullBlock(phy_addr, size), pf);
       mach_addr = att_.Translate(phy_addr, mach_base);
     }
+    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, true, NULL));
     att_.AddBlockWrite(index);
     return mach_addr;
   }
@@ -182,9 +190,8 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
   assert(CheckValid(phy_addr, size) && phy_addr < phy_range_);
   PTTEntry page = migrator_.LookupPage(phy_addr, pf);
   if (page.index < 0) {
-    mem_store_->ckNVMWrite();
+    mem_store_->statsNVMWrites();
     Addr mach_addr = NVMStore(phy_addr, size, pf);
-    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, false, NULL));
     return mach_addr;
   } else {
     migrator_.AddDRAMPageWrite(page.mach_base);
@@ -195,9 +202,8 @@ Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
       migrator_.ShiftState(page.mach_base, PTTEntry::DIRTY_STATIC, pf);
       page.state = PTTEntry::DIRTY_STATIC;
     }
-    mem_store_->ckDRAMWrite();
-    Addr mach_addr = DRAMStore(phy_addr, size, pf);
-    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, true, &page));
+    mem_store_->statsDRAMWrites();
+    Addr mach_addr = DRAMStore(phy_addr, size, page, pf);
     return mach_addr;
   }
 }

@@ -210,11 +210,13 @@ class SimpleMemory : public AbstractMemory
      */
     Tick getLatency();
 
-    Addr GetVirtualRegionBase()
+    Addr GetVirtRegionBase()
     {
         return ((addrController.Size() - 1) & ~(banks.row_buffer_size() - 1)) +
                 banks.row_buffer_size();
     }
+
+    Addr GetVirtMachAddr(Addr mach_addr, bool is_dram, const PTTEntry* page);
 
     /**
      * @page NULL denotes a request from a NVM physical address.
