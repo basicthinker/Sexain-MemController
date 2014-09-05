@@ -390,9 +390,9 @@ SimpleMemory::GetReadLatency(Addr mach_addr,
         bool is_dram, const PTTEntry* page)
 {
     mach_addr = GetVirtMachAddr(mach_addr, is_dram, page);
-    bool hit = banks.access(mach_addr);
-    DPRINTF(RowBuffer, "RowBuffer: Read addr=%lx %d\n", mach_addr, hit);
-    if (hit) {
+    DRAMBanks::Bank* bank = banks.Access(mach_addr);
+    DPRINTF(RowBuffer, "RowBuffer: Read addr=%lx %d\n", mach_addr, bank != NULL);
+    if (bank) {
         ++readRowHits;
         return latency;
     } else {
@@ -406,9 +406,9 @@ SimpleMemory::GetWriteLatency(Addr mach_addr,
         bool is_dram, const PTTEntry* page)
 {
     mach_addr = GetVirtMachAddr(mach_addr, is_dram, page);
-    bool hit = banks.access(mach_addr);
-    DPRINTF(RowBuffer, "RowBuffer: Write addr=%lx %d\n", mach_addr, hit);
-    if (hit) {
+    DRAMBanks::Bank* bank = banks.Access(mach_addr);
+    DPRINTF(RowBuffer, "RowBuffer: Write addr=%lx %d\n", mach_addr, bank != NULL);
+    if (bank) {
         ++writeRowHits;
         return latency;
     } else {
