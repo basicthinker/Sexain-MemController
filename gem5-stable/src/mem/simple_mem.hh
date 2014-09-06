@@ -50,6 +50,7 @@
 #define __SIMPLE_MEMORY_HH__
 
 #include <deque>
+#include <list>
 
 #include "mem/abstract_mem.hh"
 #include "mem/port.hh"
@@ -119,6 +120,7 @@ class SimpleMemory : public AbstractMemory
     const Tick latency_miss;
 
     DDR3Banks banks;
+    std::list<Addr> ckptQueue;
 
     const Tick tATTOp;
     const Tick tBufferOp;

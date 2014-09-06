@@ -37,9 +37,10 @@ class AddrTransController {
   virtual Control Probe(Addr phy_addr);
   virtual Addr StoreAddr(Addr phy_addr, int size, Profiler& pf);
 
-  virtual void BeginCheckpointing(Profiler& pf);
-  virtual void FinishCheckpointing();
-  virtual void MigratePages(Profiler& pf, double dr = 0.33, double wr = 0.67);
+  virtual void BeginCheckpointing(std::list<Addr>& ckpt_queue, Profiler& pf);
+  virtual void FinishCheckpointing(std::list<Addr>& ckpt_queue);
+  virtual void MigratePages(std::list<Addr>& ckpt_queue, Profiler& pf,
+      double dr = 0.33, double wr = 0.67);
 
   uint64_t phy_range() const { return phy_range_; }
   uint64_t Size() const;
@@ -56,9 +57,6 @@ class AddrTransController {
   uint64_t pages_to_nvm() const { return pages_to_nvm_; }
 
   virtual bool IsDRAM(Addr phy_addr, Profiler& pf);
-  Addr NextCheckpointBlock(); ///< Returns -EINVAL if none.
-  void InsertCheckpointBlock(Addr block); ///< To the queue head.
-  int ckpt_queue_size() { return ckpt_queue_.size(); }
 #ifdef MEMCK
   std::pair<AddrInfo, AddrInfo> GetAddrInfo(Addr phy_addr);
 #endif
@@ -90,9 +88,11 @@ class AddrTransController {
 
   void Discard(int index, VersionBuffer& vb, Profiler& pf);
   /// Move a DRAM page out
-  void MigrateDRAM(const DRAMPageStats& stats, Profiler& pf);
+  void MigrateDRAM(const DRAMPageStats& stats,
+      std::list<Addr>& ckpt_queue, Profiler& pf);
   /// Move a NVM page out
-  void MigrateNVM(const NVMPageStats& stats, Profiler& pf);
+  void MigrateNVM(const NVMPageStats& stats,
+      std::list<Addr>& ckpt_queue, Profiler& pf);
 
   void CopyBlockIntra(Addr dest_addr, Addr src_addr,
       Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
@@ -104,8 +104,6 @@ class AddrTransController {
   const uint64_t phy_range_; ///< Size of physical address space
   MemStore* mem_store_;
   bool in_checkpointing_;
-
-  std::list<Addr> ckpt_queue_;
 
   uint64_t pages_to_dram_; ///< Sum number of pages migrated from NVM to DRAM
   uint64_t pages_to_nvm_; ///< Sum number of pages migrated from DRAM to NVM
@@ -141,19 +139,6 @@ inline uint64_t AddrTransController::Size() const {
 
 inline bool AddrTransController::IsDRAM(Addr phy_addr, Profiler& pf) {
   return migrator_.Contains(phy_addr, pf);
-}
-
-inline Addr AddrTransController::NextCheckpointBlock() {
-  assert(in_checkpointing_);
-  if (ckpt_queue_.empty()) return -EINVAL;
-  Addr a = ckpt_queue_.front();
-  ckpt_queue_.pop_front();
-  return a;
-}
-
-inline void AddrTransController::InsertCheckpointBlock(Addr block) {
-  assert(in_checkpointing_ && (block & (block_size() - 1)) == 0);
-  ckpt_queue_.push_front(block);
 }
 
 inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {

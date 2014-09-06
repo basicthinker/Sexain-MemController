@@ -184,8 +184,9 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     if (pkt->cmd != MemCmd::SwapReq && pkt->isWrite()) {
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
+            assert(ckptQueue.empty());
             Profiler pf(profBase);
-            addrController.MigratePages(pf);
+            addrController.MigratePages(ckptQueue, pf);
             bytesChannel += pf.SumBusUtil();
             bytesInterChannel += pf.SumBusUtil(true);
 
@@ -288,17 +289,18 @@ SimpleMemory::freeze()
     numPagesToNVM = addrController.pages_to_nvm();
 
     Profiler pf(profBase);
-    addrController.BeginCheckpointing(pf);
+    addrController.BeginCheckpointing(ckptQueue, pf);
     bytesChannel += pf.SumBusUtil();
     bytesInterChannel += pf.SumBusUtil(true);
 
-    Addr block = addrController.NextCheckpointBlock();
-    if (block != -EINVAL) {
+    if (!ckptQueue.empty()) {
+        //Addr block = ckptQueue.front();
+        ckptQueue.pop_front();
         schedule(unfreezeEvent, curTick() + latency); //TODO
         totalCkptTime += latency;
         ckBusUtil += addrController.block_size();
     } else {
-        addrController.FinishCheckpointing();
+        addrController.FinishCheckpointing(ckptQueue);
     }
 
     if (retryReq) {
@@ -310,13 +312,14 @@ SimpleMemory::freeze()
 void
 SimpleMemory::unfreeze()
 {
-    Addr block = addrController.NextCheckpointBlock();
-    if (block != -EINVAL) {
+    if (!ckptQueue.empty()) {
+        //Addr block = ckptQueue.front();
+        ckptQueue.pop_front();
         schedule(unfreezeEvent, curTick() + latency); //GetWriteLatency(block, false));
         totalCkptTime += latency;
         ckBusUtil += addrController.block_size();
     } else {
-        addrController.FinishCheckpointing();
+        addrController.FinishCheckpointing(ckptQueue);
         assert(ckBusUtil == bytesChannel.value());
         if (isWait()) {
             clearWait();
