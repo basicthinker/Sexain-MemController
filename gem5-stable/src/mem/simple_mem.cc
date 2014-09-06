@@ -195,6 +195,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
             Tick duration = area * wbBandwidth;
             duration += pf.SumLatency();
             totalWaitTime += duration;
+            totalCkptTime += duration;
             schedule(freezeEvent, curTick() + duration);
             isBusy = true;
             retryReq = true;
