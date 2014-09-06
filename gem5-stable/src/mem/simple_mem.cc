@@ -62,6 +62,7 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     isTiming = !p->disable_timing;
     wbBandwidth = (double)latency / 64;
     waitStart = 0;
+    ckptStart = 0;
     profBase.set_op_latency(p->lat_att_operate);
 }
 
@@ -151,6 +152,22 @@ SimpleMemory::clearWait()
     waitStart = 0;
 }
 
+void
+SimpleMemory::setCkptStart(Tick time)
+{
+    assert(ckptStart == 0);
+    ckptStart = time;
+}
+
+Tick
+SimpleMemory::getCkptTime()
+{
+    assert(ckptStart > 0);
+    Tick time = curTick() - ckptStart;
+    ckptStart = 0;
+    return time;
+}
+
 bool
 SimpleMemory::recvTimingReq(PacketPtr pkt)
 {
@@ -196,7 +213,7 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
             Tick duration = area * wbBandwidth;
             duration += pf.SumLatency();
             totalWaitTime += duration;
-            totalCkptTime += duration;
+            setCkptStart(curTick());
             schedule(freezeEvent, curTick() + duration);
             isBusy = true;
             retryReq = true;
@@ -297,7 +314,6 @@ SimpleMemory::freeze()
         //Addr block = ckptQueue.front();
         ckptQueue.pop_front();
         schedule(unfreezeEvent, curTick() + latency); //TODO
-        totalCkptTime += latency;
         ckBusUtil += addrController.block_size();
     } else {
         addrController.FinishCheckpointing(ckptQueue);
@@ -316,11 +332,11 @@ SimpleMemory::unfreeze()
         //Addr block = ckptQueue.front();
         ckptQueue.pop_front();
         schedule(unfreezeEvent, curTick() + latency); //GetWriteLatency(block, false));
-        totalCkptTime += latency;
         ckBusUtil += addrController.block_size();
     } else {
         addrController.FinishCheckpointing(ckptQueue);
         assert(ckBusUtil == bytesChannel.value());
+        totalCkptTime += getCkptTime();
         if (isWait()) {
             clearWait();
             port.sendRetry();

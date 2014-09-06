@@ -163,6 +163,10 @@ class SimpleMemory : public AbstractMemory
     void setWait();
     void clearWait();
 
+    Tick ckptStart;
+    void setCkptStart(Tick time);
+    Tick getCkptTime();
+
     /**
      * Remember if we have to retry an outstanding request that
      * arrived while we were busy.
