@@ -90,7 +90,7 @@ bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats, Profiler& pf) {
   return true;
 }
 
-void MigrationController::AddToBlockList(Addr page, std::list<Addr>* list) {
+void MigrationController::AddToBlockList(Addr page, vector<Addr>* list) {
   assert((page & page_mask_) == 0 && list);
   Addr next_page = page + page_size();
   for (Addr a = page; a < next_page; a += (1 << block_bits_)) {
@@ -98,7 +98,7 @@ void MigrationController::AddToBlockList(Addr page, std::list<Addr>* list) {
   }
 }
 
-void MigrationController::Clear(Profiler& pf, std::list<Addr>* ckpt_blocks) {
+void MigrationController::Clear(Profiler& pf, vector<Addr>* ckpt_blocks) {
   pf.AddPageMoveInter(dirty_entries_); // epoch write-backs
   for (PTTEntryIterator it = entries_.begin(); it != entries_.end(); ++it) {
     it->second.epoch_reads = 0;

@@ -8,7 +8,6 @@
 #include <vector>
 #include <unordered_map>
 #include <set>
-#include <list>
 #include <algorithm>
 
 #include "addr_trans_table.h"
@@ -79,9 +78,9 @@ class MigrationController {
   /// Next DRAM page with increasing dirty ratio
   bool ExtractDRAMPage(DRAMPageStats& stats, Profiler& profiler);
   /// Clear up all entries, heaps, epoch statistics, etc.
-  void Clear(Profiler& profiler, std::list<Addr>* ckpt_blocks);
+  void Clear(Profiler& profiler, std::vector<Addr>* ckpt_blocks);
 
-  void AddToBlockList(Addr page, std::list<Addr>* list);
+  void AddToBlockList(Addr page, std::vector<Addr>* list);
 
   int page_bits() const { return page_bits_; }
   int page_size() const { return 1 << page_bits_; }

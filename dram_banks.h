@@ -8,26 +8,43 @@
 #include <vector>
 #include <cassert>
 
+typedef uint64_t Time;
+
 class DRAMBanks {
  public:
 
+  struct Address {
+    int rank_ID;
+    int bank_ID;
+    int row_ID;
+  };
+
   class Bank {
    public:
-    Bank() : open_row_(INVALID_ROW) { }
+    Bank() : open_row_(-EINVAL), busy_time_(0) { }
     uint32_t open_row() const { return open_row_; }
-    void set_open_row(uint32_t row) { open_row_ = row; }
-    uint64_t busy_time() const { return busy_time_; }
-    void set_busy_time(uint64_t time) { busy_time_ = time; }
-    static const uint32_t INVALID_ROW = -1;
+    Time busy_time() const { return busy_time_; }
+    void set_busy_time(Time time) { busy_time_ = time; }
+
+    bool Access(int row);
+    void PushWrite(Address addr);
+    Address PopWrite();
+    bool HasPendingWrite() const { return !write_queue_.empty(); }
+
    private:
     uint32_t open_row_;
-    uint64_t busy_time_;
+    Time busy_time_;
+    std::vector<Address> write_queue_;
   };
 
   DRAMBanks(uint64_t capacity, int burst_size, int row_buffer_size,
       int ranks_per_channel, int banks_per_rank);
-  bool IsBankBusy(uint64_t addr, uint64_t time);
-  Bank* Access(uint64_t addr);
+  void PushWrite(uint64_t addr);
+  bool HasPendingWrite() const;
+  Bank* Access(uint64_t addr, bool& hit);
+  Time NextTime(Time t) const;
+  /// Process pending checkpoint blocks.
+  std::vector<std::pair<DRAMBanks::Bank*, bool>> Access(Time t, int* flushed);
   int row_buffer_size() const { return row_buffer_size_; }
 
  protected:
@@ -37,7 +54,8 @@ class DRAMBanks {
   const int banks_per_rank_;
 
  private:
-  void ParseAddr(uint64_t addr, int& rank, int& bank, int& row);
+  Address ParseAddr(uint64_t addr);
+  Bank* Access(Address addr, bool& hit);
 
   uint64_t capacity_;
   int columns_per_row_buffer_;
@@ -49,6 +67,21 @@ class DDR3Banks : public DRAMBanks {
  public:
   DDR3Banks(uint64_t capacity) : DRAMBanks(capacity, 64, 8192, 2, 8) { }
 };
+
+inline bool DRAMBanks::Bank::Access(int row) {
+  return open_row() == row ? true : (open_row_ = row, false);
+}
+
+inline void DRAMBanks::Bank::PushWrite(Address addr) {
+  assert(write_queue_.empty() || write_queue_.back().bank_ID == addr.bank_ID);
+  write_queue_.push_back(addr);
+}
+
+inline DRAMBanks::Address DRAMBanks::Bank::PopWrite() {
+  Address addr = write_queue_.back();
+  write_queue_.pop_back();
+  return addr;
+}
 
 inline DRAMBanks::DRAMBanks(uint64_t capacity, int burst_size,
     int row_buffer_size, int ranks_per_channel, int banks_per_rank) :
@@ -63,41 +96,75 @@ inline DRAMBanks::DRAMBanks(uint64_t capacity, int burst_size,
       ranks_per_channel_);
 }
 
-inline void DRAMBanks::ParseAddr(uint64_t addr,
-    int& rank, int& bank, int& row) {
+inline DRAMBanks::Address DRAMBanks::ParseAddr(uint64_t addr) {
+  Address a;
   addr = addr / burst_size_;
   addr = addr / columns_per_row_buffer_;
 
-  bank = addr % banks_per_rank_;
+  a.bank_ID = addr % banks_per_rank_;
   addr = addr / banks_per_rank_;
-  assert(bank >= 0 && bank < banks_per_rank_);
+  assert(a.bank_ID >= 0 && a.bank_ID < banks_per_rank_);
 
-  rank = addr % ranks_per_channel_;
+  a.rank_ID = addr % ranks_per_channel_;
   addr = addr / ranks_per_channel_;
-  assert(rank >= 0 && rank < ranks_per_channel_);
+  assert(a.rank_ID >= 0 && a.rank_ID < ranks_per_channel_);
 
-  row = addr % rows_per_bank_;
+  a.row_ID = addr % rows_per_bank_;
   addr = addr / rows_per_bank_;
-  assert(row >= 0 && row < rows_per_bank_);
+  assert(a.row_ID >= 0 && a.row_ID < rows_per_bank_);
+  return a;
 }
 
-inline bool DRAMBanks::IsBankBusy(uint64_t addr, uint64_t time) {
-  int rank, bank, row;
-  ParseAddr(addr, rank, bank, row);
-  return banks_[rank][bank].busy_time() > time;
+inline void DRAMBanks::PushWrite(uint64_t addr) {
+  Address a = ParseAddr(addr);
+  banks_[a.rank_ID][a.bank_ID].PushWrite(a);
 }
 
-inline DRAMBanks::Bank* DRAMBanks::Access(uint64_t addr) {
-  int rank, bank, row;
-  ParseAddr(addr, rank, bank, row);
-  Bank& b = banks_[rank][bank];
-  if (b.open_row() == row) {
-    return &b; // assuming the bank structure is kept valid
-  } else {
-    b.set_open_row(row);
-    return NULL;
+inline bool DRAMBanks::HasPendingWrite() const {
+  for (int i = 0; i < banks_.size(); ++i) {
+    for (int j = 0; j < banks_[i].size(); ++j) {
+      if (banks_[i][j].HasPendingWrite()) return true;
+    }
   }
+  return false;
+}
+
+inline DRAMBanks::Bank* DRAMBanks::Access(DRAMBanks::Address addr, bool& hit) {
+  Bank& bank = banks_[addr.rank_ID][addr.bank_ID];
+  hit = bank.Access(addr.row_ID);
+  return &bank;
+}
+
+inline DRAMBanks::Bank* DRAMBanks::Access(uint64_t addr, bool& hit) {
+  return Access(ParseAddr(addr), hit);
+}
+
+inline std::vector<std::pair<DRAMBanks::Bank*, bool>> DRAMBanks::Access(
+    Time t, int* flushed) {
+  std::vector<std::pair<DRAMBanks::Bank*, bool>> ret;
+  *flushed = 0;
+  for (int i = 0; i < banks_.size(); ++i) {
+    for (int j = 0; j < banks_[i].size(); ++j) {
+      if (banks_[i][j].busy_time() == t) ++(*flushed);
+      if (banks_[i][j].busy_time() <= t && banks_[i][j].HasPendingWrite()) {
+        bool hit;
+        Bank* bank = Access(banks_[i][j].PopWrite(), hit);
+        ret.push_back(std::make_pair(bank, hit));
+      }
+    }
+  }
+  return ret;
+}
+
+inline Time DRAMBanks::NextTime(Time now) const {
+  Time next = -1; // max integer value
+  for (int i = 0; i < banks_.size(); ++i) {
+    for (int j = 0; j < banks_[i].size(); ++j) {
+      if (banks_[i][j].busy_time() > now && banks_[i][j].busy_time() < next)
+        next = banks_[i][j].busy_time();
+    }
+  }
+  return next == -1 ? 0 : next;
 }
 
 #endif // SEXAIN_DRAM_BANKS_H_
-

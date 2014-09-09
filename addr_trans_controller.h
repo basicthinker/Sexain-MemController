@@ -6,7 +6,7 @@
 
 #include <cassert>
 #include <vector>
-#include <list>
+
 #include "mem_store.h"
 #include "version_buffer.h"
 #include "addr_trans_table.h"
@@ -37,9 +37,9 @@ class AddrTransController {
   virtual Control Probe(Addr phy_addr);
   virtual Addr StoreAddr(Addr phy_addr, int size, Profiler& pf);
 
-  virtual void BeginCheckpointing(std::list<Addr>& ckpt_queue, Profiler& pf);
-  virtual void FinishCheckpointing(std::list<Addr>& ckpt_queue);
-  virtual void MigratePages(std::list<Addr>& ckpt_queue, Profiler& pf,
+  virtual void BeginCheckpointing(std::vector<Addr>& ckpt_blocks, Profiler& pf);
+  virtual void FinishCheckpointing();
+  virtual void MigratePages(std::vector<Addr>& ckpt_blocks, Profiler& pf,
       double dr = 0.33, double wr = 0.67);
 
   uint64_t phy_range() const { return phy_range_; }
@@ -77,11 +77,11 @@ class AddrTransController {
   Addr ResetClean(int index, bool move_data, Profiler& pf);
   void FreeClean(int index, Profiler& pf);
   Addr DirtyStained(int index, bool move_data,
-      Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
+      Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL);
   void FreeLoan(int index, bool move_data,
-      Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
+      Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL);
   void HideTemp(int index, bool move_data,
-      Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
+      Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL);
 
   Addr NVMStore(Addr phy_addr, int size, Profiler& pf);
   Addr DRAMStore(Addr phy_addr, int size, const PTTEntry& page, Profiler& pf);
@@ -89,17 +89,17 @@ class AddrTransController {
   void Discard(int index, VersionBuffer& vb, Profiler& pf);
   /// Move a DRAM page out
   void MigrateDRAM(const DRAMPageStats& stats,
-      std::list<Addr>& ckpt_queue, Profiler& pf);
+      std::vector<Addr>& ckpt_blocks, Profiler& pf);
   /// Move a NVM page out
   void MigrateNVM(const NVMPageStats& stats,
-      std::list<Addr>& ckpt_queue, Profiler& pf);
+      std::vector<Addr>& ckpt_blocks, Profiler& pf);
 
   void CopyBlockIntra(Addr dest_addr, Addr src_addr,
-      Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
+      Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL);
   void CopyBlockInter(Addr dest_addr, Addr src_addr,
-      Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
+      Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL);
   void SwapBlock(Addr direct_addr, Addr mach_addr,
-      Profiler& pf, std::list<Addr>* ckpt_blocks = NULL);
+      Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL);
 
   const uint64_t phy_range_; ///< Size of physical address space
   MemStore* mem_store_;
@@ -111,25 +111,25 @@ class AddrTransController {
   class DirtyCleaner : public QueueVisitor { // inc. TEMP and HIDDEN
    public:
     DirtyCleaner(AddrTransController* atc,
-        Profiler& pf, std::list<Addr>* ckpt_blocks = NULL) :
+        Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL) :
         atc_(atc), pf_(pf), ckpt_blocks_(ckpt_blocks) { }
     void Visit(int i);
    private:
     AddrTransController* atc_;
     Profiler& pf_;
-    std::list<Addr>* ckpt_blocks_;
+    std::vector<Addr>* ckpt_blocks_;
   };
 
   class LoanRevoker : public QueueVisitor {
    public:
     LoanRevoker(AddrTransController* atc,
-        Profiler& pf, std::list<Addr>* ckpt_blocks = NULL) :
+        Profiler& pf, std::vector<Addr>* ckpt_blocks = NULL) :
         atc_(atc), pf_(pf), ckpt_blocks_(ckpt_blocks) { }
     void Visit(int i);
    private:
     AddrTransController* atc_;
     Profiler& pf_;
-    std::list<Addr>* ckpt_blocks_;
+    std::vector<Addr>* ckpt_blocks_;
   };
 };
 
@@ -150,21 +150,21 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
 }
 
 inline void AddrTransController::CopyBlockIntra(Addr dest, Addr src,
-    Profiler& pf, std::list<Addr>* ckpt_blocks) {
+    Profiler& pf, std::vector<Addr>* ckpt_blocks) {
   mem_store_->MemCopy(dest, src, att_.block_size());
   pf.AddBlockMoveIntra();
   if (ckpt_blocks) ckpt_blocks->push_back(dest);
 }
 
 inline void AddrTransController::CopyBlockInter(Addr dest, Addr src,
-    Profiler& pf, std::list<Addr>* ckpt_blocks) {
+    Profiler& pf, std::vector<Addr>* ckpt_blocks) {
   mem_store_->MemCopy(dest, src, att_.block_size());
   pf.AddBlockMoveInter();
   if (ckpt_blocks) ckpt_blocks->push_back(dest);
 }
 
 inline void AddrTransController::SwapBlock(Addr direct_addr, Addr mach_addr,
-    Profiler& pf, std::list<Addr>* ckpt_blocks) {
+    Profiler& pf, std::vector<Addr>* ckpt_blocks) {
   mem_store_->MemSwap(direct_addr, mach_addr, att_.block_size());
   pf.AddBlockMoveIntra(3);
   if (ckpt_blocks) {

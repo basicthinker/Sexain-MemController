@@ -230,20 +230,20 @@ void AddrTransController::LoanRevoker::Visit(int i) {
 }
 
 void AddrTransController::MigrateDRAM(const DRAMPageStats& stats,
-    list<Addr>& ckpt_queue, Profiler& pf) {
+    vector<Addr>& ckpt_blocks, Profiler& pf) {
   DPRINTF(Migration, "Migrate DRAM page WR=%f, from %s.\n",
       stats.write_ratio, PTTEntry::state_strings[stats.state]);
   if (stats.state == PTTEntry::CLEAN_STATIC) {
     pf.AddPageMoveIntra();
-    migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue);
+    migrator_.AddToBlockList(stats.phy_addr, &ckpt_blocks);
   } else if (stats.state == PTTEntry::DIRTY_DIRECT) {
     pf.AddPageMoveInter(); // for write back
-    migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue);
+    migrator_.AddToBlockList(stats.phy_addr, &ckpt_blocks);
   } else if (stats.state == PTTEntry::DIRTY_STATIC) {
     pf.AddPageMoveIntra();
     pf.AddPageMoveInter();
-    migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue);
-    migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue);
+    migrator_.AddToBlockList(stats.phy_addr, &ckpt_blocks);
+    migrator_.AddToBlockList(stats.phy_addr, &ckpt_blocks);
   }
 #ifdef MEMCK
   Tag tag = att_.ToTag(stats.phy_addr);
@@ -255,7 +255,7 @@ void AddrTransController::MigrateDRAM(const DRAMPageStats& stats,
 }
 
 void AddrTransController::MigrateNVM(const NVMPageStats& stats,
-    list<Addr>& ckpt_queue, Profiler& pf) {
+    vector<Addr>& ckpt_blocks, Profiler& pf) {
   Tag phy_tag = att_.ToTag(stats.phy_addr);
   Tag next_page = att_.ToTag(stats.phy_addr + migrator_.page_size());
   assert(next_page - phy_tag == migrator_.page_blocks());
@@ -274,14 +274,14 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats,
       case ATTEntry::DIRTY:
         pf.AddBlockMoveInter(); // for copying data to DRAM
         CopyBlockIntra(att_.ToAddr(entry.phy_tag), entry.mach_base, pf);
-        ckpt_queue.push_back(att_.ToAddr(entry.phy_tag));
+        ckpt_blocks.push_back(att_.ToAddr(entry.phy_tag));
         Discard(index, nvm_buffer_, pf);
         break;
       case ATTEntry::STAINED:
       case ATTEntry::TEMP:
         pf.AddBlockMoveIntra(); // for copying data to DRAM
         CopyBlockInter(att_.ToAddr(entry.phy_tag), entry.mach_base, pf);
-        ckpt_queue.push_back(att_.ToAddr(entry.phy_tag));
+        ckpt_blocks.push_back(att_.ToAddr(entry.phy_tag));
         Discard(index, dram_buffer_, pf);
         break;
       case ATTEntry::LOAN:
@@ -302,15 +302,15 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats,
     migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, pf);
     DPRINTF(Migration, "Migrate NVM page to CLEAN_DIRECT.\n");
   }
-  migrator_.AddToBlockList(stats.phy_addr, &ckpt_queue);
+  migrator_.AddToBlockList(stats.phy_addr, &ckpt_blocks);
   ++pages_to_dram_;
 }
 
-void AddrTransController::MigratePages(list<Addr>& ckpt_queue, Profiler& pf,
+void AddrTransController::MigratePages(vector<Addr>& ckpt_blocks, Profiler& pf,
     double dr, double wr) {
   assert(!in_checkpointing());
 
-  LoanRevoker loan_revoker(this, pf, &ckpt_queue);
+  LoanRevoker loan_revoker(this, pf, &ckpt_blocks);
   att_.VisitQueue(ATTEntry::LOAN, &loan_revoker);
   assert(att_.IsEmpty(ATTEntry::LOAN));
 
@@ -332,10 +332,10 @@ void AddrTransController::MigratePages(list<Addr>& ckpt_queue, Profiler& pf,
         break;
       }
       pf.set_ignore_latency();
-      MigrateDRAM(d, ckpt_queue, pf);
+      MigrateDRAM(d, ckpt_blocks, pf);
       pf.clear_ignore_latency();
     }
-    MigrateNVM(n, ckpt_queue, pf);
+    MigrateNVM(n, ckpt_blocks, pf);
   }
   if ((!d_ready && !migrator_.ExtractDRAMPage(d, pf))) return;
   int limit = migrator_.ptt_capacity() - migrator_.ptt_length();
@@ -345,7 +345,7 @@ void AddrTransController::MigratePages(list<Addr>& ckpt_queue, Profiler& pf,
     if (d.write_ratio == 0) continue;
     if (d.write_ratio > wr) break;
     pf.set_ignore_latency();
-    MigrateDRAM(d, ckpt_queue, pf);
+    MigrateDRAM(d, ckpt_blocks, pf);
     pf.clear_ignore_latency();
     ++pages_to_nvm_; // excluding clean DRAM pages exchanged with NVM pages
     --limit;
@@ -354,11 +354,11 @@ void AddrTransController::MigratePages(list<Addr>& ckpt_queue, Profiler& pf,
 }
 
 void AddrTransController::BeginCheckpointing(
-    list<Addr>& ckpt_queue, Profiler& pf) {
+    vector<Addr>& ckpt_blocks, Profiler& pf) {
   assert(!in_checkpointing());
 
   // ATT flush
-  DirtyCleaner att_cleaner(this, pf, &ckpt_queue);
+  DirtyCleaner att_cleaner(this, pf, &ckpt_blocks);
   att_.VisitQueue(ATTEntry::DIRTY, &att_cleaner);
   assert(att_.GetLength(ATTEntry::CLEAN) +
       att_.GetLength(ATTEntry::FREE) == att_.length());
@@ -367,12 +367,11 @@ void AddrTransController::BeginCheckpointing(
   in_checkpointing_ = true;
 
   att_.ClearStats(pf);
-  migrator_.Clear(pf, &ckpt_queue); // page write-back
+  migrator_.Clear(pf, &ckpt_blocks); // page write-back
 }
 
-void AddrTransController::FinishCheckpointing(list<Addr>& ckpt_queue) {
+void AddrTransController::FinishCheckpointing() {
   assert(in_checkpointing());
-  assert(ckpt_queue.empty());
   nvm_buffer_.ClearBackup(Profiler::Null); //TODO
   in_checkpointing_ = false;
   mem_store_->OnEpochEnd();
@@ -441,7 +440,7 @@ void AddrTransController::FreeClean(int index, Profiler& pf) {
 }
 
 Addr AddrTransController::DirtyStained(int index, bool move_data,
-    Profiler& pf, std::list<Addr>* ckpt_blocks) {
+    Profiler& pf, vector<Addr>* ckpt_blocks) {
   assert(!in_checkpointing());
   const ATTEntry& entry = att_.At(index);
   assert(entry.state == ATTEntry::STAINED);
@@ -457,7 +456,7 @@ Addr AddrTransController::DirtyStained(int index, bool move_data,
 }
 
 void AddrTransController::FreeLoan(int index, bool move_data,
-    Profiler& pf, std::list<Addr>* ckpt_blocks) {
+    Profiler& pf, vector<Addr>* ckpt_blocks) {
   assert(!in_checkpointing());
   const ATTEntry& entry = att_.At(index);
   assert(entry.state == ATTEntry::LOAN);
@@ -474,7 +473,7 @@ void AddrTransController::FreeLoan(int index, bool move_data,
 }
 
 void AddrTransController::HideTemp(int index, bool move_data,
-    Profiler& pf, std::list<Addr>* ckpt_blocks) {
+    Profiler& pf, vector<Addr>* ckpt_blocks) {
   assert(!in_checkpointing());
   const ATTEntry& entry = att_.At(index);
   assert(entry.state == ATTEntry::TEMP);

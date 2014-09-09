@@ -201,9 +201,9 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     if (pkt->cmd != MemCmd::SwapReq && pkt->isWrite()) {
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
-            assert(ckptQueue.empty());
+            assert(ckptBlocks.empty());
             Profiler pf(profBase);
-            addrController.MigratePages(ckptQueue, pf);
+            addrController.MigratePages(ckptBlocks, pf);
             bytesChannel += pf.SumBusUtil();
             bytesInterChannel += pf.SumBusUtil(true);
 
@@ -306,17 +306,27 @@ SimpleMemory::freeze()
     numPagesToNVM = addrController.pages_to_nvm();
 
     Profiler pf(profBase);
-    addrController.BeginCheckpointing(ckptQueue, pf);
+    addrController.BeginCheckpointing(ckptBlocks, pf);
     bytesChannel += pf.SumBusUtil();
     bytesInterChannel += pf.SumBusUtil(true);
 
-    if (!ckptQueue.empty()) {
-        //Addr block = ckptQueue.front();
-        ckptQueue.pop_front();
-        schedule(unfreezeEvent, curTick() + latency); //TODO
-        ckBusUtil += addrController.block_size();
+    while(!ckptBlocks.empty()) {
+        banks.PushWrite(ckptBlocks.back());
+        ckptBlocks.pop_back();
+    }
+
+    int flushed;
+    vector<pair<DRAMBanks::Bank*, bool>> b = banks.Access(curTick(), &flushed);
+    ckBusUtil += addrController.block_size() * flushed;
+    for (int i = 0; i < b.size(); ++i) {
+        b[i].first->set_busy_time(curTick() + latency); //TODO
+    }
+    Tick next = banks.NextTime(curTick());
+    assert(!next || next - curTick() == latency); //TODO
+    if (next) {
+        schedule(unfreezeEvent, next);
     } else {
-        addrController.FinishCheckpointing(ckptQueue);
+        addrController.FinishCheckpointing();
     }
 
     if (retryReq) {
@@ -328,13 +338,18 @@ SimpleMemory::freeze()
 void
 SimpleMemory::unfreeze()
 {
-    if (!ckptQueue.empty()) {
-        //Addr block = ckptQueue.front();
-        ckptQueue.pop_front();
-        schedule(unfreezeEvent, curTick() + latency); //GetWriteLatency(block, false));
-        ckBusUtil += addrController.block_size();
+    int flushed;
+    vector<pair<DRAMBanks::Bank*, bool>> b = banks.Access(curTick(), &flushed);
+    ckBusUtil += addrController.block_size() * flushed;
+    for (int i = 0; i < b.size(); ++i) {
+        b[i].first->set_busy_time(curTick() + latency); //TODO
+    }
+    Tick next = banks.NextTime(curTick());
+    assert(!next || next - curTick() == latency); //TODO
+    if (next) {
+        schedule(unfreezeEvent, next);
     } else {
-        addrController.FinishCheckpointing(ckptQueue);
+        addrController.FinishCheckpointing();
         assert(ckBusUtil == bytesChannel.value());
         totalCkptTime += getCkptTime();
         if (isWait()) {
@@ -410,9 +425,10 @@ SimpleMemory::GetReadLatency(Addr mach_addr,
         bool is_dram, const PTTEntry* page)
 {
     mach_addr = GetVirtMachAddr(mach_addr, is_dram, page);
-    DRAMBanks::Bank* bank = banks.Access(mach_addr);
+    bool hit;
+    DRAMBanks::Bank* bank = banks.Access(mach_addr, hit);
     DPRINTF(RowBuffer, "RowBuffer: Read addr=%lx %d\n", mach_addr, bank != NULL);
-    if (bank) {
+    if (hit) {
         ++readRowHits;
         return latency;
     } else {
@@ -426,9 +442,10 @@ SimpleMemory::GetWriteLatency(Addr mach_addr,
         bool is_dram, const PTTEntry* page)
 {
     mach_addr = GetVirtMachAddr(mach_addr, is_dram, page);
-    DRAMBanks::Bank* bank = banks.Access(mach_addr);
+    bool hit;
+    DRAMBanks::Bank* bank = banks.Access(mach_addr, hit);
     DPRINTF(RowBuffer, "RowBuffer: Write addr=%lx %d\n", mach_addr, bank != NULL);
-    if (bank) {
+    if (hit) {
         ++writeRowHits;
         return latency;
     } else {
