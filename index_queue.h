@@ -1,83 +1,109 @@
-// index_queue.h
-// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
+/*
+ * Copyright (c) 2014 Jinglei Ren <jinglei.ren@persper.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met: redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer;
+ * redistributions in binary form must reproduce the above copyright
+ * notice, this list of conditions and the following disclaimer in the
+ * documentation and/or other materials provided with the distribution;
+ * neither the name of the copyright holders nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-#ifndef SEXAIN_INDEX_QUEUE_H_
-#define SEXAIN_INDEX_QUEUE_H_
+#ifndef __INDEX_QUEUE_HH__
+#define __INDEX_QUEUE_HH__
 
 #include <cerrno>
 #include <cassert>
-#include <set>
 #include <algorithm>
+#include <set>
 
-struct IndexNode {
-  int prev;
-  int next;
-  IndexNode() {
-    prev = next = -EINVAL;
-  }
+struct IndexNode
+{
+    int prev;
+    int next;
+    IndexNode()
+    {
+        prev = next = -EINVAL;
+    }
 };
 
-class IndexArray {
- public:
-  virtual IndexNode& operator[](int i) = 0;
+class IndexArray
+{
+  public:
+    virtual IndexNode& operator[](int i) = 0;
+    virtual ~IndexArray() { }
 };
 
-class QueueVisitor {
- public:
-  virtual void Visit(int i) = 0;
+class QueueVisitor
+{
+  public:
+    virtual void Visit(int i) = 0;
+    virtual ~QueueVisitor() { }
 };
 
-class IndexQueue {
- public:
-  IndexQueue(IndexArray& arr);
-  int Front() const { return head_.prev; }
-  int Back() const { return head_.next; }
-  bool Empty() const;
-  void Remove(int i);
-  int PopFront();
-  void PushBack(int i);
+class IndexQueue
+{
+  public:
+    IndexQueue(IndexArray& arr);
+    int front() const { return head.prev; }
+    int back() const { return head.next; }
+    bool empty() const;
+    void remove(int i);
+    int popFront();
+    void pushBack(int i);
 
-  int Accept(QueueVisitor* visitor);
-  int length() const { return length_; }
- private:
-  IndexNode& FrontNode();
-  IndexNode& BackNode();
-  void SetFront(int i) { head_.prev = i; }
-  void SetBack(int i) { head_.next = i; }
+    int accept(QueueVisitor* visitor);
+    int length() const { return _length; }
 
-  IndexNode head_;
-  IndexArray& array_;
-  int length_;
+  private:
+    void setFront(int i) { head.prev = i; }
+    void setBack(int i) { head.next = i; }
+
+    IndexNode head;
+    IndexArray& array;
+    int _length;
 };
 
-inline IndexQueue::IndexQueue(IndexArray& arr) : array_(arr) {
-  SetFront(-EINVAL);
-  SetBack(-EINVAL);
-  length_ = 0;
+inline
+IndexQueue::IndexQueue(IndexArray& indexes) : array(indexes)
+{
+    setFront(-EINVAL);
+    setBack(-EINVAL);
+    _length = 0;
 }
 
-inline IndexNode& IndexQueue::FrontNode() {
-  assert(Front() >= 0);
-  return array_[Front()];
+inline bool
+IndexQueue::empty() const
+{
+    assert((front() == -EINVAL) == (back() == -EINVAL));
+    assert((length() == 0) == (front() == -EINVAL));
+    return front() == -EINVAL;
 }
 
-inline IndexNode& IndexQueue::BackNode() {
-  assert(Back() >= 0);
-  return array_[Back()];
+inline int
+IndexQueue::popFront()
+{
+    if (empty())
+        return -EINVAL;
+    remove(front());
+    return front();
 }
 
-inline bool IndexQueue::Empty() const {
-  assert((Front() == -EINVAL) == (Back() == -EINVAL));
-  assert((length_ == 0) == (Front() == -EINVAL));
-  return Front() == -EINVAL;
-}
-
-inline int IndexQueue::PopFront() {
-  if (Empty()) return -EINVAL;
-  const int front = Front();
-  Remove(front);
-  return front;
-}
-
-#endif // SEXAIN_INDEX_QUEUE_H_
-
+#endif  // __INDEX_QUEUE_HH__
