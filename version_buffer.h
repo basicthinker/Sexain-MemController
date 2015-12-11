@@ -1,82 +1,126 @@
-// version_buffer.h
-// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
+/*
+ * Copyright (c) 2014 Jinglei Ren <jinglei.ren@persper.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met: redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer;
+ * redistributions in binary form must reproduce the above copyright
+ * notice, this list of conditions and the following disclaimer in the
+ * documentation and/or other materials provided with the distribution;
+ * neither the name of the copyright holders nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-#ifndef SEXAIN_VERSION_BUFFER_H_
-#define SEXAIN_VERSION_BUFFER_H_
+#ifndef __THYNVM_VERSION_BUFFER_HH__
+#define __THYNVM_VERSION_BUFFER_HH__
 
-#include <vector>
-#include <set>
-#include <limits>
-#include <cstdint>
 #include <cassert>
+#include <cerrno>
+#include <cstdint>
+#include <limits>
+#include <set>
+#include <vector>
 #include "profiler.h"
 
-#define INVAL_ADDR std::numeric_limits<uint64_t>::max()
+namespace thynvm {
 
-class VersionBuffer {
- public:
-  enum State {
-    BACKUP0 = 0,
-    BACKUP1,
-    IN_USE,
-    FREE, // max queue index
-  };
+class VersionBuffer
+{
+  public:
+    enum State
+    {
+        SHORT = 0,
+        LONG,
+        IN_USE,
+        FREE,  // max queue index
+    };
 
-  VersionBuffer(int length, int block_bits);
+    VersionBuffer(int length, int block_bits);
 
-  uint64_t SlotAlloc(Profiler& pf);
-  void FreeSlot(uint64_t mach_addr, State state, Profiler& pf);
-  void SlotBackup(uint64_t mach_addr, State state, Profiler& pf);
-  void ClearBackup(Profiler& pf);
+    uint64_t allocSlot(Profiler& profiler);
+    void freeSlot(uint64_t hw_addr, State state, Profiler& profiler);
+    void backupSlot(uint64_t hw_addr, State state, Profiler& profiler);
+    void clearBackup(Profiler& profiler);
 
-  uint64_t addr_base() const { return addr_base_; }
-  void set_addr_base(uint64_t base) { addr_base_ = base; }
-  int length() const { return length_; }
-  int block_size() const { return 1 << block_bits_; }
-  /// The total address space size that this buffer area covers in bytes
-  uint64_t Size() const;
-  bool Contains(uint64_t addr) const;
- private:
-  uint64_t At(int index);
-  int Index(uint64_t mach_addr);
+    uint64_t addrBase() const { return _addr_base; }
+    void setAddrBase(uint64_t base) { _addr_base = base; }
 
-  uint64_t addr_base_;
-  const int length_;
-  const int block_bits_;
-  const uint64_t block_mask_;
-  std::vector<std::set<int>> sets_;
+    /**
+     * Returns the number of block slots in this buffer area
+     */
+    int length() const { return _length; }
+
+    /**
+     * Returns the address space size that this buffer area covers in bytes
+     */
+    uint64_t size() const;
+
+    bool contains(uint64_t addr) const;
+
+  private:
+    uint64_t at(int index);
+    int index(uint64_t hw_addr);
+
+    uint64_t _addr_base;
+    const int _length;
+    const int block_bits;
+    std::vector<std::set<int>> index_sets;
 };
 
-inline VersionBuffer::VersionBuffer(int length, int block_bits) :
-    length_(length), block_bits_(block_bits),
-    block_mask_(block_size() - 1), sets_(FREE + 1) {
-  for (int i = 0; i < length_; ++i) {
-    sets_[FREE].insert(i);
-  }
-  addr_base_ = INVAL_ADDR;
+inline
+VersionBuffer::VersionBuffer(int length, int block_bits)
+        : _length(length), block_bits(block_bits), index_sets(FREE + 1)
+{
+    for (int i = 0; i < _length; ++i) {
+        index_sets[FREE].insert(i);
+    }
+    _addr_base = -EINVAL;
 }
 
-inline uint64_t VersionBuffer::Size() const {
-  return length_ << block_bits_;
+inline uint64_t
+VersionBuffer::size() const
+{
+    return _length << block_bits;
 }
 
-inline bool VersionBuffer::Contains(uint64_t addr) const {
-  return addr >= addr_base_ && (addr - addr_base_) < Size();
+inline bool
+VersionBuffer::contains(uint64_t addr) const
+{
+    return addr >= _addr_base && (addr - _addr_base) < size();
 }
 
-inline uint64_t VersionBuffer::At(int index) {
-  assert(addr_base_ != INVAL_ADDR && index >= 0 && index < length_);
-  return addr_base_ + (index << block_bits_);
+inline uint64_t
+VersionBuffer::at(int index)
+{
+    assert(_addr_base != -EINVAL && index >= 0 && index < _length);
+    return _addr_base + (index << block_bits);
 }
 
-inline int VersionBuffer::Index(uint64_t mach_addr) {
-  assert(mach_addr >= addr_base_);
-  uint64_t bytes = mach_addr - addr_base_;
-  assert((bytes & block_mask_) == 0);
-  int i = bytes >> block_bits_;
-  assert(i >= 0 && i < length_);
-  return i;
+inline int
+VersionBuffer::index(uint64_t hw_addr)
+{
+    assert(hw_addr >= _addr_base);
+    uint64_t bytes = hw_addr - _addr_base;
+    int i = bytes >> block_bits;
+    assert(i >= 0 && i < _length);
+    return i;
 }
 
-#endif // SEXAIN_VERSION_BUFFER_H_
+}  // namespace thynvm
 
+#endif  // __THYNVM_VERSION_BUFFER_HH__
