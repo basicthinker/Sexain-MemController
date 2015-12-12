@@ -1,8 +1,33 @@
-// addr_trans_table.h
-// Copyright (c) 2014 Jinglei Ren <jinglei@ren.systems>
+/*
+ * Copyright (c) 2014 Jinglei Ren <jinglei.ren@persper.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met: redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer;
+ * redistributions in binary form must reproduce the above copyright
+ * notice, this list of conditions and the following disclaimer in the
+ * documentation and/or other materials provided with the distribution;
+ * neither the name of the copyright holders nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 
-#ifndef SEXAIN_ADDR_TRANS_TABLE_H_
-#define SEXAIN_ADDR_TRANS_TABLE_H_
+#ifndef __THYNVM_ADDR_TRANS_TABLE_HH__
+#define __THYNVM_ADDR_TRANS_TABLE_HH__
 
 #include <cerrno>
 #include <cstdint>
@@ -12,136 +37,144 @@
 #include "index_queue.h"
 #include "profiler.h"
 
+namespace thynvm {
+
 typedef int64_t Tag; // never negative
 typedef uint64_t Addr;
 
-struct ATTEntry {
-  enum State {
-    CLEAN = 0,
-    LOAN,
-    FREE,
-    DIRTY, // max queue index
-    HIDDEN,
-    TEMP,
-    STAINED,
-  };
+struct ATTEntry
+{
+    enum State
+    {
+        FREE = 0,
+        CLEAN,
+        DIRTY,
+        HIDDEN,
+        PRE_HIDDEN,
+        PRE_DIRTY,
+        LOAN, // max queue index
+    };
 
-  Tag phy_tag;
-  Addr mach_base;
-  IndexNode queue_node;
-  State state;
+    Tag phy_tag;
+    Addr hw_addr;
+    State state;
 
-  // Statistics
-  int epoch_reads;
-  int epoch_writes;
+    /**
+     * Since AddrTransTable (ATT) is organized as an index array,
+     * the IndexNode structure is embedded into each ATT entry.
+     */
+    IndexNode queue_node;
 
-  static const char* state_strings[];
+    // Statistics
+    int epoch_reads;
+    int epoch_writes;
 
-  ATTEntry() : epoch_reads(0), epoch_writes(0) { }
-
-  const char* StateString() const {
-    return state_strings[state];
-  }
-
-  static int StateIndex(State state) {
-    return state < DIRTY ? state : DIRTY;
-  }
+    ATTEntry() : phy_tag(0), hw_addr(0), state(FREE),
+            epoch_reads(0), epoch_writes(0) { }
 };
 
-class AddrTransTable : public IndexArray {
- public:
-  AddrTransTable(int length, int block_bits);
+class AddrTransTable: public IndexArray
+{
+  public:
+    AddrTransTable(int length, int block_bits);
 
-  int Lookup(Tag phy_tag, Profiler& pf);
-  int Setup(Tag phy_tag, Addr mach_base, ATTEntry::State state, Profiler& pf);
-  void ShiftState(int index, ATTEntry::State state, Profiler& pf);
-  void Reset(int index, Addr new_base, ATTEntry::State new_state, Profiler& pf);
-  int VisitQueue(ATTEntry::State state, QueueVisitor* visitor);
-  bool Contains(Addr phy_addr, Profiler& pf) const;
+    int insert(Tag phy_tag, Addr hw_addr, ATTEntry::State state,
+            Profiler& profiler);
+    int lookup(Tag phy_tag, Profiler& profiler);
+    void shiftState(int index, ATTEntry::State state, Profiler& profiler);
+    void reset(int index, Addr new_base, ATTEntry::State new_state,
+            Profiler& profiler);
 
-  const ATTEntry& At(int i) const;
-  bool IsEmpty(ATTEntry::State state) const;
-  int GetLength(ATTEntry::State state) const;
-  int GetFront(ATTEntry::State state) const;
+    bool isEmpty(ATTEntry::State state) const;
+    bool contains(Addr phy_addr, Profiler& profiler) const;
+    const ATTEntry& at(int i) const;
 
-  Tag ToTag(Addr addr) const { return Tag(addr >> block_bits_); }
-  Addr ToAddr(Tag tag) const { return Addr(tag) << block_bits_; }
-  Addr Translate(Addr phy_addr, Addr mach_base) const;
+    int visitQueue(ATTEntry::State state, QueueVisitor* visitor);
+    int getLength(ATTEntry::State state) const;
+    int getFront(ATTEntry::State state) const;
 
-  int length() const { return length_; }
-  int block_size() const { return 1 << block_bits_; }
-  int block_bits() const { return block_bits_; }
+    int length() const { return _length; }
+    int blockSize() const { return 1 << blockBits; }
 
-  void AddBlockRead(int index) { ++entries_[index].epoch_reads; }
-  void AddBlockWrite(int index) { ++entries_[index].epoch_writes; }
-  void ClearStats(Profiler& pf);
-  const std::vector<ATTEntry>& entries() const { return entries_; }
+    Tag toTag(Addr addr) const { return Tag(addr >> blockBits); }
+    Addr toAddr(Tag tag) const { return Addr(tag) << blockBits; }
+    Addr toHardwareAddr(Addr phy_addr, Addr hw_base) const;
 
-  IndexNode& operator[](int i) { return entries_[i].queue_node; }
-  const IndexQueue& GetQueue(ATTEntry::State state) const;
+    void addBlockRead(int index) { ++entries[index].epoch_reads; }
+    void addBlockWrite(int index) { ++entries[index].epoch_writes; }
+    const std::vector<ATTEntry>& collectEntries() const { return entries; }
+    void clearStats(Profiler& profiler);
 
- private:
-  const int length_;
-  const int block_bits_;
-  const Addr block_mask_;
-  std::unordered_map<Tag, int> tag_index_;
-  std::vector<ATTEntry> entries_;
-  std::vector<IndexQueue> queues_;
+private:
+    IndexNode& operator[](int i) { return entries[i].queue_node; }
 
-  IndexQueue& GetQueue(ATTEntry::State state);
+    const int _length;
+    const int blockBits;
+    const Addr blockMask;
+    std::unordered_map<Tag, int> tagIndex;
+    std::vector<ATTEntry> entries;
+    std::vector<IndexQueue> queues;
 };
 
-inline AddrTransTable::AddrTransTable(int length, int block_bits) :
-    length_(length), block_bits_(block_bits), block_mask_(block_size() - 1),
-    entries_(length_), queues_(ATTEntry::DIRTY + 1, *this) {
-  for (int i = 0; i < length_; ++i) {
-    GetQueue(ATTEntry::FREE).PushBack(i);
-  }
+inline
+AddrTransTable::AddrTransTable(int length, int block_bits)
+        : _length(length), blockBits(block_bits), blockMask(blockSize() - 1),
+          entries(_length), queues(ATTEntry::LOAN + 1, *this)
+{
+    for (int i = 0; i < _length; ++i) {
+        queues[ATTEntry::FREE].pushBack(i);
+    }
 }
 
-inline const ATTEntry& AddrTransTable::At(int i) const {
-  assert(i >= 0 && i < length_);
-  return entries_[i];
+inline const ATTEntry&
+AddrTransTable::at(int i) const
+{
+    assert(i >= 0 && i < _length);
+    return entries[i];
 }
 
-inline bool AddrTransTable::Contains(Addr phy_addr, Profiler& pf) const {
-  pf.AddTableOp();
-  return tag_index_.find(Tag(phy_addr)) != tag_index_.end();
+inline bool
+AddrTransTable::contains(Addr phy_addr, Profiler& profiler) const
+{
+    profiler.addTableOp();
+    return tagIndex.find(Tag(phy_addr)) != tagIndex.end();
 }
 
-inline int AddrTransTable::VisitQueue(ATTEntry::State state,
-    QueueVisitor* visitor) {
-  assert(state <= ATTEntry::DIRTY);
-  return GetQueue(state).Accept(visitor);
+inline int
+AddrTransTable::visitQueue(ATTEntry::State state, QueueVisitor* visitor)
+{
+    assert(state < ATTEntry::LOAN);
+    return queues[state].accept(visitor);
 }
 
-inline bool AddrTransTable::IsEmpty(ATTEntry::State state) const {
-  assert(state <= ATTEntry::DIRTY);
-  return GetQueue(state).Empty();
+inline bool
+AddrTransTable::isEmpty(ATTEntry::State state) const
+{
+    assert(state < ATTEntry::LOAN);
+    return queues[state].empty();
 }
 
-inline int AddrTransTable::GetLength(ATTEntry::State state) const {
-  assert(state <= ATTEntry::DIRTY);
-  return GetQueue(state).length();
+inline int
+AddrTransTable::getLength(ATTEntry::State state) const
+{
+    assert(state < ATTEntry::LOAN);
+    return queues[state].length();
 }
 
-inline int AddrTransTable::GetFront(ATTEntry::State state) const {
-  assert(state < ATTEntry::DIRTY);
-  return GetQueue(state).Front();
-}
- 
-inline Addr AddrTransTable::Translate(
-    Addr phy_addr, Addr mach_base) const {
-  assert((mach_base & block_mask_) == 0);
-  return mach_base + (phy_addr & block_mask_);
+inline int
+AddrTransTable::getFront(ATTEntry::State state) const
+{
+    assert(state < ATTEntry::LOAN);
+    return queues[state].front();
 }
 
-inline const IndexQueue& AddrTransTable::GetQueue(ATTEntry::State state) const {
-  return queues_[ATTEntry::StateIndex(state)];
+inline Addr
+AddrTransTable::toHardwareAddr(Addr phy_addr, Addr hw_base) const
+{
+    assert((hw_base & blockMask) == 0);
+    return hw_base + (phy_addr & blockMask);
 }
 
-inline IndexQueue& AddrTransTable::GetQueue(ATTEntry::State state) {
-  return queues_[ATTEntry::StateIndex(state)];
-}
+}  // namespace thynvm
 
-#endif // SEXAIN_ADDR_TRANS_TABLE_H_
+#endif  // __THYNVM_ADDR_TRANS_TABLE_HH__
