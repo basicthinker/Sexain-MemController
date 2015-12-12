@@ -29,11 +29,9 @@
 #ifndef __THYNVM_ADDR_TRANS_TABLE_HH__
 #define __THYNVM_ADDR_TRANS_TABLE_HH__
 
-#include <cerrno>
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
-#include <initializer_list>
 #include "index_queue.h"
 #include "profiler.h"
 
@@ -76,7 +74,7 @@ struct ATTEntry
 class AddrTransTable: public IndexArray
 {
   public:
-    AddrTransTable(int length, int block_bits);
+    AddrTransTable(int length, int unit_bits);
 
     int insert(Tag phy_tag, Addr hw_addr, ATTEntry::State state,
             Profiler& profiler);
@@ -94,14 +92,14 @@ class AddrTransTable: public IndexArray
     int getFront(ATTEntry::State state) const;
 
     int length() const { return _length; }
-    int blockSize() const { return 1 << blockBits; }
+    int unitSize() const { return 1 << unitBits; }
 
-    Tag toTag(Addr addr) const { return Tag(addr >> blockBits); }
-    Addr toAddr(Tag tag) const { return Addr(tag) << blockBits; }
+    Tag toTag(Addr addr) const { return Tag(addr >> unitBits); }
+    Addr toAddr(Tag tag) const { return Addr(tag) << unitBits; }
     Addr toHardwareAddr(Addr phy_addr, Addr hw_base) const;
 
-    void addBlockRead(int index) { ++entries[index].epoch_reads; }
-    void addBlockWrite(int index) { ++entries[index].epoch_writes; }
+    void addReadCount(int index) { ++entries[index].epoch_reads; }
+    void addWriteCount(int index) { ++entries[index].epoch_writes; }
     const std::vector<ATTEntry>& collectEntries() const { return entries; }
     void clearStats(Profiler& profiler);
 
@@ -109,16 +107,16 @@ private:
     IndexNode& operator[](int i) { return entries[i].queue_node; }
 
     const int _length;
-    const int blockBits;
-    const Addr blockMask;
+    const int unitBits;
+    const Addr unitMask;
     std::unordered_map<Tag, int> tagIndex;
     std::vector<ATTEntry> entries;
     std::vector<IndexQueue> queues;
 };
 
 inline
-AddrTransTable::AddrTransTable(int length, int block_bits)
-        : _length(length), blockBits(block_bits), blockMask(blockSize() - 1),
+AddrTransTable::AddrTransTable(int length, int unit_bits)
+        : _length(length), unitBits(unit_bits), unitMask(unitSize() - 1),
           entries(_length), queues(ATTEntry::LOAN + 1, *this)
 {
     for (int i = 0; i < _length; ++i) {
@@ -171,8 +169,8 @@ AddrTransTable::getFront(ATTEntry::State state) const
 inline Addr
 AddrTransTable::toHardwareAddr(Addr phy_addr, Addr hw_base) const
 {
-    assert((hw_base & blockMask) == 0);
-    return hw_base + (phy_addr & blockMask);
+    assert((hw_base & unitMask) == 0);
+    return hw_base + (phy_addr & unitMask);
 }
 
 }  // namespace thynvm

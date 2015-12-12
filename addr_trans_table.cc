@@ -28,6 +28,8 @@
 
 #include "addr_trans_table.h"
 
+#include <cerrno>
+
 using namespace std;
 using namespace thynvm;
 
