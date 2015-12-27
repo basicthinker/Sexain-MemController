@@ -7,6 +7,7 @@
 #include "debug/Migration.hh"
 
 using namespace std;
+using namespace thynvm;
 
 // Space partition (low -> high):
 // phy_limit || NVM buffer || DRAM buffer
@@ -24,83 +25,82 @@ AddrTransController::AddrTransController(
   mem_store_ = ms;
   in_checkpointing_ = false;
 
-  nvm_buffer_.set_addr_base(phy_range_);
-  dram_buffer_.set_addr_base(nvm_buffer_.addr_base() + nvm_buffer_.Size());
+  nvm_buffer_.setAddrBase(phy_range_);
+  dram_buffer_.setAddrBase(nvm_buffer_.addrBase() + nvm_buffer_.size());
 }
 
 Addr AddrTransController::LoadAddr(Addr phy_addr, Profiler& pf) {
-  int index = att_.Lookup(att_.ToTag(phy_addr), pf);
+  int index = att_.lookup(att_.toTag(phy_addr), pf);
   if (index != -EINVAL) {
-    const ATTEntry& entry = att_.At(index);
-    att_.AddBlockRead(index);
-    Addr mach_addr = att_.Translate(phy_addr, entry.mach_base);
-    bool is_dram = (entry.state == ATTEntry::TEMP ||
-        entry.state == ATTEntry::LOAN ||
-        entry.state == ATTEntry::STAINED);
-    pf.AddLatency(mem_store_->GetReadLatency(mach_addr, is_dram));
+    const ATTEntry& entry = att_.at(index);
+    att_.addReadCount(index);
+    Addr mach_addr = att_.toHardwareAddr(phy_addr, entry.hw_addr);
+    // bool is_dram = (entry.state == ATTEntry::PRE_HIDDEN ||
+    //     entry.state == ATTEntry::LOAN ||
+    //     entry.state == ATTEntry::PRE_DIRTY);
+    // pf.addLatency(mem_store_->GetReadLatency(mach_addr, is_dram));
     return mach_addr;
   } else {
-    PTTEntry* page = migrator_.LookupPage(phy_addr, pf);
+    PTTEntry* page = migrator_.lookupPage(phy_addr, pf);
     Addr mach_addr;
     if (page) {
       migrator_.AddDRAMPageRead(*page);
-      mach_addr = migrator_.Translate(phy_addr, page->mach_base);
-      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, true));
+      mach_addr = migrator_.toHardwareAddr(phy_addr, page->hw_addr);
+      pf.addLatency(mem_store_->GetReadLatency(mach_addr, true));
     } else {
       mach_addr = phy_addr;
-      pf.AddLatency(mem_store_->GetReadLatency(mach_addr, false));
+      // pf.addLatency(mem_store_->GetReadLatency(mach_addr, false));
     }
     return mach_addr;
   }
 }
 
 Addr AddrTransController::DRAMStore(Addr phy_addr, int size, Profiler& pf) {
-  int index = att_.Lookup(att_.ToTag(phy_addr), pf);
+  int index = att_.lookup(att_.toTag(phy_addr), pf);
   if (index != -EINVAL) { // found
-    const ATTEntry& entry = att_.At(index);
-    mem_store_->OnATTWriteHit(entry.state);
+    const ATTEntry& entry = att_.at(index);
+    // mem_store_->OnATTWriteHit(entry.state);
     if (in_checkpointing()) {
-      return att_.Translate(phy_addr, entry.mach_base);
+      return att_.toHardwareAddr(phy_addr, entry.hw_addr);
     } else {
       FreeLoan(index, !FullBlock(phy_addr, size), pf);
       return phy_addr;
     }
   } else { // not found
     if (in_checkpointing()) {
-      if (att_.IsEmpty(ATTEntry::FREE)) {
-        assert(!att_.IsEmpty(ATTEntry::CLEAN));
-        FreeClean(att_.GetFront(ATTEntry::CLEAN), pf);
-        mem_store_->OnATTWriteMiss(ATTEntry::LOAN);
+      if (att_.isEmpty(ATTEntry::FREE)) {
+        assert(!att_.isEmpty(ATTEntry::CLEAN));
+        FreeClean(att_.getFront(ATTEntry::CLEAN), pf);
+        // mem_store_->OnATTWriteMiss(ATTEntry::LOAN);
       } else {
-        mem_store_->OnATTWriteHit(ATTEntry::LOAN);
+        // mem_store_->OnATTWriteHit(ATTEntry::LOAN);
       }
-      const Addr mach_base = dram_buffer_.SlotAlloc(Profiler::Overlap);
-      Setup(phy_addr, mach_base, ATTEntry::LOAN, !FullBlock(phy_addr, size), pf);
-      return att_.Translate(phy_addr, mach_base);
+      const Addr hw_addr = dram_buffer_.allocSlot(Profiler::Overlap);
+      insert(phy_addr, hw_addr, ATTEntry::LOAN, !FullBlock(phy_addr, size), pf);
+      return att_.toHardwareAddr(phy_addr, hw_addr);
     } else { // in running
-      mem_store_->ckDRAMWriteHit();
       return phy_addr;
     }
   }
 }
 
 Addr AddrTransController::NVMStore(Addr phy_addr, int size, Profiler& pf) {
-  const Tag phy_tag = att_.ToTag(phy_addr);
-  int index = att_.Lookup(phy_tag, pf);
+  const Tag phy_tag = att_.toTag(phy_addr);
+  int index = att_.lookup(phy_tag, pf);
   Addr mach_addr;
   if (!in_checkpointing()) {
     if (index != -EINVAL) { // found
-      const ATTEntry& entry = att_.At(index);
-      mem_store_->OnATTWriteHit(entry.state);
+      const ATTEntry& entry = att_.at(index);
+      // mem_store_->OnATTWriteHit(entry.state);
       switch(entry.state) {
-      case ATTEntry::TEMP:
+      case ATTEntry::PRE_HIDDEN:
         HideTemp(index, !FullBlock(phy_addr, size), pf);
       case ATTEntry::DIRTY:
       case ATTEntry::HIDDEN:
-        mach_addr = att_.Translate(phy_addr, entry.mach_base);
+        mach_addr = att_.toHardwareAddr(phy_addr, entry.hw_addr);
         break;
-      case ATTEntry::STAINED:
-        mach_addr = att_.Translate(phy_addr,
+      case ATTEntry::PRE_DIRTY:
+        mach_addr = att_.toHardwareAddr(phy_addr,
             DirtyStained(index, !FullBlock(phy_addr, size), pf));
         break;
       default:
@@ -109,68 +109,68 @@ Addr AddrTransController::NVMStore(Addr phy_addr, int size, Profiler& pf) {
         break;
       }
     } else { // not found
-      if (att_.IsEmpty(ATTEntry::FREE)) {
-        if (!att_.IsEmpty(ATTEntry::LOAN)) {
-          int li = att_.GetFront(ATTEntry::LOAN);
+      if (att_.isEmpty(ATTEntry::FREE)) {
+        if (!att_.isEmpty(ATTEntry::LOAN)) {
+          int li = att_.getFront(ATTEntry::LOAN);
           FreeLoan(li, true, pf);
         } else {
-          assert(!att_.IsEmpty(ATTEntry::CLEAN));
-          int ci = att_.GetFront(ATTEntry::CLEAN);
+          assert(!att_.isEmpty(ATTEntry::CLEAN));
+          int ci = att_.getFront(ATTEntry::CLEAN);
           FreeClean(ci, pf);
         }
-        mem_store_->OnATTWriteMiss(ATTEntry::DIRTY);
+        // mem_store_->OnATTWriteMiss(ATTEntry::DIRTY);
       } else {
-        mem_store_->OnATTWriteHit(ATTEntry::DIRTY);
+        // mem_store_->OnATTWriteHit(ATTEntry::DIRTY);
       }
-      Addr mach_base = nvm_buffer_.SlotAlloc(Profiler::Overlap);
-      index = Setup(phy_addr, mach_base, ATTEntry::DIRTY,
+      Addr hw_addr = nvm_buffer_.allocSlot(Profiler::Overlap);
+      index = insert(phy_addr, hw_addr, ATTEntry::DIRTY,
           !FullBlock(phy_addr, size), pf);
-      mach_addr = att_.Translate(phy_addr, mach_base);
+      mach_addr = att_.toHardwareAddr(phy_addr, hw_addr);
     }
-    att_.AddBlockWrite(index);
+    att_.addWriteCount(index);
     return mach_addr;
   } else { // in checkpointing
     if (index != -EINVAL) { // found
-      const ATTEntry& entry = att_.At(index);
-      mem_store_->OnATTWriteHit(entry.state);
-      if (entry.state == ATTEntry::TEMP || entry.state == ATTEntry::STAINED) {
-        mach_addr = att_.Translate(phy_addr, entry.mach_base);
+      const ATTEntry& entry = att_.at(index);
+      // mem_store_->OnATTWriteHit(entry.state);
+      if (entry.state == ATTEntry::PRE_HIDDEN || entry.state == ATTEntry::PRE_DIRTY) {
+        mach_addr = att_.toHardwareAddr(phy_addr, entry.hw_addr);
       } else {
-        Addr mach_base = ResetClean(index, !FullBlock(phy_addr, size), pf);
-        mach_addr = att_.Translate(phy_addr, mach_base);
+        Addr hw_addr = ResetClean(index, !FullBlock(phy_addr, size), pf);
+        mach_addr = att_.toHardwareAddr(phy_addr, hw_addr);
       }
     } else { // not found
-      if (att_.IsEmpty(ATTEntry::FREE)) {
-        assert(!att_.IsEmpty(ATTEntry::CLEAN));
-        FreeClean(att_.GetFront(ATTEntry::CLEAN), pf);
-        mem_store_->OnATTWriteMiss(ATTEntry::STAINED);
+      if (att_.isEmpty(ATTEntry::FREE)) {
+        assert(!att_.isEmpty(ATTEntry::CLEAN));
+        FreeClean(att_.getFront(ATTEntry::CLEAN), pf);
+        // mem_store_->OnATTWriteMiss(ATTEntry::PRE_DIRTY);
       } else {
-        mem_store_->OnATTWriteHit(ATTEntry::STAINED);
+        // mem_store_->OnATTWriteHit(ATTEntry::PRE_DIRTY);
       }
-      Addr mach_base = dram_buffer_.SlotAlloc(Profiler::Overlap);
-      index = Setup(phy_addr, mach_base, ATTEntry::STAINED,
+      Addr hw_addr = dram_buffer_.allocSlot(Profiler::Overlap);
+      index = insert(phy_addr, hw_addr, ATTEntry::PRE_DIRTY,
           !FullBlock(phy_addr, size), pf);
-      mach_addr = att_.Translate(phy_addr, mach_base);
+      mach_addr = att_.toHardwareAddr(phy_addr, hw_addr);
     }
-    att_.AddBlockWrite(index);
+    att_.addWriteCount(index);
     return mach_addr;
   }
 }
 
 Control AddrTransController::Probe(Addr phy_addr) {
-  if (migrator_.Contains(phy_addr, Profiler::Null)) { // DRAM
+  if (migrator_.contains(phy_addr, Profiler::Null)) { // DRAM
     if (in_checkpointing()) {
-      if (!att_.Contains(phy_addr, Profiler::Null) &&
-          att_.IsEmpty(ATTEntry::FREE) && att_.IsEmpty(ATTEntry::CLEAN)) {
+      if (!att_.contains(phy_addr, Profiler::Null) &&
+          att_.isEmpty(ATTEntry::FREE) && att_.isEmpty(ATTEntry::CLEAN)) {
         return WAIT_CKPT;
       }
     }
-  } else if (!att_.Contains(phy_addr, Profiler::Null)) { // NVM
+  } else if (!att_.contains(phy_addr, Profiler::Null)) { // NVM
     if (in_checkpointing()) {
-      if (att_.IsEmpty(ATTEntry::FREE) && att_.IsEmpty(ATTEntry::CLEAN)) {
+      if (att_.isEmpty(ATTEntry::FREE) && att_.isEmpty(ATTEntry::CLEAN)) {
         return WAIT_CKPT;
       }
-    } else if (att_.GetLength(ATTEntry::DIRTY) == att_.length() ||
+    } else if (att_.getLength(ATTEntry::DIRTY) == att_.length() ||
          migrator_.num_dirty_entries() >= migrator_.ptt_length() ) {
       return NEW_EPOCH;
     }
@@ -180,45 +180,43 @@ Control AddrTransController::Probe(Addr phy_addr) {
 
 Addr AddrTransController::StoreAddr(Addr phy_addr, int size, Profiler& pf) {
   assert(CheckValid(phy_addr, size) && phy_addr < phy_range_);
-  PTTEntry* page = migrator_.LookupPage(phy_addr, pf);
+  PTTEntry* page = migrator_.lookupPage(phy_addr, pf);
   if (!page) {
-    mem_store_->ckNVMWrite();
     Addr mach_addr = NVMStore(phy_addr, size, pf);
-    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, false));
+    // pf.addLatency(mem_store_->GetWriteLatency(mach_addr, false));
     return mach_addr;
   } else {
     migrator_.AddDRAMPageWrite(*page);
     if (page->state == PTTEntry::CLEAN_STATIC) {
-      migrator_.ShiftState(*page, PTTEntry::DIRTY_DIRECT, pf);
+      migrator_.shiftState(*page, PTTEntry::DIRTY_DIRECT, pf);
     } else if (page->state == PTTEntry::CLEAN_DIRECT) {
-      migrator_.ShiftState(*page, PTTEntry::DIRTY_STATIC, pf);
+      migrator_.shiftState(*page, PTTEntry::DIRTY_STATIC, pf);
     }
-    mem_store_->ckDRAMWrite();
     Addr mach_addr = DRAMStore(phy_addr, size, pf);
-    pf.AddLatency(mem_store_->GetWriteLatency(mach_addr, true));
+    // pf.addLatency(mem_store_->GetWriteLatency(mach_addr, true));
     return mach_addr;
   }
 }
 
 void AddrTransController::DirtyCleaner::Visit(int i) {
-  const ATTEntry& entry = atc_->att_.At(i);
-  if (entry.state == ATTEntry::STAINED) {
+  const ATTEntry& entry = atc_->att_.at(i);
+  if (entry.state == ATTEntry::PRE_DIRTY) {
     atc_->DirtyStained(i, true, pf_);
-  } else if (entry.state == ATTEntry::TEMP) {
+  } else if (entry.state == ATTEntry::PRE_HIDDEN) {
     atc_->HideTemp(i, true, pf_);
   }
 
   if (entry.state == ATTEntry::DIRTY) {
-    atc_->att_.ShiftState(i, ATTEntry::CLEAN, Profiler::Overlap);
+    atc_->att_.shiftState(i, ATTEntry::CLEAN, Profiler::Overlap);
     ++num_flushed_entries_;
   } else if (entry.state == ATTEntry::HIDDEN) {
-    atc_->att_.ShiftState(i, ATTEntry::FREE, Profiler::Overlap);
+    atc_->att_.shiftState(i, ATTEntry::FREE, Profiler::Overlap);
     ++num_flushed_entries_;
   }
 }
 
 void AddrTransController::LoanRevoker::Visit(int i) {
-  const ATTEntry& entry = atc_->att_.At(i);
+  const ATTEntry& entry = atc_->att_.at(i);
   assert(entry.state == ATTEntry::LOAN);
   atc_->FreeLoan(i, true, pf_);
 }
@@ -227,50 +225,47 @@ void AddrTransController::MigrateDRAM(const DRAMPageStats& stats, Profiler& pf) 
   DPRINTF(Migration, "Migrate DRAM page WR=%f, from %s.\n",
       stats.write_ratio, PTTEntry::state_strings[stats.state]);
   if (stats.state == PTTEntry::CLEAN_STATIC) {
-    pf.AddPageMoveIntra();
-    mem_store_->ckBusUtilAdd(page_size());
+    pf.addPageIntraChannel();
   } else if (stats.state == PTTEntry::DIRTY_DIRECT) {
-    pf.AddPageMoveInter(); // for write back
-    mem_store_->ckBusUtilAdd(page_size());
+    pf.addPageInterChannel(); // for write back
   } else if (stats.state == PTTEntry::DIRTY_STATIC) {
-    pf.AddPageMoveIntra();
-    pf.AddPageMoveInter();
-    mem_store_->ckBusUtilAdd(page_size() * 2);
+    pf.addPageIntraChannel();
+    pf.addPageInterChannel();
   }
 #ifdef MEMCK
-  Tag tag = att_.ToTag(stats.phy_addr);
+  Tag tag = att_.toTag(stats.phy_addr);
   for (int i = 0; i < migrator_.page_blocks(); ++i) {
-    assert(!att_.Contains(tag + i, Profiler::Null));
+    assert(!att_.contains(tag + i, Profiler::Null));
   }
 #endif
   migrator_.Free(stats.phy_addr, pf);
 }
 
 void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
-  Tag phy_tag = att_.ToTag(stats.phy_addr);
-  Tag limit = att_.ToTag(stats.phy_addr + migrator_.page_size());
+  Tag phy_tag = att_.toTag(stats.phy_addr);
+  Tag limit = att_.toTag(stats.phy_addr + migrator_.page_size());
   assert(limit - phy_tag == migrator_.page_blocks());
 
   for (Tag tag = phy_tag; tag < limit; ++tag) {
-    int index = att_.Lookup(tag, pf);
+    int index = att_.lookup(tag, pf);
     if (index == -EINVAL) {
-      pf.AddBlockMoveInter(); // for copying data to DRAM
+      pf.addBlockInterChannel(); // for copying data to DRAM
       continue;
     }
-    const ATTEntry& entry = att_.At(index);
+    const ATTEntry& entry = att_.at(index);
 
-    pf.set_ignore_latency();
+    pf.setIgnoreLatency();
     switch (entry.state) {
       case ATTEntry::CLEAN:
       case ATTEntry::DIRTY:
-        pf.AddBlockMoveInter(); // for copying data to DRAM
-        CopyBlockIntra(att_.ToAddr(entry.phy_tag), entry.mach_base, pf);
+        pf.addBlockInterChannel(); // for copying data to DRAM
+        CopyBlockIntra(att_.toAddr(entry.phy_tag), entry.hw_addr, pf);
         Discard(index, nvm_buffer_, pf);
         break;
-      case ATTEntry::STAINED:
-      case ATTEntry::TEMP:
-        pf.AddBlockMoveIntra(); // for copying data to DRAM
-        CopyBlockInter(att_.ToAddr(entry.phy_tag), entry.mach_base, pf);
+      case ATTEntry::PRE_DIRTY:
+      case ATTEntry::PRE_HIDDEN:
+        pf.addBlockIntraChannel(); // for copying data to DRAM
+        CopyBlockInter(att_.toAddr(entry.phy_tag), entry.hw_addr, pf);
         Discard(index, dram_buffer_, pf);
         break;
       case ATTEntry::LOAN:
@@ -278,20 +273,19 @@ void AddrTransController::MigrateNVM(const NVMPageStats& stats, Profiler& pf) {
       case ATTEntry::FREE:
         assert(entry.state != ATTEntry::FREE);
       case ATTEntry::HIDDEN:
-        pf.AddBlockMoveInter(); // for copying data to DRAM
-        att_.ShiftState(index, ATTEntry::FREE, pf);
+        pf.addBlockInterChannel(); // for copying data to DRAM
+        att_.shiftState(index, ATTEntry::FREE, pf);
         break;
     }
-    pf.clear_ignore_latency();
+    pf.clearIgnoreLatency();
   }
   if (stats.dirty_ratio > 0.5) {
-    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_STATIC, pf);
+    migrator_.insert(stats.phy_addr, PTTEntry::CLEAN_STATIC, pf);
     DPRINTF(Migration, "Migrate NVM page to CLEAN_STATIC.\n");
   } else {
-    migrator_.Setup(stats.phy_addr, PTTEntry::CLEAN_DIRECT, pf);
+    migrator_.insert(stats.phy_addr, PTTEntry::CLEAN_DIRECT, pf);
     DPRINTF(Migration, "Migrate NVM page to CLEAN_DIRECT.\n");
   }
-  mem_store_->ckBusUtilAdd(page_size());
   ++pages_to_dram_;
 }
 
@@ -299,10 +293,10 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
   assert(!in_checkpointing());
 
   LoanRevoker loan_revoker(this, pf);
-  att_.VisitQueue(ATTEntry::LOAN, &loan_revoker);
-  assert(att_.IsEmpty(ATTEntry::LOAN));
+  att_.visitQueue(ATTEntry::LOAN, &loan_revoker);
+  assert(att_.isEmpty(ATTEntry::LOAN));
 
-  migrator_.InputBlocks(att_.entries());
+  migrator_.InputBlocks(att_.collectEntries());
 
   NVMPageStats n;
   DRAMPageStats d;
@@ -319,9 +313,9 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
         d_ready = true;
         break;
       }
-      pf.set_ignore_latency();
+      pf.setIgnoreLatency();
       MigrateDRAM(d, pf);
-      pf.clear_ignore_latency();
+      pf.clearIgnoreLatency();
     }
     MigrateNVM(n, pf);
   }
@@ -332,9 +326,9 @@ void AddrTransController::MigratePages(Profiler& pf, double dr, double wr) {
         d.write_ratio, d.state);
     if (d.write_ratio == 0) continue;
     if (d.write_ratio > wr) break;
-    pf.set_ignore_latency();
+    pf.setIgnoreLatency();
     MigrateDRAM(d, pf);
-    pf.clear_ignore_latency();
+    pf.clearIgnoreLatency();
     ++pages_to_nvm_; // excluding clean DRAM pages exchanged with NVM pages
     --limit;
   } while (limit && migrator_.ExtractDRAMPage(d,
@@ -346,154 +340,153 @@ void AddrTransController::BeginCheckpointing(Profiler& pf) {
 
   // ATT flush
   DirtyCleaner att_cleaner(this, pf);
-  att_.VisitQueue(ATTEntry::DIRTY, &att_cleaner);
-  assert(att_.GetLength(ATTEntry::CLEAN) +
-      att_.GetLength(ATTEntry::FREE) == att_.length());
-  pf.AddTableOp(); // assumed in parallel
+  att_.visitQueue(ATTEntry::DIRTY, &att_cleaner);
+  assert(att_.getLength(ATTEntry::CLEAN) +
+      att_.getLength(ATTEntry::FREE) == att_.length());
+  pf.addTableOp(); // assumed in parallel
 
   in_checkpointing_ = true;
 
-  att_.ClearStats(pf);
-  mem_store_->ckBusUtilAdd(migrator_.num_dirty_entries() * migrator_.page_size());
+  att_.clearStats(pf);
   migrator_.Clear(pf); // page write-back bytes
 }
 
 void AddrTransController::FinishCheckpointing() {
   assert(in_checkpointing());
-  nvm_buffer_.ClearBackup(Profiler::Null); //TODO
+  nvm_buffer_.clearBackup(Profiler::Null); //TODO
   in_checkpointing_ = false;
-  mem_store_->OnEpochEnd();
+  // mem_store_->OnEpochEnd();
 }
 
-int AddrTransController::Setup(Addr phy_addr, Addr mach_base,
+int AddrTransController::insert(Addr phy_addr, Addr hw_addr,
     ATTEntry::State state, bool move_data, Profiler& pf) {
-  assert(state == ATTEntry::DIRTY || state == ATTEntry::STAINED
+  assert(state == ATTEntry::DIRTY || state == ATTEntry::PRE_DIRTY
       || state == ATTEntry::LOAN);
 
-  const Tag phy_tag = att_.ToTag(phy_addr);
+  const Tag phy_tag = att_.toTag(phy_addr);
   if (move_data) {
-    CopyBlockIntra(mach_base, att_.ToAddr(phy_tag), pf);
+    CopyBlockIntra(hw_addr, att_.toAddr(phy_tag), pf);
   }
-  return att_.Setup(phy_tag, mach_base, state, pf);
+  return att_.insert(phy_tag, hw_addr, state, pf);
 }
 
 void AddrTransController::HideClean(int index, bool move_data, Profiler& pf) {
   assert(!in_checkpointing());
-  const ATTEntry& entry = att_.At(index);
+  const ATTEntry& entry = att_.at(index);
   assert(entry.state == ATTEntry::CLEAN);
 
-  const Addr phy_addr = att_.ToAddr(entry.phy_tag);
+  const Addr phy_addr = att_.toAddr(entry.phy_tag);
 
   if (move_data) {
 #ifdef MEMCK
     assert(!IsDRAM(phy_addr, Profiler::Null));
 #endif
-    CopyBlockIntra(phy_addr, entry.mach_base, pf);
+    CopyBlockIntra(phy_addr, entry.hw_addr, pf);
   }
-  nvm_buffer_.SlotBackup(entry.mach_base, VersionBuffer::BACKUP0, pf);
-  att_.Reset(index, phy_addr, ATTEntry::HIDDEN, Profiler::Overlap);
+  nvm_buffer_.backupSlot(entry.hw_addr, VersionBuffer::SHORT, pf);
+  att_.reset(index, phy_addr, ATTEntry::HIDDEN, Profiler::Overlap);
 }
 
 Addr AddrTransController::ResetClean(int index, bool move_data, Profiler& pf) {
   assert(in_checkpointing());
-  const ATTEntry& entry = att_.At(index);
+  const ATTEntry& entry = att_.at(index);
   assert(entry.state == ATTEntry::CLEAN);
 
-  const Addr mach_base = dram_buffer_.SlotAlloc(pf);
+  const Addr hw_addr = dram_buffer_.allocSlot(pf);
   if (move_data) {
-    CopyBlockInter(mach_base, entry.mach_base, pf);
+    CopyBlockInter(hw_addr, entry.hw_addr, pf);
   }
-  nvm_buffer_.SlotBackup(entry.mach_base, VersionBuffer::BACKUP1, pf);
-  att_.Reset(index, mach_base, ATTEntry::TEMP, Profiler::Overlap);
-  return mach_base;
+  nvm_buffer_.backupSlot(entry.hw_addr, VersionBuffer::LONG, pf);
+  att_.reset(index, hw_addr, ATTEntry::PRE_HIDDEN, Profiler::Overlap);
+  return hw_addr;
 }
 
 void AddrTransController::FreeClean(int index, Profiler& pf) {
-  const ATTEntry& entry = att_.At(index);
+  const ATTEntry& entry = att_.at(index);
   assert(entry.state == ATTEntry::CLEAN);
 
-  Addr phy_addr = att_.ToAddr(entry.phy_tag);
+  Addr phy_addr = att_.toAddr(entry.phy_tag);
  
   if (in_checkpointing()) {
-    SwapBlock(phy_addr, entry.mach_base, pf);
+    SwapBlock(phy_addr, entry.hw_addr, pf);
   } else { // in running
 #ifdef MEMCK
     assert(!IsDRAM(phy_addr, Profiler::Null));
 #endif
-    CopyBlockIntra(phy_addr, entry.mach_base, pf);
+    CopyBlockIntra(phy_addr, entry.hw_addr, pf);
   }
-  nvm_buffer_.SlotBackup(entry.mach_base,
+  nvm_buffer_.backupSlot(entry.hw_addr,
       (VersionBuffer::State)in_checkpointing(), pf);
-  att_.ShiftState(index, ATTEntry::FREE, Profiler::Overlap);
+  att_.shiftState(index, ATTEntry::FREE, Profiler::Overlap);
 }
 
 Addr AddrTransController::DirtyStained(int index, bool move_data,
     Profiler& pf) {
   assert(!in_checkpointing());
-  const ATTEntry& entry = att_.At(index);
-  assert(entry.state == ATTEntry::STAINED);
+  const ATTEntry& entry = att_.at(index);
+  assert(entry.state == ATTEntry::PRE_DIRTY);
 
-  const Addr mach_base = nvm_buffer_.SlotAlloc(pf);
+  const Addr hw_addr = nvm_buffer_.allocSlot(pf);
   if (move_data) {
-    CopyBlockInter(mach_base, entry.mach_base, pf);
+    CopyBlockInter(hw_addr, entry.hw_addr, pf);
   }
-  dram_buffer_.FreeSlot(entry.mach_base, VersionBuffer::IN_USE, pf);
-  att_.Reset(index, mach_base, ATTEntry::DIRTY, Profiler::Overlap);
-  return mach_base;
+  dram_buffer_.freeSlot(entry.hw_addr, VersionBuffer::IN_USE, pf);
+  att_.reset(index, hw_addr, ATTEntry::DIRTY, Profiler::Overlap);
+  return hw_addr;
 }
 
 void AddrTransController::FreeLoan(int index, bool move_data, Profiler& pf) {
   assert(!in_checkpointing());
-  const ATTEntry& entry = att_.At(index);
+  const ATTEntry& entry = att_.at(index);
   assert(entry.state == ATTEntry::LOAN);
 
-  const Addr phy_addr = att_.ToAddr(entry.phy_tag);
+  const Addr phy_addr = att_.toAddr(entry.phy_tag);
 
   if (move_data) {
     assert(IsDRAM(phy_addr, Profiler::Null));
-    CopyBlockIntra(phy_addr, entry.mach_base, pf);
+    CopyBlockIntra(phy_addr, entry.hw_addr, pf);
   }
-  dram_buffer_.FreeSlot(entry.mach_base, VersionBuffer::IN_USE, pf);
-  att_.ShiftState(index, ATTEntry::FREE, Profiler::Overlap);
+  dram_buffer_.freeSlot(entry.hw_addr, VersionBuffer::IN_USE, pf);
+  att_.shiftState(index, ATTEntry::FREE, Profiler::Overlap);
 }
 
 void AddrTransController::HideTemp(int index, bool move_data, Profiler& pf) {
   assert(!in_checkpointing());
-  const ATTEntry& entry = att_.At(index);
-  assert(entry.state == ATTEntry::TEMP);
+  const ATTEntry& entry = att_.at(index);
+  assert(entry.state == ATTEntry::PRE_HIDDEN);
 
-  const Addr phy_addr = att_.ToAddr(entry.phy_tag);
+  const Addr phy_addr = att_.toAddr(entry.phy_tag);
   if (move_data) {
     assert(!IsDRAM(phy_addr, Profiler::Null));
-    CopyBlockInter(phy_addr, entry.mach_base, pf);
+    CopyBlockInter(phy_addr, entry.hw_addr, pf);
   }
-  dram_buffer_.FreeSlot(entry.mach_base, VersionBuffer::IN_USE, pf);
-  att_.Reset(index, phy_addr, ATTEntry::HIDDEN, Profiler::Overlap);
+  dram_buffer_.freeSlot(entry.hw_addr, VersionBuffer::IN_USE, pf);
+  att_.reset(index, phy_addr, ATTEntry::HIDDEN, Profiler::Overlap);
 }
 
 void AddrTransController::Discard(int index, VersionBuffer& vb, Profiler& pf) {
   assert(!in_checkpointing());
-  const ATTEntry& entry = att_.At(index);
-  vb.FreeSlot(entry.mach_base, VersionBuffer::IN_USE, Profiler::Overlap);
-  att_.ShiftState(index, ATTEntry::FREE, pf);
+  const ATTEntry& entry = att_.at(index);
+  vb.freeSlot(entry.hw_addr, VersionBuffer::IN_USE, Profiler::Overlap);
+  att_.shiftState(index, ATTEntry::FREE, pf);
 }
 
 #ifdef MEMCK
   pair<AddrInfo, AddrInfo> AddrTransController::GetAddrInfo(Addr phy_addr) {
     pair<AddrInfo, AddrInfo> info;
 
-    int index = att_.Lookup(phy_addr, Profiler::Null);
+    int index = att_.lookup(phy_addr, Profiler::Null);
     if (index != -EINVAL) {
-      const ATTEntry& entry = att_.At(index);
-      info.first = { att_.ToAddr(entry.phy_tag), entry.mach_base,
+      const ATTEntry& entry = att_.at(index);
+      info.first = { att_.toAddr(entry.phy_tag), entry.hw_addr,
           entry.StateString() };
     } else {
       info.first = { 0, 0, NULL };
     }
 
-    PTTEntry* p = migrator_.LookupPage(phy_addr, Profiler::Null);
+    PTTEntry* p = migrator_.lookupPage(phy_addr, Profiler::Null);
     if (p) {
-      info.second = { migrator_.PageAlign(phy_addr), p->mach_base,
+      info.second = { migrator_.PageAlign(phy_addr), p->hw_addr,
           p->StateString() };
     } else {
       info.second = { 0, 0, NULL };

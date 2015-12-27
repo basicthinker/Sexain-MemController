@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <cassert>
 
+namespace thynvm {
+
 class MemStore {
  public:
   virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size) = 0;
@@ -16,22 +18,9 @@ class MemStore {
   virtual void OnBufferOp() { }
   virtual uint64_t GetReadLatency(uint64_t mach_addr, bool dram) { return -1; }
   virtual uint64_t GetWriteLatency(uint64_t mach_addr, bool dram) { return -1; }
-
-  virtual void OnNVMRead(uint64_t mach_addr, int size) { }
-  virtual void OnNVMStore(uint64_t phy_addr, int size) { }
-  virtual void OnDRAMRead(uint64_t mach_addr, int size) { }
-  virtual void OnDRAMStore(uint64_t phy_addr, int size) { }
-
-  virtual void OnEpochEnd() { }
-  virtual void OnATTWriteHit(int state) { }
-  virtual void OnATTWriteMiss(int state) { }
-
-  virtual void OnCacheRegister() { }
-  virtual void ckBusUtilAdd(uint64_t bytes) { }
-  virtual void ckNVMWrite() { }
-  virtual void ckDRAMWrite() { }
-  virtual void ckDRAMWriteHit() { }
 };
+
+}  // namespace thynvm
 
 #endif // SEXAIN_MEM_STORE_H_
 

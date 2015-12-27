@@ -50,7 +50,6 @@ inline CacheController::CacheController(const CacheControllerParams* p) :
 inline void CacheController::RegisterCache(BaseCache* const cache) {
   assert(!cache_);
   cache_ = cache;
-  memory_->OnCacheRegister();
 }
 
 inline void CacheController::Flush() {

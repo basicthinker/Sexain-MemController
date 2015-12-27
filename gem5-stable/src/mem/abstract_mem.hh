@@ -102,17 +102,17 @@ class LockedAddr {
  * timing information. It is a MemObject since any subclass must have
  * at least one slave port.
  */
-class AbstractMemory : public MemObject, public MemStore
+class AbstractMemory : public MemObject, public thynvm::MemStore
 {
   protected:
     // Physical ddress range of this memory
     AddrRange range;
 
     // Base profiler for copy construction
-    Profiler profBase;
+    thynvm::Profiler profBase;
 
     // Controller for addr translation
-    AddrTransController addrController;
+    thynvm::AddrTransController addrController;
 
     // Pointer to host memory used to implement this memory
     uint8_t* pmemAddr;
@@ -190,54 +190,16 @@ class AbstractMemory : public MemObject, public MemStore
     /** Total bandwidth from this memory */
     Stats::Formula bwTotal;
 
-    /** Number of epochs */
-    Stats::Scalar numEpochs;
-    /** Number of write hits on ATT */
-    Stats::Scalar numATTWriteHits;
-    /** Number of write misses on ATT */
-    Stats::Scalar numATTWriteMisses;
-
-    /** Number of writes on NVM pages */
-    Stats::Scalar numNVMWrites;
-    /** Number of writes on DRAM pages */
-    Stats::Scalar numDRAMWrites;
-    /** Number of dirty NVM blocks */
-    Stats::Scalar numDirtyNVMBlocks;
-    /** Number of dirty NVM pages */
-    Stats::Scalar numDirtyNVMPages;
-    /** Number of dirty DRAM pages */
-    Stats::Scalar numDirtyDRAMPages;
-
     /** Data transfer through channel in bytes */
     Stats::Scalar bytesChannel;
     /** Data transfer excluding intra-channel in bytes */
     Stats::Scalar bytesInterChannel;
-
-    /** Average dirty ratio of NVM pages */
-    Stats::Formula avgNVMDirtyRatio;
-    /** Average write ratio of DRAM pages */
-    Stats::Formula avgDRAMWriteRatio;
-
-    /** Total number of pages migrated from NVM to DRAM */
-    Stats::Scalar numPagesToDRAM;
-    /** Total number of pages migrated from DRAM to NVM */
-    Stats::Scalar numPagesToNVM;
-    /** Average number of pages migrated to DRAM per epoch */
-    Stats::Formula avgPagesToDRAM;
-    /** Average number of pages migrated to NVM per epoch */
-    Stats::Formula avgPagesToNVM;
-
-    int regCaches;
-    Stats::Formula numRegCaches;
 
     /** Pointor to the System object.
      * This is used for getting the number of masters in the system which is
      * needed when registering stats
      */
     System *_system;
-
-    uint64_t ckBusUtil;
-    uint64_t ckDRAMWriteHits; ///< Number of writes on DRAM without hitting ATT
 
   private:
 
@@ -353,9 +315,9 @@ class AbstractMemory : public MemObject, public MemStore
      * is turned into a response if required.
      *
      * @param pkt Packet performing the access
-     * @param pf Profiler counting internal behaviors
+     * @param pf thynvm::Profiler counting internal behaviors
      */
-    void access(PacketPtr pkt, Profiler& pf = Profiler::Null);
+    void access(PacketPtr pkt, thynvm::Profiler& pf = thynvm::Profiler::Null);
 
     /**
      * Perform an untimed memory read or write without changing
@@ -374,56 +336,11 @@ class AbstractMemory : public MemObject, public MemStore
 
     virtual bool isDRAM(Addr phy_addr)
     {
-        return addrController.IsDRAM(phy_addr, Profiler::Null);
+        return addrController.IsDRAM(phy_addr, thynvm::Profiler::Null);
     }
 
     virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size);
     virtual void MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size);
-
-    virtual void OnWaiting()
-    {
-        panic("AbstractMemory should never have write waiting\n");
-    }
-
-    virtual void OnEpochEnd()
-    {
-        ++numEpochs;
-    }
-
-    virtual void OnATTWriteHit(int state)
-    {
-        ++numATTWriteHits;
-    }
-
-    virtual void OnATTWriteMiss(int state)
-    {
-        ++numATTWriteMisses;
-    }
-
-    virtual void OnCacheRegister()
-    {
-        ++regCaches;
-    }
-
-    virtual void ckBusUtilAdd(uint64_t bytes)
-    {
-        ckBusUtil += bytes;
-    }
-
-    virtual void ckNVMWrite()
-    {
-        ++numNVMWrites;
-    }
-
-    virtual void ckDRAMWrite()
-    {
-        ++numDRAMWrites;
-    }
-
-    virtual void ckDRAMWriteHit()
-    {
-        ++ckDRAMWriteHits;
-    }
 };
 
 #endif //__ABSTRACT_MEMORY_HH__

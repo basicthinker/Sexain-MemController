@@ -13,6 +13,8 @@
 #include "addr_trans_table.h"
 #include "profiler.h"
 
+namespace thynvm {
+
 struct PTTEntry {
   enum State {
     CLEAN_DIRECT = 0, ///< Sorted with precedence
@@ -24,7 +26,7 @@ struct PTTEntry {
   State state;
   int epoch_reads;
   int epoch_writes;
-  uint64_t mach_base;
+  uint64_t hw_addr;
 
   static const char* state_strings[];
 
@@ -60,13 +62,13 @@ class MigrationController {
  public:
   MigrationController(int block_bits, int page_bits, int ptt_length);
 
-  PTTEntry* LookupPage(uint64_t phy_addr, Profiler& profiler);
-  bool Contains(uint64_t phy_addr, Profiler& profiler);
-  void ShiftState(PTTEntry& entry, PTTEntry::State state, Profiler& pf);
+  PTTEntry* lookupPage(uint64_t phy_addr, Profiler& profiler);
+  bool contains(uint64_t phy_addr, Profiler& profiler);
+  void shiftState(PTTEntry& entry, PTTEntry::State state, Profiler& pf);
   void Free(uint64_t page_addr, Profiler& profiler);
-  void Setup(uint64_t page_addr, PTTEntry::State state, Profiler& profiler);
+  void insert(uint64_t page_addr, PTTEntry::State state, Profiler& profiler);
 
-  uint64_t Translate(uint64_t phy_addr, uint64_t page_base) const;
+  uint64_t toHardwareAddr(uint64_t phy_addr, uint64_t page_base) const;
   void AddDRAMPageRead(PTTEntry& entry);
   void AddDRAMPageWrite(PTTEntry& entry);
 
@@ -145,16 +147,16 @@ inline MigrationController::MigrationController(
     dram_heap_filled_(false), nvm_heap_filled_(false) {
 }
 
-inline PTTEntry* MigrationController::LookupPage(uint64_t phy_addr,
+inline PTTEntry* MigrationController::lookupPage(uint64_t phy_addr,
     Profiler& pf) {
-  pf.AddTableOp();
+  pf.addTableOp();
   PTTEntryIterator it = entries_.find(PageAlign(phy_addr));
   if (it == entries_.end()) return NULL;
   return &it->second;
 }
 
-inline bool MigrationController::Contains(uint64_t phy_addr, Profiler& pf) {
-  pf.AddTableOp();
+inline bool MigrationController::contains(uint64_t phy_addr, Profiler& pf) {
+  pf.addTableOp();
   return entries_.find(PageAlign(phy_addr)) != entries_.end();
 }
 
@@ -166,43 +168,45 @@ inline void MigrationController::AddDRAMPageWrite(PTTEntry& entry) {
   ++entry.epoch_writes;
 }
 
-inline void MigrationController::ShiftState(PTTEntry& entry,
+inline void MigrationController::shiftState(PTTEntry& entry,
     PTTEntry::State state, Profiler& pf) {
   entry.state = state;
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_entries_;
   }
-  pf.AddTableOp();
+  pf.addTableOp();
 }
 
 inline void MigrationController::Free(uint64_t page_addr, Profiler& pf) {
-  PTTEntry* page = LookupPage(page_addr, Profiler::Overlap);
+  PTTEntry* page = lookupPage(page_addr, Profiler::Overlap);
   assert(page);
   if (page->state == PTTEntry::DIRTY_DIRECT ||
       page->state == PTTEntry::DIRTY_STATIC) {
     --dirty_entries_;
   }
   assert(entries_.erase(page_addr) == 1);
-  pf.AddTableOp();
+  pf.addTableOp();
 }
 
-inline void MigrationController::Setup(
+inline void MigrationController::insert(
     uint64_t page_addr, PTTEntry::State state, Profiler& pf) {
   assert((page_addr & page_mask_) == 0);
   PTTEntry& entry = entries_[page_addr];
   entry.state = state;
-  entry.mach_base = page_addr; // simulate direct/static page allocation
+  entry.hw_addr = page_addr; // simulate direct/static page allocation
   if (state == PTTEntry::DIRTY_DIRECT || state == PTTEntry::DIRTY_STATIC) {
     ++dirty_entries_;
   }
   assert(entries_.size() <= ptt_capacity_);
-  pf.AddTableOp();
+  pf.addTableOp();
 }
 
-inline uint64_t MigrationController::Translate(uint64_t phy_addr,
+inline uint64_t MigrationController::toHardwareAddr(uint64_t phy_addr,
     uint64_t page_base) const {
   assert((page_base & page_mask_) == 0);
   return page_base + (phy_addr & page_mask_);
 }
+
+}  // namespace thynvm
 
 #endif // SEXAIN_MIGRATION_CONTROLLER_H_

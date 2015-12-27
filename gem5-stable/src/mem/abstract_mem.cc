@@ -57,7 +57,6 @@ using namespace std;
 
 AbstractMemory::AbstractMemory(const Params *p) :
     MemObject(p), range(params()->range),
-    profBase(p->block_bits, p->page_bits),
     addrController(range.size(), p->dram_size,
             p->att_length, p->block_bits, p->page_bits, this),
     pmemAddr(NULL), confTableReported(p->conf_table_reported),
@@ -65,9 +64,9 @@ AbstractMemory::AbstractMemory(const Params *p) :
 {
     if (range.size() % TheISA::PageBytes != 0)
         panic("Memory Size not divisible by page size\n");
-    ckBusUtil = 0;
-    ckDRAMWriteHits = 0;
-    regCaches = 0;
+
+    profBase.setBlockTraffic(1 << p->block_bits);
+    profBase.setPageTraffic(1 << p->page_bits);
 #ifdef MEMCK
     ckmem = (uint8_t*) mmap(NULL, hostSize(), PROT_READ | PROT_WRITE,
             MAP_ANON | MAP_PRIVATE, -1, 0);
@@ -184,32 +183,6 @@ AbstractMemory::regStats()
         bwTotal.subname(i, system()->getMasterName(i));
     }
 
-    numEpochs
-        .name(name() + ".num_epochs")
-        .desc("Total number of epochs");
-    numATTWriteHits
-        .name(name() + ".att_write_hits")
-        .desc("Total number of write hits on ATT");
-    numATTWriteMisses
-        .name(name() + ".att_write_misses")
-        .desc("Total number of write misses on ATT");
-
-    numNVMWrites
-        .name(name() + ".num_nvm_writes")
-        .desc("Total number of writes on NVM pages");
-    numDRAMWrites
-        .name(name() + ".num_dram_writes")
-        .desc("Total number of writes on DRAM pages");
-    numDirtyNVMBlocks
-        .name(name() + ".dirty_nvm_blocks")
-        .desc("Total number of dirty NVM blocks");
-    numDirtyNVMPages
-        .name(name() + ".dirty_nvm_pages")
-        .desc("Total number of dirty NVM pages");
-    numDirtyDRAMPages
-        .name(name() + ".dirty_dram_pages")
-        .desc("Total number of dirty DRAM pages");
-
     bytesChannel
         .name(name() + ".bytes_channel")
         .desc("Data transfer through channel");
@@ -217,46 +190,10 @@ AbstractMemory::regStats()
         .name(name() + ".bytes_inter_channel")
         .desc("Data transfer through channel excluding intra");
 
-    avgNVMDirtyRatio
-        .name(name() + ".avg_nvm_dirty_ratio")
-        .desc("Average dirty ratio of NVM pages")
-        .prereq(numDirtyNVMBlocks);
-    avgDRAMWriteRatio
-        .name(name() + ".avg_dram_write_ratio")
-        .desc("Average write ratio of DRAM pages")
-        .prereq(numDirtyDRAMPages);
-
-    numPagesToDRAM
-        .name(name() + ".num_pages_to_dram")
-        .desc("Total number of pages ever migrated from NVM to DRAM");
-    numPagesToNVM
-        .name(name() + ".num_pages_to_nvm")
-        .desc("Total number of pages ever migrated from DRAM to NVM");
-    avgPagesToDRAM
-        .name(name() + ".avg_pages_to_dram")
-        .desc("Number of pages migrated to DRAM per epoch")
-        .prereq(numPagesToDRAM);
-    avgPagesToNVM
-        .name(name() + ".avg_pages_to_nvm")
-        .desc("Number of pages migrated to NVM per epoch")
-        .prereq(numPagesToNVM);
-
-    numRegCaches
-        .name(name() + ".num_reg_caches")
-        .desc("Number of caches registered to the THNVM cache controller");
-    numRegCaches = constant(regCaches);
-
     bwRead = bytesRead / simSeconds;
     bwInstRead = bytesInstRead / simSeconds;
     bwWrite = bytesWritten / simSeconds;
     bwTotal = (bytesRead + bytesWritten) / simSeconds;
-
-    avgNVMDirtyRatio = numDirtyNVMBlocks / numDirtyNVMPages /
-        constant(addrController.migrator().page_blocks());
-    avgDRAMWriteRatio = numDRAMWrites / numDirtyDRAMPages /
-        constant(addrController.migrator().page_blocks());
-    avgPagesToDRAM = numPagesToDRAM / numEpochs;
-    avgPagesToNVM = numPagesToNVM / numEpochs;
 }
 
 AddrRange
@@ -412,7 +349,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 
 #define MEMCK_AFTER_WRITE(LA, PKT)                                             \
     do {                                                                       \
-        Addr post_addr = addrController.LoadAddr(localAddr(PKT), Profiler::Null);\
+        Addr post_addr = addrController.LoadAddr(localAddr(PKT), thynvm::Profiler::Null);\
     	if (post_addr != (LA)) {                                               \
     	    warn("File %s, line %d: Memory write meets corrupted address: "    \
     	         "%lx => %lx for physical %lx\n",                              \
@@ -430,7 +367,7 @@ AbstractMemory::checkLockedAddrList(PacketPtr pkt)
 #endif
 
 void
-AbstractMemory::access(PacketPtr pkt, Profiler& pf)
+AbstractMemory::access(PacketPtr pkt, thynvm::Profiler& pf)
 {
     assert(AddrRange(pkt->getAddr(),
                      pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
@@ -488,7 +425,7 @@ AbstractMemory::access(PacketPtr pkt, Profiler& pf)
             trackLoadLocked(pkt);
         }
         if (pmemAddr) {
-            assert(pkt->getSize() == addrController.block_size());
+            assert(pkt->getSize() == addrController.blockSize());
             uint8_t* host_addr =
                     hostAddr(addrController.LoadAddr(localAddr(pkt), pf));
             MEMCK_BEFORE_READ(host_addr, pkt);
@@ -502,14 +439,13 @@ AbstractMemory::access(PacketPtr pkt, Profiler& pf)
     } else if (pkt->isWrite()) {
         if (writeOK(pkt)) {
             if (pmemAddr) {
-                assert(pkt->getSize() == addrController.block_size());
+                assert(pkt->getSize() == addrController.blockSize());
                 Addr local_addr = addrController.StoreAddr(
                         localAddr(pkt), pkt->getSize(), pf);
                 memcpy(hostAddr(local_addr), pkt->getPtr<uint8_t>(),
                         pkt->getSize());
                 MEMCK_AFTER_WRITE(local_addr, pkt);
-                pf.AddBlockMoveInter();
-                ckBusUtilAdd(addrController.block_size());
+                pf.addBlockInterChannel();
                 DPRINTF(MemoryAccess, "%s wrote %x bytes to address %x\n",
                         __func__, pkt->getSize(), pkt->getAddr());
             }
@@ -534,7 +470,7 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 {
     assert(AddrRange(pkt->getAddr(),
                      pkt->getAddr() + pkt->getSize() - 1).isSubset(range));
-    Addr local_addr = addrController.LoadAddr(localAddr(pkt), Profiler::Null);
+    Addr local_addr = addrController.LoadAddr(localAddr(pkt), thynvm::Profiler::Null);
     uint8_t *host_addr = hostAddr(local_addr);
 
     if (pkt->isRead()) {
@@ -571,7 +507,7 @@ AbstractMemory::MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size)
 {
     assert(direct_addr != mach_addr);
     memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
-    ckBusUtilAdd(size);
+    // ckBusUtilAdd(size);
 }
 
 void
@@ -582,6 +518,6 @@ AbstractMemory::MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size)
     memcpy(data, hostAddr(direct_addr), size);
     memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
     memcpy(hostAddr(mach_addr), data, size);
-    ckBusUtilAdd(size * 3);
+    // ckBusUtilAdd(size * 3);
 }
 

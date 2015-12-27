@@ -12,10 +12,12 @@
 #include "migration_controller.h"
 #include "profiler.h"
 
+namespace thynvm {
+
 #ifdef MEMCK
 struct AddrInfo {
   Addr phy_base;
-  Addr mach_base;
+  Addr hw_base;
   const char* state;
 };
 #endif
@@ -41,7 +43,7 @@ class AddrTransController {
   virtual void MigratePages(Profiler& pf, double dr = 0.33, double wr = 0.67);
 
   uint64_t Size() const;
-  int block_size() const { return att_.block_size(); }
+  int blockSize() const { return att_.unitSize(); }
   int page_size() const { return migrator_.page_size(); }
   int att_length() const { return att_.length(); }
   bool in_checkpointing() const { return in_checkpointing_; }
@@ -65,7 +67,7 @@ class AddrTransController {
   bool CheckValid(Addr phy_addr, int size);
   bool FullBlock(Addr phy_addr, int size);
 
-  int Setup(Addr phy_addr, Addr mach_base, ATTEntry::State state,
+  int insert(Addr phy_addr, Addr hw_base, ATTEntry::State state,
       bool move_data, Profiler& pf);
   void HideClean(int index, bool move_data, Profiler& pf);
   Addr ResetClean(int index, bool move_data, Profiler& pf);
@@ -85,7 +87,7 @@ class AddrTransController {
 
   void CopyBlockIntra(Addr dest_addr, Addr src_addr, Profiler& pf);
   void CopyBlockInter(Addr dest_addr, Addr src_addr, Profiler& pf);
-  void SwapBlock(Addr direct_addr, Addr mach_addr, Profiler& pf);
+  void SwapBlock(Addr direct_addr, Addr hw_addr, Profiler& pf);
 
   const uint64_t phy_range_; ///< Size of physical address space
   const uint64_t dram_size_; ///< Size of DRAM cache region
@@ -118,38 +120,40 @@ class AddrTransController {
 };
 
 inline uint64_t AddrTransController::Size() const {
-  return phy_range_ + nvm_buffer_.Size() + dram_buffer_.Size();
+  return phy_range_ + nvm_buffer_.size() + dram_buffer_.size();
 }
 
 inline bool AddrTransController::IsDRAM(Addr phy_addr, Profiler& pf) {
-  return migrator_.Contains(phy_addr, pf);
+  return migrator_.contains(phy_addr, pf);
 }
 
 inline bool AddrTransController::CheckValid(Addr phy_addr, int size) {
-  return att_.ToTag(phy_addr) == att_.ToTag(phy_addr + size - 1);
+  return att_.toTag(phy_addr) == att_.toTag(phy_addr + size - 1);
 }
 
 inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
-  return (phy_addr & (att_.block_size() - 1)) == 0 && size == att_.block_size();
+  return (phy_addr & (att_.unitSize() - 1)) == 0 && size == att_.unitSize();
 }
 
 inline void AddrTransController::CopyBlockIntra(
     Addr dest_addr, Addr src_addr, Profiler& pf) {
-  mem_store_->MemCopy(dest_addr, src_addr, att_.block_size());
-  pf.AddBlockMoveIntra();
+  mem_store_->MemCopy(dest_addr, src_addr, att_.unitSize());
+  pf.addBlockIntraChannel();
 }
 
 inline void AddrTransController::CopyBlockInter(
     Addr dest, Addr src, Profiler& pf) {
-  mem_store_->MemCopy(dest, src, att_.block_size());
-  pf.AddBlockMoveInter();
+  mem_store_->MemCopy(dest, src, att_.unitSize());
+  pf.addBlockInterChannel();
 }
 
 inline void AddrTransController::SwapBlock(
-    Addr direct_addr, Addr mach_addr, Profiler& pf) {
-  mem_store_->MemSwap(direct_addr, mach_addr, att_.block_size());
-  pf.AddBlockMoveIntra(3);
+    Addr direct_addr, Addr hw_addr, Profiler& pf) {
+  mem_store_->MemSwap(direct_addr, hw_addr, att_.unitSize());
+  pf.addBlockIntraChannel(3);
 }
+
+}  // namespace thynvm
 
 #endif // SEXAIN_ADDR_TRANS_CONTROLLER_H_
 

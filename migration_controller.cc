@@ -4,6 +4,7 @@
 #include "migration_controller.h"
 
 using namespace std;
+using namespace thynvm;
 
 const char* PTTEntry::state_strings[] = {
     "CLEAN_DIRECT", "CLEAN_STATIC", "DIRTY_DIRECT", "DIRTY_STATIC"
@@ -73,7 +74,7 @@ bool MigrationController::ExtractNVMPage(NVMPageStats& stats, Profiler& pf) {
   pop_heap(nvm_heap_.begin(), nvm_heap_.end());
   nvm_heap_.pop_back();
 
-  pf.AddTableOp();
+  pf.addTableOp();
   return true;
 }
 
@@ -86,20 +87,20 @@ bool MigrationController::ExtractDRAMPage(DRAMPageStats& stats, Profiler& pf) {
   pop_heap(dram_heap_.begin(), dram_heap_.end());
   dram_heap_.pop_back();
 
-  pf.AddTableOp();
+  pf.addTableOp();
   return true;
 }
 
 void MigrationController::Clear(Profiler& pf) {
-  pf.AddPageMoveInter(dirty_entries_); // epoch write-backs
+  pf.addPageInterChannel(dirty_entries_); // epoch write-backs
   for (PTTEntryIterator it = entries_.begin(); it != entries_.end(); ++it) {
     it->second.epoch_reads = 0;
     it->second.epoch_writes = 0;
     if (it->second.state == PTTEntry::DIRTY_DIRECT) {
-      ShiftState(it->second, PTTEntry::CLEAN_DIRECT, pf);
+      shiftState(it->second, PTTEntry::CLEAN_DIRECT, pf);
       --dirty_entries_;
     } else if (it->second.state == PTTEntry::DIRTY_STATIC) {
-      ShiftState(it->second, PTTEntry::CLEAN_STATIC, pf);
+      shiftState(it->second, PTTEntry::CLEAN_STATIC, pf);
       --dirty_entries_;
     }
   }

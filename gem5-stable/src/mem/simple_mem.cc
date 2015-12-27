@@ -47,6 +47,7 @@
 #include "debug/RowBuffer.hh"
 
 using namespace std;
+using namespace thynvm;
 
 SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     AbstractMemory(p),
@@ -63,7 +64,7 @@ SimpleMemory::SimpleMemory(const SimpleMemoryParams* p) :
     wbBandwidth = (double)latency / 64;
     waitStart = 0;
     sumSize = 0;
-    profBase.set_op_latency(p->lat_att_operate);
+    profBase.setOpLatency(p->lat_att_operate);
 }
 
 void
@@ -112,7 +113,7 @@ SimpleMemory::regStats()
 Tick
 SimpleMemory::recvAtomic(PacketPtr pkt)
 {
-    access(pkt, Profiler::Null);
+    access(pkt, thynvm::Profiler::Null);
     return pkt->memInhibitAsserted() ? 0 : getLatency();
 }
 
@@ -185,19 +186,19 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     if (pkt->cmd != MemCmd::SwapReq && pkt->isWrite()) {
         Control ctrl = addrController.Probe(pkt->getAddr());
         if (ctrl == NEW_EPOCH) {
-            Profiler pf(profBase);
+            thynvm::Profiler pf(profBase);
             assert(sumSize == 0);
             addrController.MigratePages(pf);
 
-            sumSize = pf.SumBusUtil(); // pass to freeze()
+            sumSize = pf.sumTraffic(); // pass to freeze()
             bytesChannel += sumSize;
-            bytesInterChannel += pf.SumBusUtil(true);
+            bytesInterChannel += pf.sumTraffic(true);
 
             // ATT and PTT flushes
             uint64_t area = addrController.att_length() * 8;
             area += addrController.migrator().ptt_length() * 8;
             Tick duration = area * wbBandwidth;
-            duration += pf.SumLatency();
+            duration += pf.sumLatency();
             totalWaitTime += duration;
             schedule(freezeEvent, curTick() + duration);
             isBusy = true;
@@ -238,17 +239,17 @@ SimpleMemory::recvTimingReq(PacketPtr pkt)
     // queue if there is one
     bool needsResponse = pkt->needsResponse();
 
-    Profiler pf(profBase);
+    thynvm::Profiler pf(profBase);
     access(pkt, pf);
-    bytesChannel += pf.SumBusUtil();
-    bytesInterChannel += pf.SumBusUtil(true);
+    bytesChannel += pf.sumTraffic();
+    bytesInterChannel += pf.sumTraffic(true);
 
     // turn packet around to go back to requester if response expected
     if (needsResponse) {
         // recvAtomic() should already have turned packet into
         // atomic response
         assert(pkt->isResponse());
-        Tick lat = pf.SumLatency();
+        Tick lat = pf.sumLatency();
         extraRespLatency += (double)lat - getLatency();
         // to keep things simple (and in order), we put the packet at
         // the end even if the latency suggests it should be sent
@@ -279,6 +280,7 @@ SimpleMemory::freeze()
 {
     assert(isBusy);
     isBusy = false;
+    /* Do not mix ThyNVM-related statistics with the memory component.
     assert(numNVMWrites.value() == addrController.migrator().total_nvm_writes());
     assert(numDRAMWrites.value() == addrController.migrator().total_dram_writes());
     assert(numNVMWrites.value() + numDRAMWrites.value() ==
@@ -288,19 +290,19 @@ SimpleMemory::freeze()
     numDirtyDRAMPages = addrController.migrator().dirty_dram_pages();
     numPagesToDRAM = addrController.pages_to_dram();
     numPagesToNVM = addrController.pages_to_nvm();
+    */
 
     uint64_t bytes = getBusUtil(); // migration
 
-    Profiler pf(profBase);
+    thynvm::Profiler pf(profBase);
     addrController.BeginCheckpointing(pf);
-    bytes += pf.SumBusUtil();
-    bytesChannel += pf.SumBusUtil();
-    bytesInterChannel += pf.SumBusUtil(true);
+    bytes += pf.sumTraffic();
+    bytesChannel += pf.sumTraffic();
+    bytesInterChannel += pf.sumTraffic(true);
 
     Tick ckpt_duration = bytes * wbBandwidth;
     if (ckpt_duration) {
         schedule(unfreezeEvent, curTick() + ckpt_duration);
-        assert(ckBusUtil == bytesChannel.value());
         totalCkptTime += ckpt_duration;
     } else {
         addrController.FinishCheckpointing();
