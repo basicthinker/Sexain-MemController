@@ -46,7 +46,7 @@ Addr AddrTransController::LoadAddr(Addr phy_addr, Profiler& pf) {
     if (page) {
       migrator_.AddDRAMPageRead(*page);
       mach_addr = migrator_.toHardwareAddr(phy_addr, page->hw_addr);
-      pf.addLatency(mem_store_->GetReadLatency(mach_addr, true));
+      // pf.addLatency(mem_store_->GetReadLatency(mach_addr, true));
     } else {
       mach_addr = phy_addr;
       // pf.addLatency(mem_store_->GetReadLatency(mach_addr, false));

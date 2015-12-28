@@ -503,7 +503,7 @@ AbstractMemory::functionalAccess(PacketPtr pkt)
 }
 
 void
-AbstractMemory::MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size)
+AbstractMemory::memCopy(uint64_t direct_addr, uint64_t mach_addr, int size)
 {
     assert(direct_addr != mach_addr);
     memcpy(hostAddr(direct_addr), hostAddr(mach_addr), size);
@@ -511,7 +511,7 @@ AbstractMemory::MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size)
 }
 
 void
-AbstractMemory::MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size)
+AbstractMemory::memSwap(uint64_t direct_addr, uint64_t mach_addr, int size)
 {
     assert(direct_addr != mach_addr);
     uint8_t data[size];

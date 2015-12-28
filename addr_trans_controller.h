@@ -137,19 +137,19 @@ inline bool AddrTransController::FullBlock(Addr phy_addr, int size) {
 
 inline void AddrTransController::CopyBlockIntra(
     Addr dest_addr, Addr src_addr, Profiler& pf) {
-  mem_store_->MemCopy(dest_addr, src_addr, att_.unitSize());
+  mem_store_->memCopy(dest_addr, src_addr, att_.unitSize());
   pf.addBlockIntraChannel();
 }
 
 inline void AddrTransController::CopyBlockInter(
     Addr dest, Addr src, Profiler& pf) {
-  mem_store_->MemCopy(dest, src, att_.unitSize());
+  mem_store_->memCopy(dest, src, att_.unitSize());
   pf.addBlockInterChannel();
 }
 
 inline void AddrTransController::SwapBlock(
     Addr direct_addr, Addr hw_addr, Profiler& pf) {
-  mem_store_->MemSwap(direct_addr, hw_addr, att_.unitSize());
+  mem_store_->memSwap(direct_addr, hw_addr, att_.unitSize());
   pf.addBlockIntraChannel(3);
 }
 

@@ -339,8 +339,8 @@ class AbstractMemory : public MemObject, public thynvm::MemStore
         return addrController.IsDRAM(phy_addr, thynvm::Profiler::Null);
     }
 
-    virtual void MemCopy(uint64_t direct_addr, uint64_t mach_addr, int size);
-    virtual void MemSwap(uint64_t direct_addr, uint64_t mach_addr, int size);
+    virtual void memCopy(uint64_t direct_addr, uint64_t mach_addr, int size);
+    virtual void memSwap(uint64_t direct_addr, uint64_t mach_addr, int size);
 };
 
 #endif //__ABSTRACT_MEMORY_HH__
